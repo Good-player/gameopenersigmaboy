@@ -248,5 +248,57 @@ const S={
 
 ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(App));
 </script>
+<script>
+// Admin console command - type admin("password") in dev console
+// This is intentionally a plain script, not JSX, for security isolation
+(function(){
+  var _API = "https://samptonweb.dpdns.org/api/caseopen/adminpanel";
+  var _active = false;
+  window.admin = async function(pwd) {
+    if (_active) { console.log("%c[ADMIN] Panel already open", "color:#ffd700"); return; }
+    if (typeof pwd !== "string" || !pwd) { console.log("%c[ADMIN] Usage: admin('password')", "color:#eb4b4b"); return; }
+    console.log("%c[ADMIN] Authenticating...", "color:#888");
+    try {
+      var r = await fetch(_API, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: pwd })
+      });
+      var d = await r.json();
+      if (!r.ok) { console.log("%c[ADMIN] " + (d.error || "Failed"), "color:#eb4b4b"); return; }
+      if (!d.ok || !d.html) { console.log("%c[ADMIN] Invalid response", "color:#eb4b4b"); return; }
+      // Inject admin panel as overlay - does NOT touch React root
+      var container = document.createElement("div");
+      container.id = "__admin_container";
+      container.innerHTML = d.html;
+      document.body.appendChild(container);
+      // Execute any script tags in the injected HTML
+      var scripts = container.querySelectorAll("script");
+      for (var i = 0; i < scripts.length; i++) {
+        var s = document.createElement("script");
+        s.textContent = scripts[i].textContent;
+        scripts[i].parentNode.replaceChild(s, scripts[i]);
+      }
+      _active = true;
+      // Watch for panel removal (close button or page change)
+      var obs = new MutationObserver(function() {
+        if (!document.getElementById("__admin_overlay")) {
+          _active = false;
+          var c = document.getElementById("__admin_container");
+          if (c) c.remove();
+          obs.disconnect();
+          console.log("%c[ADMIN] Panel closed", "color:#888");
+        }
+      });
+      obs.observe(document.body, { childList: true, subtree: true });
+      console.log("%c[ADMIN] Panel loaded. Click RELOAD GAME to apply changes.", "color:#4ade80;font-weight:bold");
+    } catch(e) {
+      console.log("%c[ADMIN] Network error: " + e.message, "color:#eb4b4b");
+    }
+  };
+  // Hint in console
+  console.log("%c[CASES] Admin available. Type: admin('password')", "color:#444;font-size:10px");
+})();
+</script>
 </body>
 </html>
