@@ -15,6 +15,29 @@
 async function _stGet(key){try{const v=localStorage.getItem(key);return v!==null?{value:v}:null}catch{return null}}
 async function _stSet(key,val){try{localStorage.setItem(key,val);return{key,value:val}}catch{return null}}
 
+// User secret ID - persistent, unique per browser
+function getUserId(){let id=localStorage.getItem("co-uid");if(!id){id="u-"+Date.now().toString(36)+Math.random().toString(36).slice(2,8);localStorage.setItem("co-uid",id)}return id}
+function getUserName(){return localStorage.getItem("co-uname")||"Anon-"+getUserId().slice(2,7)}
+function setUserName(n){localStorage.setItem("co-uname",n.replace(/[<>&"']/g,"").slice(0,16))}
+const USER_ID=getUserId();
+
+// Server API
+const API_BASE="https://samptonweb.dpdns.org/api/caseopen";
+async function api(path,body){try{const r=await fetch(API_BASE+path,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({uid:USER_ID,uname:getUserName(),...body})});return await r.json()}catch{return null}}
+
+// Report an open to server (fire-and-forget)
+function reportOpen(caseName,casePrice,item,float){api("/open",{caseName,casePrice,item:item.name,rarity:item.rarity,value:item.value,icon:item.icon,float})}
+// Report sell
+function reportSell(item){api("/sell",{item:item.name,value:item.value})}
+// Send chat
+async function sendChat(msg){return api("/chat",{msg:msg.slice(0,200)})}
+// Get live feed
+async function getFeed(){return api("/feed",{})}
+// Get leaderboard
+async function getLeaderboard(){return api("/leaderboard",{})}
+// Get chat messages
+async function getChat(){return api("/chatlog",{})}
+
 const { useState, useEffect, useRef, useCallback } = React;
 
 const R={consumer:{label:"Consumer",color:"#b0b3b8",bg:"rgba(176,179,184,0.12)",chance:.55},industrial:{label:"Industrial",color:"#5b98d6",bg:"rgba(91,152,214,0.12)",chance:.20},milspec:{label:"Mil-Spec",color:"#4b69ff",bg:"rgba(75,105,255,0.12)",chance:.12},restricted:{label:"Restricted",color:"#8847ff",bg:"rgba(136,71,255,0.12)",chance:.06},classified:{label:"Classified",color:"#d32ce6",bg:"rgba(211,44,230,0.12)",chance:.03},covert:{label:"Covert",color:"#eb4b4b",bg:"rgba(235,75,75,0.12)",chance:.015},chroma:{label:"\u2605 Chroma",color:"#ffd700",bg:"rgba(255,215,0,0.18)",chance:.005}};
@@ -62,6 +85,7 @@ function App(){
   const[slot,setSlot]=useState(0);const[slotMeta,setSlotMeta]=useState([null,null,null]);const[showSlots,setShowSlots]=useState(true);
   const[st,setSt]=useState(INIT);const[page,setPage]=useState("shop");const[selCase,setSelCase]=useState(null);const[wonItem,setWonItem]=useState(null);const[wonFloat,setWonFloat]=useState(0);const[wonQuote,setWonQuote]=useState("");const[scrollItems,setScrollItems]=useState([]);const[scrollDone,setScrollDone]=useState(false);const[opening,setOpening]=useState(false);const[resetMsg,setResetMsg]=useState("");const[loanAmt,setLoanAmt]=useState("");const[rentPaid,setRentPaid]=useState(0);const[inspecting,setInspecting]=useState(null);const[confirmReset,setConfirmReset]=useState(false);const[drops,setDrops]=useState([]);
   const[invSort,setInvSort]=useState("newest");const[invFilter,setInvFilter]=useState("all");const[invView,setInvView]=useState("grid");const[selItem,setSelItem]=useState(null);const[sellAmt,setSellAmt]=useState("");const[sellConfirm,setSellConfirm]=useState(null);const[lastWonId,setLastWonId]=useState(null);
+  const[feed,setFeed]=useState([]);const[lb,setLb]=useState([]);const[chatLog,setChatLog]=useState([]);const[chatMsg,setChatMsg]=useState("");const[nickname,setNickname]=useState(getUserName());const[nameEditing,setNameEditing]=useState(false);
   const stripRef=useRef(null);const lockRef=useRef(false);
 
   useEffect(()=>{(async()=>{try{const r=await _stGet("co-slots");if(r?.value)setSlotMeta(JSON.parse(r.value))}catch{}})()},[]);
@@ -73,6 +97,9 @@ function App(){
 
   // Check tab lock - if another tab stole our slot, go back to slot screen
   useEffect(()=>{if(showSlots)return;const id=setInterval(async()=>{try{const r=await _stGet("co-lock-"+slot);if(r?.value&&r.value!==TAB_ID){setShowSlots(true);setOpening(false);lockRef.current=false}}catch{}},2000);return()=>clearInterval(id)},[showSlots,slot]);
+
+  // Poll server for live data
+  useEffect(()=>{if(showSlots)return;let on=true;async function poll(){if(!on)return;try{const[f,l,c]=await Promise.all([getFeed(),getLeaderboard(),getChat()]);if(f?.feed)setFeed(f.feed);if(l?.lb)setLb(l.lb);if(c?.msgs)setChatLog(c.msgs)}catch{}};poll();const id=setInterval(poll,8000);return()=>{on=false;clearInterval(id)}},[showSlots]);
 
   const save=useCallback(async(s,d)=>{try{const lk=await _stGet("co-lock-"+slot);if(lk?.value&&lk.value!==TAB_ID)return;await _stSet("co-s"+slot,JSON.stringify({st:s,drops:d||[]}))}catch{}const inv=s.inv||[];const tv=inv.reduce((a,i)=>a+i.value,0);setSlotMeta(prev=>{const m=[...prev];m[slot]={bal:s.bal,items:inv.length,totalVal:tv,opened:s.stats?.opened||0};saveSlotMeta(m);return m})},[slot]);
   useEffect(()=>{if(showSlots)return;const id=setInterval(()=>{setSt(cur=>{setDrops(dd=>{save(cur,dd);return dd});return cur})},5000);return()=>clearInterval(id)},[save,showSlots]);
@@ -86,8 +113,8 @@ function App(){
     const items=[];for(let i=0;i<SCROLL_COUNT;i++)items.push(i===WIN_IDX?winner:c.items[Math.floor(Math.random()*c.items.length)]);
     setScrollItems(items);setPage("opening");
     setSt(p=>{const ns={...p,bal:p.bal-c.price,stats:{...p.stats,spent:p.stats.spent+c.price,opened:p.stats.opened+1}};save(ns,drops);return ns});
-    requestAnimationFrame(()=>{requestAnimationFrame(()=>{if(!stripRef.current)return;const el=stripRef.current,parent=el.parentElement;el.style.transition="none";el.style.transform="translateX(0)";requestAnimationFrame(()=>{if(!stripRef.current)return;const itemW=parent.offsetWidth*.16,center=parent.offsetWidth/2,off=WIN_IDX*itemW+itemW/2-center+(Math.random()-.5)*itemW*.6;el.style.transition="transform 5s cubic-bezier(0.15,0.85,0.20,1.01)";el.style.transform=`translateX(-${off}px)`})})});
-    setTimeout(()=>{setScrollDone(true);sndReveal(winner.value>=c.price);let rp=0;setSt(prev=>{let rc=prev.rentCtr+1;if(rc>=RENT_EVERY){rp=RENT_AMT;rc=0}setRentPaid(rp);const newBal=prev.bal-rp;const isBig=winner.value>=c.price*3;const he={n:prev.stats.opened,bal:newBal};if(isBig)he.label=winner.name+" "+money(winner.value);const itemId=uid();setLastWonId(itemId);const ns={...prev,bal:newBal,inv:[...prev.inv,{...winner,id:itemId,from:c.id,t:Date.now(),float:fl}],stats:{...prev.stats,won:prev.stats.won+winner.value,best:winner.value>prev.stats.bestVal?winner.name:prev.stats.best,bestVal:Math.max(prev.stats.bestVal,winner.value)},loan:prev.loan,rentCtr:rc,history:[...(prev.history||[]),he].slice(-200),starred:prev.starred||{}};const nd={name:winner.name,rarity:winner.rarity,value:winner.value,cond:getCondition(fl),icon:winner.icon};setDrops(dd=>{const r=[nd,...dd].slice(0,20);save(ns,r);return r});setTimeout(()=>{checkReset(ns);lockRef.current=false},400);return ns})},5400);
+    requestAnimationFrame(()=>{requestAnimationFrame(()=>{if(!stripRef.current)return;const el=stripRef.current,parent=el.parentElement;el.style.transition="none";el.style.transform="translateX(0)";requestAnimationFrame(()=>{if(!stripRef.current)return;const itemW=parent.offsetWidth*.16,center=parent.offsetWidth/2,off=WIN_IDX*itemW+(Math.random()*itemW)-center;el.style.transition="transform 5s cubic-bezier(0.15,0.85,0.20,1.01)";el.style.transform=`translateX(-${off}px)`})})});
+    setTimeout(()=>{setScrollDone(true);sndReveal(winner.value>=c.price);let rp=0;setSt(prev=>{let rc=prev.rentCtr+1;if(rc>=RENT_EVERY){rp=RENT_AMT;rc=0}setRentPaid(rp);const newBal=prev.bal-rp;const isBig=winner.value>=c.price*3;const he={n:prev.stats.opened,bal:newBal};if(isBig)he.label=winner.name+" "+money(winner.value);const itemId=uid();setLastWonId(itemId);const ns={...prev,bal:newBal,inv:[...prev.inv,{...winner,id:itemId,from:c.id,t:Date.now(),float:fl}],stats:{...prev.stats,won:prev.stats.won+winner.value,best:winner.value>prev.stats.bestVal?winner.name:prev.stats.best,bestVal:Math.max(prev.stats.bestVal,winner.value)},loan:prev.loan,rentCtr:rc,history:[...(prev.history||[]),he].slice(-200),starred:prev.starred||{}};const nd={name:winner.name,rarity:winner.rarity,value:winner.value,cond:getCondition(fl),icon:winner.icon};setDrops(dd=>{const r=[nd,...dd].slice(0,20);save(ns,r);return r});reportOpen(c.name,c.price,winner,fl);setTimeout(()=>{checkReset(ns);lockRef.current=false},400);return ns})},5400);
   }
 
   function openAgain(){setLastWonId(null);if(!selCase||st.bal<selCase.price){setPage("shop");setOpening(false);return}doOpen(selCase)}
@@ -130,7 +157,7 @@ function App(){
     <div style={S.hdr}><div style={{display:"flex",alignItems:"center",gap:"clamp(6px,1.5vw,10px)"}}><button onClick={()=>setShowSlots(true)} style={{...S.btn,background:"#ffffff08",color:"#888",padding:"clamp(4px,1vw,6px) clamp(6px,1.5vw,10px)",fontSize:"clamp(9px,2.2vw,11px)"}}>Slot {slot+1}</button><div style={S.title}>CASES</div></div><div style={S.hdrRight}><div style={S.chip}><span style={S.chipLbl}>BAL</span><span style={{color:st.bal<100?"#eb4b4b":"#4ade80",fontWeight:700,fontSize:"clamp(14px,3.5vw,20px)"}}>{money(st.bal)}</span></div>{st.loan>0&&<div style={{...S.chip,borderColor:"#eb4b4b33"}}><span style={S.chipLbl}>DEBT</span><span style={{color:"#eb4b4b",fontWeight:700,fontSize:"clamp(12px,3vw,18px)"}}>{money(st.loan)}</span></div>}<div style={S.rentChip}>Rent in {rentIn}</div></div></div>
 
     {/* NAV */}
-    <div style={S.nav}>{[["shop","Shop"],["inv",`Inv (${st.inv.length})`],["stats","Stats"],["loan","Loan"]].map(([k,l])=>(<button key={k} onClick={()=>{if(!opening||scrollDone||k==="shop"){setPage(k);if(k!=="opening")setOpening(false)}}} style={{...S.tab,...(page===k||(page==="opening"&&k==="shop")?S.tabOn:{})}}>{l}</button>))}<button onClick={()=>setConfirmReset(true)} style={{...S.tab,marginLeft:"auto",color:"#eb4b4b"}}>Reset</button></div>
+    <div style={S.nav}>{[["shop","Shop"],["inv",`Inv (${st.inv.length})`],["stats","Stats"],["loan","Loan"],["live","\uD83D\uDD34 Live"],["lb","\uD83C\uDFC6 Top"],["chat","\uD83D\uDCAC Chat"]].map(([k,l])=>(<button key={k} onClick={()=>{if(!opening||scrollDone||k==="shop"){setPage(k);if(k!=="opening")setOpening(false)}}} style={{...S.tab,...(page===k||(page==="opening"&&k==="shop")?S.tabOn:{})}}>{l}</button>))}<button onClick={()=>setConfirmReset(true)} style={{...S.tab,marginLeft:"auto",color:"#eb4b4b"}}>Reset</button></div>
 
     {/* SHOP */}
     {page==="shop"&&<div style={S.body}><div style={S.grid}>{CASES.map(c=>{const ok=st.bal>=c.price;return(<div key={c.id} style={{...S.card,borderColor:c.color+"44",opacity:ok?1:.35}}><div style={{...S.cardIcon,background:c.color+"12",borderColor:c.color+"28"}}><span style={{fontSize:"clamp(26px,6.5vw,40px)"}}>{c.icon}</span></div><div style={S.cardName}>{c.name}</div><div style={{...S.cardPrice,color:c.color}}>{money(c.price)}</div><div style={{display:"flex",gap:"clamp(4px,1vw,6px)",width:"100%"}}><button disabled={!ok} onClick={()=>doOpen(c)} style={{...S.btn,background:ok?c.color:"#333",color:"#fff",flex:1}}>Open</button><button onClick={()=>{setInspecting(c);setPage("inspect")}} style={{...S.btn,background:"#ffffff08",color:"#777",flex:1}}>Inspect</button></div></div>)})}</div></div>}
@@ -202,6 +229,66 @@ function App(){
 
     {/* LOAN */}
     {page==="loan"&&<div style={S.body}><div style={{fontSize:"clamp(15px,4vw,20px)",fontWeight:700,marginBottom:10}}>Loan</div><div style={S.loanBox}><div style={{display:"flex",gap:18,flexWrap:"wrap",marginBottom:16}}>{[["DEBT",st.loan,st.loan>0?"#eb4b4b":"#4ade80"],["LIMIT",MAX_LOAN,"#f59e0b"],["AVAIL",Math.max(0,MAX_LOAN-st.loan),"#e2e8f0"]].map(([l,v,c])=><div key={l}><div style={{color:"#555",fontSize:"clamp(8px,2vw,10px)"}}>{l}</div><div style={{fontSize:"clamp(16px,4.5vw,24px)",fontWeight:700,color:c}}>{money(v)}</div></div>)}</div><div style={{color:"#f59e0b",fontSize:11,marginBottom:6}}>{LOAN_RATE*100}% interest.</div><div style={{color:"#eb4b4b",fontSize:10,marginBottom:12}}>Broke + maxed = auto reset.</div><div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}><input type="number" placeholder="Amount" value={loanAmt} onChange={e=>setLoanAmt(e.target.value)} style={S.input}/><button onClick={borrow} disabled={MAX_LOAN-st.loan<=0} style={{...S.btn,background:"#f59e0b",color:"#000"}}>Borrow</button><button onClick={repay} disabled={st.loan<=0||st.bal<=0} style={{...S.btn,background:"#4ade80",color:"#000"}}>Repay</button></div></div></div>}
+
+    {/* LIVE FEED */}
+    {page==="live"&&<div style={S.body}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+        <div style={{fontSize:"clamp(15px,4vw,20px)",fontWeight:700}}>{"\uD83D\uDD34"} Live Opens</div>
+        <button onClick={async()=>{const f=await getFeed();if(f?.feed)setFeed(f.feed)}} style={{...S.btn,background:"#ffffff08",color:"#888"}}>Refresh</button>
+      </div>
+      {/* Nickname editor */}
+      <div style={{background:"#0d1117",border:"1px solid #151820",borderRadius:8,padding:"8px 12px",marginBottom:12,display:"flex",gap:6,alignItems:"center",fontSize:"clamp(9px,2.2vw,11px)"}}>
+        <span style={{color:"#888"}}>Your name:</span>
+        {nameEditing?<><input value={nickname} onChange={e=>setNickname(e.target.value.slice(0,16))} maxLength={16} style={{...S.sel,flex:1}} autoFocus/><button onClick={()=>{setUserName(nickname);setNameEditing(false)}} style={{...S.btn,background:"#4ade80",color:"#000",padding:"4px 10px"}}>Save</button></>:<><span style={{color:"#e2e8f0",fontWeight:600}}>{nickname}</span><button onClick={()=>setNameEditing(true)} style={{...S.btn,background:"#ffffff08",color:"#888",padding:"4px 8px"}}>Edit</button></>}
+        <span style={{color:"#444",marginLeft:"auto"}}>ID: {USER_ID.slice(0,8)}</span>
+      </div>
+      <div style={{display:"flex",flexDirection:"column",gap:3}}>
+        {feed.length===0?<div style={{color:"#555",textAlign:"center",padding:20}}>No recent opens yet. Be the first!</div>:
+        feed.map((f,i)=><div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 10px",background:"#0d1117",borderLeft:`2px solid ${R[f.rarity]?.color||"#555"}`,borderRadius:4,fontSize:"clamp(8px,2.2vw,11px)"}}>
+          <span style={{color:"#888",flexShrink:0,width:50}}>{f.ago||""}</span>
+          <span style={{color:"#ccc",fontWeight:600}}>{f.uname||"Anon"}</span>
+          <span style={{color:"#888"}}>opened</span>
+          <span style={{color:R[f.rarity]?.color,fontWeight:600}}>{f.icon} {f.item}</span>
+          <span style={{color:"#4ade80",fontWeight:600,marginLeft:"auto",flexShrink:0}}>{money(f.value)}</span>
+        </div>)}
+      </div>
+    </div>}
+
+    {/* LEADERBOARD */}
+    {page==="lb"&&<div style={S.body}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+        <div style={{fontSize:"clamp(15px,4vw,20px)",fontWeight:700}}>{"\uD83C\uDFC6"} Leaderboard</div>
+        <button onClick={async()=>{const l=await getLeaderboard();if(l?.lb)setLb(l.lb)}} style={{...S.btn,background:"#ffffff08",color:"#888"}}>Refresh</button>
+      </div>
+      <div style={{display:"flex",flexDirection:"column",gap:3}}>
+        {lb.length===0?<div style={{color:"#555",textAlign:"center",padding:20}}>No players yet.</div>:
+        lb.map((p,i)=>{const medal=i===0?"\uD83E\uDD47":i===1?"\uD83E\uDD48":i===2?"\uD83E\uDD49":"";return(
+          <div key={i} style={{display:"grid",gridTemplateColumns:"28px 1fr 80px 80px",alignItems:"center",gap:8,padding:"8px 12px",background:i<3?"#ffd70008":"#0d1117",border:i<3?"1px solid #ffd70022":"1px solid #151820",borderRadius:6,fontSize:"clamp(9px,2.2vw,12px)"}}>
+            <span style={{fontWeight:800,color:i<3?"#ffd700":"#888",textAlign:"center"}}>{medal||`#${i+1}`}</span>
+            <span style={{fontWeight:600,color:"#e2e8f0",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.uname||"Anon"}</span>
+            <span style={{color:"#4ade80",fontWeight:600,textAlign:"right"}}>{money(p.totalWon||0)}</span>
+            <span style={{color:"#888",textAlign:"right"}}>{p.opens||0} opens</span>
+          </div>
+        )})}
+      </div>
+    </div>}
+
+    {/* CHAT */}
+    {page==="chat"&&<div style={S.body}>
+      <div style={{fontSize:"clamp(15px,4vw,20px)",fontWeight:700,marginBottom:12}}>{"\uD83D\uDCAC"} Chat Room</div>
+      <div style={{background:"#0d1117",border:"1px solid #151820",borderRadius:8,padding:10,height:"clamp(200px,50vh,400px)",overflowY:"auto",display:"flex",flexDirection:"column-reverse",gap:4,marginBottom:10}} id="__chatbox">
+        {chatLog.length===0?<div style={{color:"#555",textAlign:"center",padding:20}}>No messages yet. Say hi!</div>:
+        chatLog.map((m,i)=><div key={i} style={{display:"flex",gap:6,fontSize:"clamp(8px,2.2vw,11px)",padding:"4px 0"}}>
+          <span style={{color:"#888",flexShrink:0,width:42}}>{m.ago||""}</span>
+          <span style={{color:m.uid===USER_ID?"#4ade80":"#8b5cf6",fontWeight:700,flexShrink:0}}>{m.uname||"Anon"}</span>
+          <span style={{color:"#ccc"}}>{m.msg}</span>
+        </div>)}
+      </div>
+      <div style={{display:"flex",gap:6}}>
+        <input value={chatMsg} onChange={e=>setChatMsg(e.target.value.slice(0,200))} onKeyDown={e=>{if(e.key==="Enter"&&chatMsg.trim()){sendChat(chatMsg.trim()).then(r=>{if(r?.msgs)setChatLog(r.msgs)});setChatMsg("")}}} placeholder="Type a message..." style={{...S.input,flex:1,width:"auto"}} maxLength={200}/>
+        <button onClick={()=>{if(chatMsg.trim()){sendChat(chatMsg.trim()).then(r=>{if(r?.msgs)setChatLog(r.msgs)});setChatMsg("")}}} style={{...S.btn,background:"#8b5cf6",color:"#fff"}}>Send</button>
+      </div>
+    </div>}
 
   </div>);
 }
