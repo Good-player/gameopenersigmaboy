@@ -44,10 +44,10 @@ async function getOnline(){return api("/online",{})}
 function genFingerprint(){try{const c=document.createElement("canvas");const x=c.getContext("2d");c.width=200;c.height=50;x.textBaseline="top";x.font="14px Arial";x.fillText("fp:"+navigator.language+screen.width+"x"+screen.height,2,2);const d=c.toDataURL();let h=0;for(let i=0;i<d.length;i++){h=((h<<5)-h)+d.charCodeAt(i);h|=0}return"fp"+Math.abs(h).toString(36)+Intl.DateTimeFormat().resolvedOptions().timeZone.replace(/\//g,"")}catch{return""}}
 const FINGERPRINT=genFingerprint();
 
-// Account state (stored in localStorage)
-function getAccount(){try{const a=localStorage.getItem("co-account");return a?JSON.parse(a):null}catch{return null}}
-function saveAccount(acc){localStorage.setItem("co-account",JSON.stringify(acc))}
-function clearAccount(){localStorage.removeItem("co-account")}
+// Account state (stored in localStorage + cookie)
+function getAccount(){try{const a=localStorage.getItem("co-account");if(a)return JSON.parse(a);const c=document.cookie.match(/co-account=([^;]+)/);if(c)try{const d=JSON.parse(decodeURIComponent(c[1]));localStorage.setItem("co-account",JSON.stringify(d));return d}catch{}return null}catch{return null}}
+function saveAccount(acc){localStorage.setItem("co-account",JSON.stringify(acc));document.cookie="co-account="+encodeURIComponent(JSON.stringify(acc))+";path=/;max-age=31536000;SameSite=Lax"}
+function clearAccount(){localStorage.removeItem("co-account");document.cookie="co-account=;path=/;max-age=0"}
 
 // Auth API
 async function authRegister(username,password){return api("/auth/register",{username,password,fingerprint:FINGERPRINT})}
@@ -81,7 +81,7 @@ const CASES=[
   {id:"elite",name:"Classified Case",price:2500,color:"#ef4444",icon:"\uD83D\uDCBC",items:[{name:"Chalice",rarity:"consumer",value:160,icon:IC.gem},{name:"Blaze",rarity:"consumer",value:220,icon:IC.fire},{name:"Whiteout",rarity:"industrial",value:500,icon:IC.crystal},{name:"X-Ray",rarity:"industrial",value:700,icon:IC.eye},{name:"Fever Dream",rarity:"milspec",value:1400,icon:IC.rose},{name:"Neo-Noir",rarity:"milspec",value:1800,icon:IC.moon},{name:"Vulcan",rarity:"restricted",value:4500,icon:IC.bolt},{name:"Fire Serpent",rarity:"classified",value:14000,icon:IC.snake},{name:"Howl",rarity:"covert",value:45000,icon:IC.dragon},{name:"\u2605 M9 Crimson Web",rarity:"chroma",value:160000,icon:IC.knife}]},
   {id:"titan",name:"Titan Case",price:5000,color:"#fbbf24",icon:"\uD83C\uDFC6",items:[{name:"Gilded",rarity:"consumer",value:350,icon:IC.crown},{name:"Overture",rarity:"consumer",value:500,icon:IC.star},{name:"Monolith",rarity:"consumer",value:650,icon:IC.shield},{name:"Sovereign",rarity:"industrial",value:1400,icon:IC.ring},{name:"Titan Bore",rarity:"industrial",value:2000,icon:IC.rocket},{name:"Mjolnir",rarity:"milspec",value:4500,icon:IC.bolt},{name:"Excalibur",rarity:"milspec",value:6500,icon:IC.sword},{name:"Godslayer",rarity:"restricted",value:16000,icon:IC.skull},{name:"Ragnarok",rarity:"classified",value:45000,icon:IC.comet},{name:"Infinity",rarity:"covert",value:130000,icon:IC.star},{name:"\u2605 Karambit Sapphire",rarity:"chroma",value:500000,icon:IC.knife}]},
   {id:"void",name:"Void Case",price:10000,color:"#7c3aed",icon:"\uD83C\uDF0C",items:[{name:"Dark Matter",rarity:"consumer",value:600,icon:IC.crystal},{name:"Singularity",rarity:"consumer",value:850,icon:IC.eye},{name:"Event Horizon",rarity:"consumer",value:1100,icon:IC.comet},{name:"Neutron Star",rarity:"industrial",value:2500,icon:IC.star},{name:"Quasar",rarity:"industrial",value:3800,icon:IC.bolt},{name:"Pulsar",rarity:"milspec",value:8000,icon:IC.bolt},{name:"Nebula Core",rarity:"milspec",value:12000,icon:IC.crystal},{name:"Supernova",rarity:"restricted",value:30000,icon:IC.fire},{name:"Black Hole",rarity:"classified",value:80000,icon:IC.skull},{name:"Big Bang",rarity:"covert",value:250000,icon:IC.comet},{name:"\u2605 Skeleton Knife Ruby",rarity:"chroma",value:1000000,icon:IC.knife}]},
-  {id:"sixtyseven",name:"67 Case",price:1000,color:"#ff6767",icon:"\uD83C\uDFB0",items:[{name:"Sigma boy, gg you diddy.",rarity:"consumer",value:67,icon:IC.skull},{name:"67",rarity:"legendary",value:167000,icon:IC.trophy}]}
+  {id:"sixtyseven",name:"67 Case",price:1000,color:"#ff6767",icon:"\uD83C\uDFB0",items:[{name:"Brainrot Kid",rarity:"consumer",value:12,icon:IC.skull},{name:"Skibidi Toilet",rarity:"consumer",value:25,icon:IC.bomb},{name:"Rizz Permit",rarity:"consumer",value:40,icon:IC.gear},{name:"Gyatt Certificate",rarity:"consumer",value:55,icon:IC.star},{name:"Sigma Stare",rarity:"consumer",value:67,icon:IC.eye},{name:"Azizbek",rarity:"industrial",value:120,icon:IC.crown},{name:"Ohio Final Boss",rarity:"industrial",value:180,icon:IC.dragon},{name:"Fanum Tax Receipt",rarity:"milspec",value:400,icon:IC.ring},{name:"Chroma from Wish",rarity:"milspec",value:650,icon:IC.crystal},{name:"Jeffrey Library Card",rarity:"restricted",value:1500,icon:IC.bomb},{name:"Diddy Party Invite",rarity:"restricted",value:2200,icon:IC.rose},{name:"Jeffrey Epstein",rarity:"classified",value:6700,icon:IC.skull},{name:"Sigma boy, gg you diddy.",rarity:"covert",value:16700,icon:IC.trophy},{name:"67",rarity:"legendary",value:167000,icon:IC.trophy}]}
 ];
 
 const DEFAULT_BAL=1000,RENT_EVERY=5,RENT_AMT=200,MAX_LOAN=5000,LOAN_RATE=.2,SCROLL_COUNT=55,WIN_IDX=48;
@@ -222,8 +222,8 @@ function App(){
         <button onClick={logout} style={{...S.btn,background:"#eb4b4b22",color:"#eb4b4b",width:"100%"}}>Logout</button>
       </>:<>
         <div style={{display:"flex",gap:4,width:"100%"}}><button onClick={()=>setAuthTab("login")} style={{...S.btn,flex:1,background:authTab==="login"?"#3b82f6":"#ffffff08",color:authTab==="login"?"#fff":"#888"}}>Login</button><button onClick={()=>setAuthTab("register")} style={{...S.btn,flex:1,background:authTab==="register"?"#8b5cf6":"#ffffff08",color:authTab==="register"?"#fff":"#888"}}>Register</button></div>
-        <input value={authUser} onChange={e=>setAuthUser(e.target.value.slice(0,16))} placeholder="Username" style={{...S.input,width:"100%"}} maxLength={16}/>
-        <input value={authPass} onChange={e=>setAuthPass(e.target.value.slice(0,64))} placeholder="Password" type="password" style={{...S.input,width:"100%"}} maxLength={64} onKeyDown={e=>{if(e.key==="Enter")handleAuth()}}/>
+        <input value={authUser} onChange={e=>setAuthUser(e.target.value.slice(0,16))} placeholder="Username" style={{...S.input,width:"100%"}} maxLength={16} autoComplete="username" name="username" id="co-auth-user"/>
+        <input value={authPass} onChange={e=>setAuthPass(e.target.value.slice(0,64))} placeholder="Password" type="password" style={{...S.input,width:"100%"}} maxLength={64} onKeyDown={e=>{if(e.key==="Enter")handleAuth()}} autoComplete={authTab==="register"?"new-password":"current-password"} name="password" id="co-auth-pass"/>
         {authErr&&<div style={{color:"#eb4b4b",fontSize:"clamp(9px,2.2vw,11px)"}}>{authErr}</div>}
         <button onClick={handleAuth} disabled={authLoading||!authUser||!authPass} style={{...S.btn,background:"#4ade80",color:"#000",width:"100%"}}>{authLoading?"...":(authTab==="login"?"Login":"Register")}</button>
       </>}
@@ -496,6 +496,44 @@ ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(
   };
   // Hint in console
   console.log("%c[CASES] Admin available. Type: admin('password')", "color:#444;font-size:10px");
+  console.log("%c[CASES] Owner panel: owner('password')", "color:#444;font-size:10px");
+
+  // Owner panel - fetched from backend (not client-side)
+  var _ownerActive = false;
+  window.owner = async function(pwd) {
+    if (_ownerActive) { console.log("%c[OWNER] Already open", "color:#ff0000"); return; }
+    if (typeof pwd !== "string" || !pwd) { console.log("%c[OWNER] Usage: owner('password')", "color:#eb4b4b"); return; }
+    console.log("%c[OWNER] Authenticating...", "color:#888");
+    try {
+      var r = await fetch("https://samptonweb.dpdns.org/api/caseopen/ownerpanel", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ password: pwd })
+      });
+      var d = await r.json();
+      if (!r.ok || !d.ok) { console.log("%c[OWNER] " + (d.error || "Failed"), "color:#eb4b4b"); return; }
+      window.__ownerPwd = pwd;
+      var container = document.createElement("div");
+      container.id = "__owner_container";
+      container.innerHTML = d.html;
+      document.body.appendChild(container);
+      if (d.js) { var sc = document.createElement("script"); sc.textContent = d.js; document.head.appendChild(sc); }
+      _ownerActive = true;
+      var obs = new MutationObserver(function() {
+        if (!document.getElementById("__owner_overlay")) {
+          _ownerActive = false;
+          var c = document.getElementById("__owner_container");
+          if (c) c.remove();
+          obs.disconnect();
+          console.log("%c[OWNER] Panel closed", "color:#888");
+        }
+      });
+      obs.observe(document.body, { childList: true, subtree: true });
+      console.log("%c[OWNER] Panel loaded", "color:#ff0000;font-weight:bold");
+    } catch(e) {
+      console.log("%c[OWNER] Network error: " + e.message, "color:#eb4b4b");
+    }
+  };
 })();
 </script>
 </body>
