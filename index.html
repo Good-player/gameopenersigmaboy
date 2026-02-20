@@ -37,10 +37,31 @@ async function getFeed(){return api("/feed",{})}
 async function getLeaderboard(){return api("/leaderboard",{})}
 // Get chat messages
 async function getChat(){return api("/chatlog",{})}
+// Get online players
+async function getOnline(){return api("/online",{})}
+
+// Browser fingerprint (canvas + screen + timezone + UA hash)
+function genFingerprint(){try{const c=document.createElement("canvas");const x=c.getContext("2d");c.width=200;c.height=50;x.textBaseline="top";x.font="14px Arial";x.fillText("fp:"+navigator.language+screen.width+"x"+screen.height,2,2);const d=c.toDataURL();let h=0;for(let i=0;i<d.length;i++){h=((h<<5)-h)+d.charCodeAt(i);h|=0}return"fp"+Math.abs(h).toString(36)+Intl.DateTimeFormat().resolvedOptions().timeZone.replace(/\//g,"")}catch{return""}}
+const FINGERPRINT=genFingerprint();
+
+// Account state (stored in localStorage)
+function getAccount(){try{const a=localStorage.getItem("co-account");return a?JSON.parse(a):null}catch{return null}}
+function saveAccount(acc){localStorage.setItem("co-account",JSON.stringify(acc))}
+function clearAccount(){localStorage.removeItem("co-account")}
+
+// Auth API
+async function authRegister(username,password){return api("/auth/register",{username,password,fingerprint:FINGERPRINT})}
+async function authLogin(username,password){return api("/auth/login",{username,password,fingerprint:FINGERPRINT})}
+async function authSave(username,token,slot,data){return api("/auth/save",{username,token,slot,data})}
+async function authLoad(username,token){return api("/auth/load",{username,token})}
+
+// Cookie consent check
+function hasConsent(){return localStorage.getItem("co-consent")==="yes"}
+function giveConsent(){localStorage.setItem("co-consent","yes")}
 
 const { useState, useEffect, useRef, useCallback } = React;
 
-const R={consumer:{label:"Consumer",color:"#b0b3b8",bg:"rgba(176,179,184,0.12)",chance:.55},industrial:{label:"Industrial",color:"#5b98d6",bg:"rgba(91,152,214,0.12)",chance:.20},milspec:{label:"Mil-Spec",color:"#4b69ff",bg:"rgba(75,105,255,0.12)",chance:.12},restricted:{label:"Restricted",color:"#8847ff",bg:"rgba(136,71,255,0.12)",chance:.06},classified:{label:"Classified",color:"#d32ce6",bg:"rgba(211,44,230,0.12)",chance:.03},covert:{label:"Covert",color:"#eb4b4b",bg:"rgba(235,75,75,0.12)",chance:.015},chroma:{label:"\u2605 Chroma",color:"#ffd700",bg:"rgba(255,215,0,0.18)",chance:.005}};
+const R={consumer:{label:"Consumer",color:"#b0b3b8",bg:"rgba(176,179,184,0.12)",chance:.55},industrial:{label:"Industrial",color:"#5b98d6",bg:"rgba(91,152,214,0.12)",chance:.20},milspec:{label:"Mil-Spec",color:"#4b69ff",bg:"rgba(75,105,255,0.12)",chance:.12},restricted:{label:"Restricted",color:"#8847ff",bg:"rgba(136,71,255,0.12)",chance:.06},classified:{label:"Classified",color:"#d32ce6",bg:"rgba(211,44,230,0.12)",chance:.03},covert:{label:"Covert",color:"#eb4b4b",bg:"rgba(235,75,75,0.12)",chance:.015},chroma:{label:"\u2605 Chroma",color:"#ffd700",bg:"rgba(255,215,0,0.18)",chance:.005},legendary:{label:"\u2605 Legendary",color:"#ff0000",bg:"rgba(255,0,0,0.18)",chance:.00001}};
 const RKEYS=Object.keys(R);
 const IC={pistol:"\uD83D\uDD2B",knife:"\uD83D\uDD2A",rifle:"\uD83C\uDFF9",shield:"\uD83D\uDEE1\uFE0F",gem:"\uD83D\uDC8E",fire:"\uD83D\uDD25",bolt:"\u26A1",skull:"\uD83D\uDC80",star:"\u2B50",crown:"\uD83D\uDC51",sword:"\u2694\uFE0F",bomb:"\uD83D\uDCA3",crystal:"\uD83D\uDD2E",rocket:"\uD83D\uDE80",snake:"\uD83D\uDC0D",dragon:"\uD83D\uDC09",eye:"\uD83D\uDC41\uFE0F",rose:"\uD83C\uDF39",moon:"\uD83C\uDF19",comet:"\u2604\uFE0F",chain:"\u26D3\uFE0F",ring:"\uD83D\uDC8D",trophy:"\uD83C\uDFC6",wolf:"\uD83D\uDC3A",octopus:"\uD83D\uDC19",gear:"\u2699\uFE0F",anchor:"\u2693",leaf:"\uD83C\uDF43",tornado:"\uD83C\uDF2A\uFE0F",snowflake:"\u2744\uFE0F"};
 const CONDITIONS=["Factory New","Minimal Wear","Field-Tested","Well-Worn","Battle-Scarred"];
@@ -59,7 +80,8 @@ const CASES=[
   {id:"deep",name:"Deep Sea Case",price:1600,color:"#0e7490",icon:"\uD83C\uDF0A",items:[{name:"Barnacle",rarity:"consumer",value:110,icon:IC.anchor},{name:"Kelp",rarity:"consumer",value:150,icon:IC.leaf},{name:"Coral",rarity:"consumer",value:190,icon:IC.rose},{name:"Anglerfish",rarity:"industrial",value:400,icon:IC.eye},{name:"Trident",rarity:"industrial",value:550,icon:IC.sword},{name:"Kraken",rarity:"milspec",value:1100,icon:IC.octopus},{name:"Leviathan",rarity:"milspec",value:1500,icon:IC.dragon},{name:"Maelstrom",rarity:"restricted",value:4200,icon:IC.tornado},{name:"Abyss Pearl",rarity:"classified",value:11000,icon:IC.gem},{name:"Poseidon",rarity:"covert",value:35000,icon:IC.crown},{name:"\u2605 Talon Knife Sapphire",rarity:"chroma",value:100000,icon:IC.knife}]},
   {id:"elite",name:"Classified Case",price:2500,color:"#ef4444",icon:"\uD83D\uDCBC",items:[{name:"Chalice",rarity:"consumer",value:160,icon:IC.gem},{name:"Blaze",rarity:"consumer",value:220,icon:IC.fire},{name:"Whiteout",rarity:"industrial",value:500,icon:IC.crystal},{name:"X-Ray",rarity:"industrial",value:700,icon:IC.eye},{name:"Fever Dream",rarity:"milspec",value:1400,icon:IC.rose},{name:"Neo-Noir",rarity:"milspec",value:1800,icon:IC.moon},{name:"Vulcan",rarity:"restricted",value:4500,icon:IC.bolt},{name:"Fire Serpent",rarity:"classified",value:14000,icon:IC.snake},{name:"Howl",rarity:"covert",value:45000,icon:IC.dragon},{name:"\u2605 M9 Crimson Web",rarity:"chroma",value:160000,icon:IC.knife}]},
   {id:"titan",name:"Titan Case",price:5000,color:"#fbbf24",icon:"\uD83C\uDFC6",items:[{name:"Gilded",rarity:"consumer",value:350,icon:IC.crown},{name:"Overture",rarity:"consumer",value:500,icon:IC.star},{name:"Monolith",rarity:"consumer",value:650,icon:IC.shield},{name:"Sovereign",rarity:"industrial",value:1400,icon:IC.ring},{name:"Titan Bore",rarity:"industrial",value:2000,icon:IC.rocket},{name:"Mjolnir",rarity:"milspec",value:4500,icon:IC.bolt},{name:"Excalibur",rarity:"milspec",value:6500,icon:IC.sword},{name:"Godslayer",rarity:"restricted",value:16000,icon:IC.skull},{name:"Ragnarok",rarity:"classified",value:45000,icon:IC.comet},{name:"Infinity",rarity:"covert",value:130000,icon:IC.star},{name:"\u2605 Karambit Sapphire",rarity:"chroma",value:500000,icon:IC.knife}]},
-  {id:"void",name:"Void Case",price:10000,color:"#7c3aed",icon:"\uD83C\uDF0C",items:[{name:"Dark Matter",rarity:"consumer",value:600,icon:IC.crystal},{name:"Singularity",rarity:"consumer",value:850,icon:IC.eye},{name:"Event Horizon",rarity:"consumer",value:1100,icon:IC.comet},{name:"Neutron Star",rarity:"industrial",value:2500,icon:IC.star},{name:"Quasar",rarity:"industrial",value:3800,icon:IC.bolt},{name:"Pulsar",rarity:"milspec",value:8000,icon:IC.bolt},{name:"Nebula Core",rarity:"milspec",value:12000,icon:IC.crystal},{name:"Supernova",rarity:"restricted",value:30000,icon:IC.fire},{name:"Black Hole",rarity:"classified",value:80000,icon:IC.skull},{name:"Big Bang",rarity:"covert",value:250000,icon:IC.comet},{name:"\u2605 Skeleton Knife Ruby",rarity:"chroma",value:1000000,icon:IC.knife}]}
+  {id:"void",name:"Void Case",price:10000,color:"#7c3aed",icon:"\uD83C\uDF0C",items:[{name:"Dark Matter",rarity:"consumer",value:600,icon:IC.crystal},{name:"Singularity",rarity:"consumer",value:850,icon:IC.eye},{name:"Event Horizon",rarity:"consumer",value:1100,icon:IC.comet},{name:"Neutron Star",rarity:"industrial",value:2500,icon:IC.star},{name:"Quasar",rarity:"industrial",value:3800,icon:IC.bolt},{name:"Pulsar",rarity:"milspec",value:8000,icon:IC.bolt},{name:"Nebula Core",rarity:"milspec",value:12000,icon:IC.crystal},{name:"Supernova",rarity:"restricted",value:30000,icon:IC.fire},{name:"Black Hole",rarity:"classified",value:80000,icon:IC.skull},{name:"Big Bang",rarity:"covert",value:250000,icon:IC.comet},{name:"\u2605 Skeleton Knife Ruby",rarity:"chroma",value:1000000,icon:IC.knife}]},
+  {id:"sixtyseven",name:"67 Case",price:1000,color:"#ff6767",icon:"\uD83C\uDFB0",items:[{name:"Sigma boy, gg you diddy.",rarity:"consumer",value:67,icon:IC.skull},{name:"67",rarity:"legendary",value:167000,icon:IC.trophy}]}
 ];
 
 const DEFAULT_BAL=1000,RENT_EVERY=5,RENT_AMT=200,MAX_LOAN=5000,LOAN_RATE=.2,SCROLL_COUNT=55,WIN_IDX=48;
@@ -86,6 +108,7 @@ function App(){
   const[st,setSt]=useState(INIT);const[page,setPage]=useState("shop");const[selCase,setSelCase]=useState(null);const[wonItem,setWonItem]=useState(null);const[wonFloat,setWonFloat]=useState(0);const[wonQuote,setWonQuote]=useState("");const[scrollItems,setScrollItems]=useState([]);const[scrollDone,setScrollDone]=useState(false);const[opening,setOpening]=useState(false);const[resetMsg,setResetMsg]=useState("");const[loanAmt,setLoanAmt]=useState("");const[rentPaid,setRentPaid]=useState(0);const[inspecting,setInspecting]=useState(null);const[confirmReset,setConfirmReset]=useState(false);const[drops,setDrops]=useState([]);
   const[invSort,setInvSort]=useState("newest");const[invFilter,setInvFilter]=useState("all");const[invView,setInvView]=useState("grid");const[selItem,setSelItem]=useState(null);const[sellAmt,setSellAmt]=useState("");const[sellConfirm,setSellConfirm]=useState(null);const[lastWonId,setLastWonId]=useState(null);
   const[feed,setFeed]=useState([]);const[lb,setLb]=useState([]);const[chatLog,setChatLog]=useState([]);const[chatMsg,setChatMsg]=useState("");const[nickname,setNickname]=useState(getUserName());const[nameEditing,setNameEditing]=useState(false);const[chatCd,setChatCd]=useState(0);
+  const[account,setAccount]=useState(getAccount());const[showAuth,setShowAuth]=useState(false);const[authTab,setAuthTab]=useState("login");const[authUser,setAuthUser]=useState("");const[authPass,setAuthPass]=useState("");const[authErr,setAuthErr]=useState("");const[authLoading,setAuthLoading]=useState(false);const[saveStatus,setSaveStatus]=useState("");const[consent,setConsent]=useState(hasConsent());const[onlineData,setOnlineData]=useState(null);
   const stripRef=useRef(null);const lockRef=useRef(false);
 
   useEffect(()=>{(async()=>{try{const r=await _stGet("co-slots");if(r?.value)setSlotMeta(JSON.parse(r.value))}catch{}})()},[]);
@@ -125,6 +148,51 @@ function App(){
   function repay(){const a=parseInt(loanAmt);if(!a||a<=0)return;const actual=Math.min(a,st.loan,st.bal);if(actual<=0)return;setSt(p=>{const ns={...p,bal:p.bal-actual,loan:p.loan-actual};save(ns,drops);return ns});setLoanAmt("")}
   function doReset(){const fresh={...INIT,inv:[],stats:{...INIT.stats},history:[{n:0,bal:DEFAULT_BAL,label:"Start"}],starred:{}};setSt(fresh);setDrops([]);save(fresh,[]);setPage("shop");lockRef.current=false;setOpening(false);setConfirmReset(false)}
 
+  // Auth handlers
+  async function handleAuth(){
+    setAuthErr("");setAuthLoading(true);
+    try{
+      const fn=authTab==="login"?authLogin:authRegister;
+      const r=await fn(authUser,authPass);
+      if(!r||r.error){setAuthErr(r?.error||"Failed");setAuthLoading(false);return}
+      const acc={username:r.username,token:r.token,role:r.role||"user"};
+      setAccount(acc);saveAccount(acc);setShowAuth(false);setAuthUser("");setAuthPass("");
+      // On login, if server has saved slots, offer to load
+      if(r.slots&&r.slots.some(s=>s!==null)){
+        if(confirm("Account has saved data. Load from cloud? (Cancel to keep local data)")){
+          for(let i=0;i<3;i++){if(r.slots[i]){await _stSet("co-s"+i,JSON.stringify(r.slots[i]))}}
+          location.reload();
+        }
+      }
+    }catch(e){setAuthErr(e.message||"Error")}
+    setAuthLoading(false);
+  }
+  async function cloudSave(){
+    if(!account)return;setSaveStatus("saving");
+    try{
+      const slotData=await _stGet("co-s"+slot);
+      const data=slotData?.value?JSON.parse(slotData.value):null;
+      if(!data){setSaveStatus("No data");return}
+      const r=await authSave(account.username,account.token,slot,data);
+      if(r?.ok)setSaveStatus("Saved!");else setSaveStatus(r?.error||"Failed");
+    }catch{setSaveStatus("Error")}
+    setTimeout(()=>setSaveStatus(""),3000);
+  }
+  async function cloudLoad(){
+    if(!account)return;
+    if(!confirm("Load slot "+(slot+1)+" from cloud? This will overwrite your local data."))return;
+    setSaveStatus("loading");
+    try{
+      const r=await authLoad(account.username,account.token);
+      if(r?.slots&&r.slots[slot]){
+        await _stSet("co-s"+slot,JSON.stringify(r.slots[slot]));
+        setSaveStatus("Loaded!");location.reload();
+      }else{setSaveStatus("No cloud data for this slot")}
+    }catch{setSaveStatus("Error")}
+    setTimeout(()=>setSaveStatus(""),3000);
+  }
+  function logout(){clearAccount();setAccount(null)}
+
   function sellItem(item){sndSell();setSt(p=>{const idx=p.inv.findIndex(i=>i.id===item.id);if(idx===-1)return p;const ni=[...p.inv];ni.splice(idx,1);const starred={...p.starred};delete starred[item.id];const ns={...p,bal:p.bal+item.value,inv:ni,stats:{...p.stats,sold:(p.stats.sold||0)+item.value},starred};save(ns,drops);return ns});setSelItem(null)}
   function sellLastWon(){if(!lastWonId||!wonItem)return;sndSell();setSt(p=>{const idx=p.inv.findIndex(i=>i.id===lastWonId);if(idx===-1)return p;const item=p.inv[idx];const ni=[...p.inv];ni.splice(idx,1);const starred={...p.starred};delete starred[lastWonId];const ns={...p,bal:p.bal+item.value,inv:ni,stats:{...p.stats,sold:(p.stats.sold||0)+item.value},starred};save(ns,drops);return ns});setLastWonId(null)}
   function sellMultiple(count){sndSell();setSt(p=>{let sorted=getFilteredSorted(p.inv,p.starred);sorted=sorted.filter(i=>!p.starred[i.id]);const toSell=sorted.slice(0,count);if(!toSell.length)return p;const ids=new Set(toSell.map(i=>i.id));const total=toSell.reduce((s,i)=>s+i.value,0);const ni=p.inv.filter(i=>!ids.has(i.id));const ns={...p,bal:p.bal+total,inv:ni,stats:{...p.stats,sold:(p.stats.sold||0)+total}};save(ns,drops);return ns})}
@@ -137,10 +205,30 @@ function App(){
   function caseStats(cId){const items=st.inv.filter(i=>i.from===cId);const sp=items.length*(CASES.find(c=>c.id===cId)?.price||0);const ea=items.reduce((s,i)=>s+i.value,0);const counts={};RKEYS.forEach(k=>{counts[k]=items.filter(i=>i.rarity===k).length});return{opened:items.length,spent:sp,earned:ea,counts}}
   const filteredInv=getFilteredSorted(st.inv,st.starred||{});
 
+  // COOKIE CONSENT
+  if(!consent)return(<div style={S.root}><style>{CSS}</style><div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"clamp(20px,5vw,40px)",gap:16,textAlign:"center"}}><div style={{fontSize:"clamp(40px,12vw,64px)"}}>{"\uD83C\uDF6A"}</div><div style={{fontSize:"clamp(18px,5vw,26px)",fontWeight:800}}>Cookie Notice</div><div style={{color:"#888",fontSize:"clamp(10px,2.5vw,13px)",maxWidth:400}}>This game uses localStorage to save your progress and cookies to sync your account. Your data stays in your browser and on our server only.</div><button onClick={()=>{giveConsent();setConsent(true)}} style={{...S.btn,background:"#4ade80",color:"#000",padding:"12px 32px",fontSize:"clamp(12px,3vw,16px)"}}>Accept & Play</button><div style={{color:"#555",fontSize:"clamp(8px,2vw,10px)"}}>Required to save game data</div></div></div>);
+
   // SAVE SLOT SCREEN
   if(showSlots)return(<div style={S.root}><style>{CSS}</style><div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"clamp(20px,5vw,40px)",gap:"clamp(16px,4vw,28px)"}}><div style={{fontSize:"clamp(20px,6vw,32px)",fontWeight:800,letterSpacing:3,color:"#ccc"}}>CASES</div><div style={{color:"#666",fontSize:"clamp(10px,2.5vw,13px)"}}>Select a save slot</div><div style={{display:"flex",flexDirection:"column",gap:"clamp(8px,2vw,12px)",width:"100%",maxWidth:400}}>{[0,1,2].map(i=>{const m=slotMeta[i];return(<button key={i} onClick={()=>loadSlot(i)} style={{...S.slotBtn,borderColor:slot===i?"#4ade80":"#1e2430"}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",width:"100%"}}><span style={{fontWeight:700,fontSize:"clamp(12px,3vw,16px)"}}>Slot {i+1}</span>{m?<span style={{color:"#4ade80",fontWeight:600,fontSize:"clamp(10px,2.5vw,13px)"}}>{money(m.bal)}</span>:<span style={{color:"#555",fontSize:"clamp(10px,2.5vw,12px)"}}>Empty</span>}</div>{m&&<div style={{display:"flex",gap:"clamp(10px,3vw,18px)",fontSize:"clamp(8px,2vw,10px)",color:"#888"}}><span>{m.items} items</span><span>Inv: {money(m.totalVal)}</span><span>{m.opened} opened</span></div>}</button>)})}</div></div></div>);
 
   return(<div style={S.root}><style>{CSS}</style>
+
+    {/* Auth Modal */}
+    {showAuth&&<div style={S.overlay} onClick={()=>setShowAuth(false)}><div style={S.modal} onClick={e=>e.stopPropagation()}>
+      <div style={{fontSize:"clamp(14px,3.5vw,18px)",fontWeight:700}}>{account?"Account":"Login / Register"}</div>
+      {account?<>
+        <div style={{color:"#4ade80",fontWeight:600}}>{"\u2705"} {account.username}</div>
+        <div style={{color:"#888",fontSize:"clamp(9px,2.2vw,11px)"}}>Role: {account.role}</div>
+        <button onClick={logout} style={{...S.btn,background:"#eb4b4b22",color:"#eb4b4b",width:"100%"}}>Logout</button>
+      </>:<>
+        <div style={{display:"flex",gap:4,width:"100%"}}><button onClick={()=>setAuthTab("login")} style={{...S.btn,flex:1,background:authTab==="login"?"#3b82f6":"#ffffff08",color:authTab==="login"?"#fff":"#888"}}>Login</button><button onClick={()=>setAuthTab("register")} style={{...S.btn,flex:1,background:authTab==="register"?"#8b5cf6":"#ffffff08",color:authTab==="register"?"#fff":"#888"}}>Register</button></div>
+        <input value={authUser} onChange={e=>setAuthUser(e.target.value.slice(0,16))} placeholder="Username" style={{...S.input,width:"100%"}} maxLength={16}/>
+        <input value={authPass} onChange={e=>setAuthPass(e.target.value.slice(0,64))} placeholder="Password" type="password" style={{...S.input,width:"100%"}} maxLength={64} onKeyDown={e=>{if(e.key==="Enter")handleAuth()}}/>
+        {authErr&&<div style={{color:"#eb4b4b",fontSize:"clamp(9px,2.2vw,11px)"}}>{authErr}</div>}
+        <button onClick={handleAuth} disabled={authLoading||!authUser||!authPass} style={{...S.btn,background:"#4ade80",color:"#000",width:"100%"}}>{authLoading?"...":(authTab==="login"?"Login":"Register")}</button>
+      </>}
+      <button onClick={()=>setShowAuth(false)} style={{...S.btn,background:"#ffffff08",color:"#666",width:"100%"}}>Close</button>
+    </div></div>}
 
     {/* Modals */}
     {confirmReset&&<div style={S.overlay}><div style={S.modal}><div style={{fontSize:"clamp(28px,8vw,44px)"}}>{"\u26A0\uFE0F"}</div><div style={{fontSize:"clamp(14px,3.5vw,18px)",fontWeight:700}}>Reset slot {slot+1}?</div><div style={{color:"#888",fontSize:"clamp(10px,2.5vw,12px)",textAlign:"center"}}>Everything will be wiped.</div><div style={{display:"flex",gap:"clamp(8px,2vw,12px)",marginTop:8}}><button onClick={()=>setConfirmReset(false)} style={{...S.btn,background:"#ffffff0a",color:"#888",flex:1}}>Cancel</button><button onClick={doReset} style={{...S.btn,background:"#eb4b4b",color:"#fff",flex:1}}>Reset</button></div></div></div>}
@@ -157,10 +245,10 @@ function App(){
     {resetMsg&&<div style={S.overlay}><div style={S.modal}><div style={{fontSize:"clamp(36px,10vw,56px)"}}>{"\uD83D\uDC80"}</div><div style={{fontSize:"clamp(16px,4vw,22px)",fontWeight:700,color:"#eb4b4b"}}>{resetMsg}</div></div></div>}
 
     {/* HEADER */}
-    <div style={S.hdr}><div style={{display:"flex",alignItems:"center",gap:"clamp(6px,1.5vw,10px)"}}><button onClick={()=>setShowSlots(true)} style={{...S.btn,background:"#ffffff08",color:"#888",padding:"clamp(4px,1vw,6px) clamp(6px,1.5vw,10px)",fontSize:"clamp(9px,2.2vw,11px)"}}>Slot {slot+1}</button><div style={S.title}>CASES</div></div><div style={S.hdrRight}><div style={S.chip}><span style={S.chipLbl}>BAL</span><span style={{color:st.bal<100?"#eb4b4b":"#4ade80",fontWeight:700,fontSize:"clamp(14px,3.5vw,20px)"}}>{money(st.bal)}</span></div>{st.loan>0&&<div style={{...S.chip,borderColor:"#eb4b4b33"}}><span style={S.chipLbl}>DEBT</span><span style={{color:"#eb4b4b",fontWeight:700,fontSize:"clamp(12px,3vw,18px)"}}>{money(st.loan)}</span></div>}<div style={S.rentChip}>Rent in {rentIn}</div></div></div>
+    <div style={S.hdr}><div style={{display:"flex",alignItems:"center",gap:"clamp(6px,1.5vw,10px)"}}><button onClick={()=>setShowSlots(true)} style={{...S.btn,background:"#ffffff08",color:"#888",padding:"clamp(4px,1vw,6px) clamp(6px,1.5vw,10px)",fontSize:"clamp(9px,2.2vw,11px)"}}>Slot {slot+1}</button><div style={S.title}>CASES</div></div><div style={S.hdrRight}><button onClick={()=>setShowAuth(true)} style={{...S.btn,background:account?"#4ade8022":"#ffffff08",color:account?"#4ade80":"#888",padding:"4px 8px",fontSize:"clamp(8px,2vw,10px)",border:account?"1px solid #4ade8033":"none"}}>{account?account.username:"\uD83D\uDD12 Login"}</button>{account&&<><button onClick={cloudSave} style={{...S.btn,background:"#3b82f622",color:"#3b82f6",padding:"4px 8px",fontSize:"clamp(8px,2vw,10px)"}}>{"\uD83D\uDCBE"}</button><button onClick={cloudLoad} style={{...S.btn,background:"#8b5cf622",color:"#8b5cf6",padding:"4px 8px",fontSize:"clamp(8px,2vw,10px)"}}>{"\u2601"}</button></>}{saveStatus&&<span style={{color:"#fbbf24",fontSize:"clamp(8px,2vw,10px)"}}>{saveStatus}</span>}<div style={S.chip}><span style={S.chipLbl}>BAL</span><span style={{color:st.bal<100?"#eb4b4b":"#4ade80",fontWeight:700,fontSize:"clamp(14px,3.5vw,20px)"}}>{money(st.bal)}</span></div>{st.loan>0&&<div style={{...S.chip,borderColor:"#eb4b4b33"}}><span style={S.chipLbl}>DEBT</span><span style={{color:"#eb4b4b",fontWeight:700,fontSize:"clamp(12px,3vw,18px)"}}>{money(st.loan)}</span></div>}<div style={S.rentChip}>Rent in {rentIn}</div></div></div>
 
     {/* NAV */}
-    <div style={S.nav}>{[["shop","Shop"],["inv",`Inv (${st.inv.length})`],["stats","Stats"],["loan","Loan"],["live","\uD83D\uDD34 Live"],["lb","\uD83C\uDFC6 Top"],["chat","\uD83D\uDCAC Chat"]].map(([k,l])=>(<button key={k} onClick={()=>{if(!opening||scrollDone||k==="shop"){setPage(k);if(k!=="opening")setOpening(false)}}} style={{...S.tab,...(page===k||(page==="opening"&&k==="shop")?S.tabOn:{})}}>{l}</button>))}<button onClick={()=>setConfirmReset(true)} style={{...S.tab,marginLeft:"auto",color:"#eb4b4b"}}>Reset</button></div>
+    <div style={S.nav}>{[["shop","Shop"],["inv",`Inv (${st.inv.length})`],["stats","Stats"],["loan","Loan"],["live","\uD83D\uDD34 Live"],["lb","\uD83C\uDFC6 Top"],["chat","\uD83D\uDCAC Chat"],["map","\uD83C\uDF0D Map"]].map(([k,l])=>(<button key={k} onClick={()=>{if(!opening||scrollDone||k==="shop"){setPage(k);if(k!=="opening")setOpening(false);if(k==="map")getOnline().then(r=>{if(r)setOnlineData(r)})}}} style={{...S.tab,...(page===k||(page==="opening"&&k==="shop")?S.tabOn:{})}}>{l}</button>))}<button onClick={()=>setConfirmReset(true)} style={{...S.tab,marginLeft:"auto",color:"#eb4b4b"}}>Reset</button></div>
 
     {/* SHOP */}
     {page==="shop"&&<div style={S.body}><div style={S.grid}>{CASES.map(c=>{const ok=st.bal>=c.price;return(<div key={c.id} style={{...S.card,borderColor:c.color+"44",opacity:ok?1:.35}}><div style={{...S.cardIcon,background:c.color+"12",borderColor:c.color+"28"}}><span style={{fontSize:"clamp(26px,6.5vw,40px)"}}>{c.icon}</span></div><div style={S.cardName}>{c.name}</div><div style={{...S.cardPrice,color:c.color}}>{money(c.price)}</div><div style={{display:"flex",gap:"clamp(4px,1vw,6px)",width:"100%"}}><button disabled={!ok} onClick={()=>doOpen(c)} style={{...S.btn,background:ok?c.color:"#333",color:"#fff",flex:1}}>Open</button><button onClick={()=>{setInspecting(c);setPage("inspect")}} style={{...S.btn,background:"#ffffff08",color:"#777",flex:1}}>Inspect</button></div></div>)})}</div></div>}
@@ -283,14 +371,39 @@ function App(){
         {chatLog.length===0?<div style={{color:"#555",textAlign:"center",padding:20}}>No messages yet. Say hi!</div>:
         chatLog.map((m,i)=><div key={i} style={{display:"flex",gap:6,fontSize:"clamp(8px,2.2vw,11px)",padding:"4px 0"}}>
           <span style={{color:"#888",flexShrink:0,width:42}}>{m.ago||""}</span>
-          <span style={{color:m.uid===USER_ID?"#4ade80":"#8b5cf6",fontWeight:700,flexShrink:0}}>{m.uname||"Anon"}</span>
-          <span style={{color:"#ccc"}}>{m.msg}</span>
+          <span style={{color:m.uid===USER_ID?"#4ade80":m.uid==="SYSTEM"?"#f59e0b":"#8b5cf6",fontWeight:700,flexShrink:0}}>{m.uname||"Anon"}</span>
+          <span style={{color:m.uid==="SYSTEM"?"#fbbf24":"#ccc"}}>{m.msg}</span>
         </div>)}
       </div>
       <div style={{display:"flex",gap:6}}>
-        <input value={chatMsg} onChange={e=>setChatMsg(e.target.value.slice(0,200))} onKeyDown={e=>{if(e.key==="Enter"&&chatMsg.trim()&&chatCd<=0){sendChat(chatMsg.trim()).then(r=>{if(r?.cooldown)setChatCd(r.cooldown);else if(r?.msgs){setChatLog(r.msgs);setChatCd(5)}});setChatMsg("")}}} placeholder={chatCd>0?`Wait ${chatCd}s...`:"Type a message..."} style={{...S.input,flex:1,width:"auto"}} maxLength={200} disabled={chatCd>0}/>
+        <input value={chatMsg} onChange={e=>setChatMsg(e.target.value.slice(0,200))} onKeyDown={e=>{if(e.key==="Enter"&&chatMsg.trim()&&chatCd<=0){sendChat(chatMsg.trim()).then(r=>{if(r?.cooldown)setChatCd(r.cooldown);else if(r?.msgs){setChatLog(r.msgs);setChatCd(5)}else if(r?.error==="Banned: "||r?.banned){setChatCd(999)}});setChatMsg("")}}} placeholder={chatCd>0?`Wait ${chatCd}s...`:"Type a message..."} style={{...S.input,flex:1,width:"auto"}} maxLength={200} disabled={chatCd>0}/>
         <button onClick={()=>{if(chatMsg.trim()&&chatCd<=0){sendChat(chatMsg.trim()).then(r=>{if(r?.cooldown)setChatCd(r.cooldown);else if(r?.msgs){setChatLog(r.msgs);setChatCd(5)}});setChatMsg("")}}} disabled={chatCd>0||!chatMsg.trim()} style={{...S.btn,background:chatCd>0?"#333":"#8b5cf6",color:chatCd>0?"#666":"#fff"}}>{chatCd>0?chatCd+"s":"Send"}</button>
       </div>
+    </div>}
+
+    {/* ONLINE MAP */}
+    {page==="map"&&<div style={S.body}>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
+        <div style={{fontSize:"clamp(15px,4vw,20px)",fontWeight:700}}>{"\uD83C\uDF0D"} Online Players</div>
+        <button onClick={async()=>{const r=await getOnline();if(r)setOnlineData(r)}} style={{...S.btn,background:"#ffffff08",color:"#888"}}>Refresh</button>
+      </div>
+      <div style={{background:"#0d1117",border:"1px solid #151820",borderRadius:10,padding:"clamp(12px,3vw,20px)",marginBottom:12}}>
+        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:12}}>
+          <div style={{width:10,height:10,borderRadius:"50%",background:"#4ade80",boxShadow:"0 0 6px #4ade80"}}/>
+          <span style={{color:"#4ade80",fontWeight:700,fontSize:"clamp(16px,4vw,22px)"}}>{onlineData?.online||0}</span>
+          <span style={{color:"#888"}}>players online</span>
+        </div>
+        {onlineData?.countries&&Object.entries(onlineData.countries).sort((a,b)=>b[1].count-a[1].count).map(([code,data])=>(
+          <div key={code} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 0",borderBottom:"1px solid #151820"}}>
+            <span style={{fontSize:"clamp(16px,4vw,22px)"}}>{code!=="XX"?String.fromCodePoint(...[...code.toUpperCase()].map(c=>0x1F1E6+c.charCodeAt(0)-65)):"\uD83C\uDF10"}</span>
+            <span style={{color:"#e2e8f0",fontWeight:600,flex:1}}>{code!=="XX"?code:"Unknown"}</span>
+            <span style={{color:"#4ade80",fontWeight:700}}>{data.count}</span>
+            <span style={{color:"#666",fontSize:"clamp(8px,2vw,10px)"}}>{data.players.slice(0,3).join(", ")}{data.players.length>3?"...":""}</span>
+          </div>
+        ))}
+        {(!onlineData?.countries||Object.keys(onlineData.countries).length===0)&&<div style={{color:"#555",textAlign:"center",padding:20}}>No players online</div>}
+      </div>
+      <div style={{color:"#666",fontSize:"clamp(8px,2vw,10px)",textAlign:"center"}}>Location based on country only. No precise tracking.</div>
     </div>}
 
   </div>);
