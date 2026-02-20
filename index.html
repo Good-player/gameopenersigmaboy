@@ -8,7 +8,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
 </head>
-<body>
+<body style="background:#0a0c10;color:#e2e8f0;margin:0;font-family:'JetBrains Mono',monospace">
 <div id="root"></div>
 <script type="text/babel">
 // localStorage polyfill for window.storage API
@@ -26,7 +26,7 @@ const API_BASE="https://samptonweb.dpdns.org/api/caseopen";
 async function api(path,body){try{const r=await fetch(API_BASE+path,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({uid:USER_ID,uname:getUserName(),...body})});return await r.json()}catch{return null}}
 
 // Report an open to server (fire-and-forget)
-function reportOpen(caseName,casePrice,item,float){api("/open",{caseName,casePrice,item:item.name,rarity:item.rarity,value:item.value,icon:item.icon,float})}
+// Report open is now handled server-side via /roll
 // Report sell
 function reportSell(item){api("/sell",{item:item.name,value:item.value})}
 // Send chat
