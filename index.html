@@ -59,6 +59,17 @@ async function authLoad(username,token){return api("/auth/load",{username,token}
 function hasConsent(){return localStorage.getItem("co-consent")==="yes"}
 function giveConsent(){localStorage.setItem("co-consent","yes")}
 
+// Simple markdown renderer (Discord-style)
+function renderMd(text){
+  if(!text)return "";
+  return text
+    .replace(/\*\*(.+?)\*\*/g,"<b>$1</b>")
+    .replace(/\*(.+?)\*/g,"<i>$1</i>")
+    .replace(/~~(.+?)~~/g,"<s>$1</s>")
+    .replace(/`(.+?)`/g,"<code style='background:#1a1d24;padding:1px 4px;border-radius:3px;font-size:0.9em'>$1</code>")
+    .replace(/\n/g,"<br>");
+}
+
 const { useState, useEffect, useRef, useCallback } = React;
 
 const R={consumer:{label:"Consumer",color:"#b0b3b8",bg:"rgba(176,179,184,0.12)",chance:.55},industrial:{label:"Industrial",color:"#5b98d6",bg:"rgba(91,152,214,0.12)",chance:.20},milspec:{label:"Mil-Spec",color:"#4b69ff",bg:"rgba(75,105,255,0.12)",chance:.12},restricted:{label:"Restricted",color:"#8847ff",bg:"rgba(136,71,255,0.12)",chance:.06},classified:{label:"Classified",color:"#d32ce6",bg:"rgba(211,44,230,0.12)",chance:.03},covert:{label:"Covert",color:"#eb4b4b",bg:"rgba(235,75,75,0.12)",chance:.015},chroma:{label:"\u2605 Chroma",color:"#ffd700",bg:"rgba(255,215,0,0.18)",chance:.005},legendary:{label:"\u2605 Legendary",color:"#ff0000",bg:"rgba(255,0,0,0.18)",chance:.00001}};
@@ -84,7 +95,7 @@ const CASES=[
   {id:"sixtyseven",name:"67 Case",price:1000,color:"#ff6767",icon:"\uD83C\uDFB0",items:[{name:"Brainrot Kid",rarity:"consumer",value:12,icon:IC.skull},{name:"Skibidi Toilet",rarity:"consumer",value:25,icon:IC.bomb},{name:"Rizz Permit",rarity:"consumer",value:40,icon:IC.gear},{name:"Gyatt Certificate",rarity:"consumer",value:55,icon:IC.star},{name:"Sigma Stare",rarity:"consumer",value:67,icon:IC.eye},{name:"Azizbek",rarity:"industrial",value:120,icon:IC.crown},{name:"Ohio Final Boss",rarity:"industrial",value:180,icon:IC.dragon},{name:"Fanum Tax Receipt",rarity:"milspec",value:400,icon:IC.ring},{name:"Chroma from Wish",rarity:"milspec",value:650,icon:IC.crystal},{name:"Jeffrey Library Card",rarity:"restricted",value:1500,icon:IC.bomb},{name:"Diddy Party Invite",rarity:"restricted",value:2200,icon:IC.rose},{name:"Jeffrey Epstein",rarity:"classified",value:6700,icon:IC.skull},{name:"Sigma boy, gg you diddy.",rarity:"covert",value:16700,icon:IC.trophy},{name:"67",rarity:"legendary",value:167000,icon:IC.trophy}]}
 ];
 
-const DEFAULT_BAL=1000,RENT_EVERY=5,RENT_AMT=200,MAX_LOAN=5000,LOAN_RATE=.2,SCROLL_COUNT=55,WIN_IDX=48;
+const DEFAULT_BAL=1000,RENT_EVERY=5,RENT_AMT=200,MAX_LOAN=10000,LOAN_RATE=.2,SCROLL_COUNT=55,WIN_IDX=48;
 const INIT={bal:DEFAULT_BAL,inv:[],stats:{opened:0,spent:0,won:0,sold:0,best:null,bestVal:0},loan:0,rentCtr:0,history:[{n:0,bal:DEFAULT_BAL,label:"Start"}],starred:{}};
 function roll(c){let r2=Math.random(),cum=0;for(const[k,v]of Object.entries(R)){cum+=v.chance;if(r2<=cum){const pool=c.items.filter(i=>i.rarity===k);if(pool.length)return pool[Math.floor(Math.random()*pool.length)]}}return c.items.filter(i=>i.rarity==="consumer")[0]}
 function money(n){return"$"+n.toLocaleString()}
@@ -109,6 +120,10 @@ function App(){
   const[invSort,setInvSort]=useState("newest");const[invFilter,setInvFilter]=useState("all");const[invView,setInvView]=useState("grid");const[selItem,setSelItem]=useState(null);const[sellAmt,setSellAmt]=useState("");const[sellConfirm,setSellConfirm]=useState(null);const[lastWonId,setLastWonId]=useState(null);
   const[feed,setFeed]=useState([]);const[lb,setLb]=useState([]);const[chatLog,setChatLog]=useState([]);const[chatMsg,setChatMsg]=useState("");const[nickname,setNickname]=useState(getUserName());const[nameEditing,setNameEditing]=useState(false);const[chatCd,setChatCd]=useState(0);
   const[account,setAccount]=useState(getAccount());const[showAuth,setShowAuth]=useState(false);const[authTab,setAuthTab]=useState("login");const[authUser,setAuthUser]=useState("");const[authPass,setAuthPass]=useState("");const[authErr,setAuthErr]=useState("");const[authLoading,setAuthLoading]=useState(false);const[saveStatus,setSaveStatus]=useState("");const[consent,setConsent]=useState(hasConsent());const[onlineData,setOnlineData]=useState(null);
+  const[dmInbox,setDmInbox]=useState(null);const[dmTo,setDmTo]=useState("");const[dmMsg,setDmMsg]=useState("");const[dmSearch,setDmSearch]=useState("");const[dmResults,setDmResults]=useState([]);const[dmUnread,setDmUnread]=useState(0);
+  const[viewProfile,setViewProfile]=useState(null);const[editBio,setEditBio]=useState("");const[editPrivacy,setEditPrivacy]=useState("public");
+  const[reportTarget,setReportTarget]=useState("");const[reportReason,setReportReason]=useState("");const[reportMsg,setReportMsg]=useState("");
+  const[events,setEvents]=useState([]);const[dismissedEvents,setDismissedEvents]=useState({});
   const stripRef=useRef(null);const lockRef=useRef(false);
 
   useEffect(()=>{(async()=>{try{const r=await _stGet("co-slots");if(r?.value)setSlotMeta(JSON.parse(r.value))}catch{}})()},[]);
@@ -123,24 +138,30 @@ function App(){
 
   // Poll server for live data + remote refresh check
   const lastRefreshRef=useRef(Date.now());
-  useEffect(()=>{if(showSlots)return;let on=true;async function poll(){if(!on)return;try{const[f,l,c,ref]=await Promise.all([getFeed(),getLeaderboard(),getChat(),api("/refresh",{})]);if(f?.feed)setFeed(f.feed);if(l?.lb)setLb(l.lb);if(c?.msgs)setChatLog(c.msgs);if(ref?.refreshAt&&ref.refreshAt>lastRefreshRef.current){lastRefreshRef.current=ref.refreshAt;location.reload()}}catch{}};poll();const id=setInterval(poll,8000);return()=>{on=false;clearInterval(id)}},[showSlots]);
+  useEffect(()=>{if(showSlots)return;let on=true;async function poll(){if(!on)return;try{const[f,l,c,ref,ev]=await Promise.all([getFeed(),getLeaderboard(),getChat(),api("/refresh",{}),api("/events",{})]);if(f?.feed)setFeed(f.feed);if(l?.lb)setLb(l.lb);if(c?.msgs)setChatLog(c.msgs);if(ref?.refreshAt&&ref.refreshAt>lastRefreshRef.current){lastRefreshRef.current=ref.refreshAt;location.reload()}if(ev?.events)setEvents(ev.events);if(account){const dm=await api("/dm/inbox",{username:account.username,token:account.token});if(dm?.unread!==undefined)setDmUnread(dm.unread)}}catch{}};poll();const id=setInterval(poll,8000);return()=>{on=false;clearInterval(id)}},[showSlots]);
   // Chat cooldown countdown
   useEffect(()=>{if(chatCd<=0)return;const id=setTimeout(()=>setChatCd(c=>c-1),1000);return()=>clearTimeout(id)},[chatCd]);
+  // Auto cloud save every 30s
+  useEffect(()=>{if(!account||showSlots)return;const id=setInterval(()=>{cloudSave()},30000);return()=>clearInterval(id)},[account,showSlots,slot]);
 
   const save=useCallback(async(s,d)=>{try{const lk=await _stGet("co-lock-"+slot);if(lk?.value&&lk.value!==TAB_ID)return;await _stSet("co-s"+slot,JSON.stringify({st:s,drops:d||[]}))}catch{}const inv=s.inv||[];const tv=inv.reduce((a,i)=>a+i.value,0);setSlotMeta(prev=>{const m=[...prev];m[slot]={bal:s.bal,items:inv.length,totalVal:tv,opened:s.stats?.opened||0};saveSlotMeta(m);return m})},[slot]);
   useEffect(()=>{if(showSlots)return;const id=setInterval(()=>{setSt(cur=>{setDrops(dd=>{save(cur,dd);return dd});return cur})},5000);return()=>clearInterval(id)},[save,showSlots]);
 
   function checkReset(s){const cheapest=Math.min(...CASES.map(c=>c.price));if(s.bal<cheapest&&s.loan>=MAX_LOAN){setResetMsg("Bankrupt. Game reset.");const fresh={...INIT,inv:[],stats:{...INIT.stats},history:[{n:0,bal:DEFAULT_BAL,label:"Start"}],starred:{}};setSt(fresh);setDrops([]);save(fresh,[]);setTimeout(()=>{setResetMsg("");setPage("shop")},2500);return true}return false}
 
-  function doOpen(c){
+  async function doOpen(c){
     if(lockRef.current||st.bal<c.price)return;lockRef.current=true;setOpening(true);setScrollDone(false);setSelCase(c);sndOpen();
-    const winner=roll(c),fl=genFloat(),quotes=winner.value>=c.price?QUOTES_WIN:QUOTES_LOSS;
+    // Server-side roll
+    const rollResp=await api("/roll",{caseId:c.id,username:account?.username||"",token:account?.token||""});
+    if(!rollResp?.ok||!rollResp.result){lockRef.current=false;setOpening(false);return}
+    const sr=rollResp.result;const winner={name:sr.name,rarity:sr.rarity,value:sr.value,icon:c.items.find(i=>i.name===sr.name)?.icon||"?"};
+    const fl=sr.float,quotes=winner.value>=c.price?QUOTES_WIN:QUOTES_LOSS;
     setWonItem({...winner,id:uid()});setWonFloat(fl);setWonQuote(quotes[Math.floor(Math.random()*quotes.length)]);
     const items=[];for(let i=0;i<SCROLL_COUNT;i++)items.push(i===WIN_IDX?winner:c.items[Math.floor(Math.random()*c.items.length)]);
     setScrollItems(items);setPage("opening");
     setSt(p=>{const ns={...p,bal:p.bal-c.price,stats:{...p.stats,spent:p.stats.spent+c.price,opened:p.stats.opened+1}};save(ns,drops);return ns});
     requestAnimationFrame(()=>{requestAnimationFrame(()=>{if(!stripRef.current)return;const el=stripRef.current,parent=el.parentElement;el.style.transition="none";el.style.transform="translateX(0)";requestAnimationFrame(()=>{if(!stripRef.current)return;const firstItem=el.children[0];if(!firstItem)return;const itemW=firstItem.offsetWidth,center=parent.offsetWidth/2,pad=itemW*.1,off=WIN_IDX*itemW+pad+(Math.random()*(itemW-pad*2))-center;el.style.transition="transform 5s cubic-bezier(0.15,0.85,0.20,1.01)";el.style.transform=`translateX(-${off}px)`})})});
-    setTimeout(()=>{setScrollDone(true);sndReveal(winner.value>=c.price);let rp=0;setSt(prev=>{let rc=prev.rentCtr+1;if(rc>=RENT_EVERY){rp=RENT_AMT;rc=0}setRentPaid(rp);const newBal=prev.bal-rp;const isBig=winner.value>=c.price*3;const he={n:prev.stats.opened,bal:newBal};if(isBig)he.label=winner.name+" "+money(winner.value);const itemId=uid();setLastWonId(itemId);const ns={...prev,bal:newBal,inv:[...prev.inv,{...winner,id:itemId,from:c.id,t:Date.now(),float:fl}],stats:{...prev.stats,won:prev.stats.won+winner.value,best:winner.value>prev.stats.bestVal?winner.name:prev.stats.best,bestVal:Math.max(prev.stats.bestVal,winner.value)},loan:prev.loan,rentCtr:rc,history:[...(prev.history||[]),he].slice(-200),starred:prev.starred||{}};const nd={name:winner.name,rarity:winner.rarity,value:winner.value,cond:getCondition(fl),icon:winner.icon};setDrops(dd=>{const r=[nd,...dd].slice(0,20);save(ns,r);return r});reportOpen(c.name,c.price,winner,fl);setTimeout(()=>{checkReset(ns);lockRef.current=false},400);return ns})},5400);
+    setTimeout(()=>{setScrollDone(true);sndReveal(winner.value>=c.price);let rp=0;setSt(prev=>{let rc=prev.rentCtr+1;if(rc>=RENT_EVERY){rp=RENT_AMT;rc=0}setRentPaid(rp);const newBal=prev.bal-rp;const isBig=winner.value>=c.price*3;const he={n:prev.stats.opened,bal:newBal};if(isBig)he.label=winner.name+" "+money(winner.value);const itemId=uid();setLastWonId(itemId);const ns={...prev,bal:newBal,inv:[...prev.inv,{...winner,id:itemId,from:c.id,t:Date.now(),float:fl}],stats:{...prev.stats,won:prev.stats.won+winner.value,best:winner.value>prev.stats.bestVal?winner.name:prev.stats.best,bestVal:Math.max(prev.stats.bestVal,winner.value)},loan:prev.loan,rentCtr:rc,history:[...(prev.history||[]),he].slice(-200),starred:prev.starred||{}};const nd={name:winner.name,rarity:winner.rarity,value:winner.value,cond:getCondition(fl),icon:winner.icon};setDrops(dd=>{const r=[nd,...dd].slice(0,20);save(ns,r);return r});setTimeout(()=>{checkReset(ns);lockRef.current=false},400);return ns})},5400);
   }
 
   function openAgain(){setLastWonId(null);if(!selCase||st.bal<selCase.price){setPage("shop");setOpening(false);return}doOpen(selCase)}
@@ -245,10 +266,12 @@ function App(){
     {resetMsg&&<div style={S.overlay}><div style={S.modal}><div style={{fontSize:"clamp(36px,10vw,56px)"}}>{"\uD83D\uDC80"}</div><div style={{fontSize:"clamp(16px,4vw,22px)",fontWeight:700,color:"#eb4b4b"}}>{resetMsg}</div></div></div>}
 
     {/* HEADER */}
-    <div style={S.hdr}><div style={{display:"flex",alignItems:"center",gap:"clamp(6px,1.5vw,10px)"}}><button onClick={()=>setShowSlots(true)} style={{...S.btn,background:"#ffffff08",color:"#888",padding:"clamp(4px,1vw,6px) clamp(6px,1.5vw,10px)",fontSize:"clamp(9px,2.2vw,11px)"}}>Slot {slot+1}</button><div style={S.title}>CASES</div></div><div style={S.hdrRight}><button onClick={()=>setShowAuth(true)} style={{...S.btn,background:account?"#4ade8022":"#ffffff08",color:account?"#4ade80":"#888",padding:"4px 8px",fontSize:"clamp(8px,2vw,10px)",border:account?"1px solid #4ade8033":"none"}}>{account?account.username:"\uD83D\uDD12 Login"}</button>{account&&<><button onClick={cloudSave} style={{...S.btn,background:"#3b82f622",color:"#3b82f6",padding:"4px 8px",fontSize:"clamp(8px,2vw,10px)"}}>{"\uD83D\uDCBE"}</button><button onClick={cloudLoad} style={{...S.btn,background:"#8b5cf622",color:"#8b5cf6",padding:"4px 8px",fontSize:"clamp(8px,2vw,10px)"}}>{"\u2601"}</button></>}{saveStatus&&<span style={{color:"#fbbf24",fontSize:"clamp(8px,2vw,10px)"}}>{saveStatus}</span>}<div style={S.chip}><span style={S.chipLbl}>BAL</span><span style={{color:st.bal<100?"#eb4b4b":"#4ade80",fontWeight:700,fontSize:"clamp(14px,3.5vw,20px)"}}>{money(st.bal)}</span></div>{st.loan>0&&<div style={{...S.chip,borderColor:"#eb4b4b33"}}><span style={S.chipLbl}>DEBT</span><span style={{color:"#eb4b4b",fontWeight:700,fontSize:"clamp(12px,3vw,18px)"}}>{money(st.loan)}</span></div>}<div style={S.rentChip}>Rent in {rentIn}</div></div></div>
+    <div style={S.hdr}><div style={{display:"flex",alignItems:"center",gap:"clamp(6px,1.5vw,10px)"}}><button onClick={()=>setShowSlots(true)} style={{...S.btn,background:"#ffffff08",color:"#888",padding:"clamp(4px,1vw,6px) clamp(6px,1.5vw,10px)",fontSize:"clamp(9px,2.2vw,11px)"}}>Slot {slot+1}</button><div style={S.title}>CASES</div></div><div style={S.hdrRight}><button onClick={()=>setShowAuth(true)} style={{...S.btn,background:account?"#4ade8022":"#ffffff08",color:account?"#4ade80":"#888",padding:"6px 12px",fontSize:"clamp(9px,2.2vw,12px)",border:account?"1px solid #4ade8033":"1px solid #333",fontWeight:700}}>{account?"\u2705 "+account.username:"\uD83D\uDD12 Login"}</button>{account&&<><button onClick={cloudSave} style={{...S.btn,background:"#3b82f6",color:"#fff",padding:"6px 14px",fontSize:"clamp(10px,2.5vw,13px)",fontWeight:700}}>{"\uD83D\uDCBE Save"}</button><button onClick={cloudLoad} style={{...S.btn,background:"#8b5cf622",color:"#8b5cf6",padding:"6px 10px",fontSize:"clamp(9px,2.2vw,11px)"}}>{"\u2601 Load"}</button></>}{saveStatus&&<span style={{color:saveStatus==="Saved!"?"#4ade80":"#fbbf24",fontSize:"clamp(9px,2.2vw,11px)",fontWeight:700,animation:"fadeUp .3s"}}>{saveStatus}</span>}<div style={S.chip}><span style={S.chipLbl}>BAL</span><span style={{color:st.bal<100?"#eb4b4b":"#4ade80",fontWeight:700,fontSize:"clamp(14px,3.5vw,20px)"}}>{money(st.bal)}</span></div>{st.loan>0&&<div style={{...S.chip,borderColor:"#eb4b4b33"}}><span style={S.chipLbl}>DEBT</span><span style={{color:"#eb4b4b",fontWeight:700,fontSize:"clamp(12px,3vw,18px)"}}>{money(st.loan)}</span></div>}<div style={S.rentChip}>Rent: {money(RENT_AMT)} in {rentIn} opens</div></div></div>
+    {!account&&<div style={{background:"#f59e0b11",borderBottom:"1px solid #f59e0b22",padding:"4px 12px",textAlign:"center",fontSize:"clamp(8px,2vw,10px)",color:"#f59e0b"}}>Login to save progress to cloud. Your data is local only!</div>}
+    {events.filter(e=>!dismissedEvents[e.id]).map(e=><div key={e.id} className="slideIn" style={{background:e.type==="announcement"?"#f59e0b22":"#3b82f622",borderBottom:"1px solid "+(e.type==="announcement"?"#f59e0b44":"#3b82f644"),padding:"8px 14px",display:"flex",alignItems:"center",gap:8}}><span style={{fontSize:"clamp(14px,3.5vw,18px)"}}>{e.type==="announcement"?"\uD83D\uDCE2":e.type==="sale"?"\uD83D\uDCB0":"\uD83C\uDF89"}</span><div style={{flex:1}}><div style={{color:e.type==="announcement"?"#f59e0b":"#3b82f6",fontWeight:700,fontSize:"clamp(10px,2.5vw,13px)"}}>{e.title}</div>{e.description&&<div style={{color:"#ccc",fontSize:"clamp(8px,2vw,10px)"}}>{e.description}</div>}</div><button onClick={()=>setDismissedEvents(d=>({...d,[e.id]:true}))} style={{background:"transparent",border:"none",color:"#666",cursor:"pointer",fontSize:14}}>{"\u2715"}</button></div>)}
 
     {/* NAV */}
-    <div style={S.nav}>{[["shop","Shop"],["inv",`Inv (${st.inv.length})`],["stats","Stats"],["loan","Loan"],["live","\uD83D\uDD34 Live"],["lb","\uD83C\uDFC6 Top"],["chat","\uD83D\uDCAC Chat"],["map","\uD83C\uDF0D Map"]].map(([k,l])=>(<button key={k} onClick={()=>{if(!opening||scrollDone||k==="shop"){setPage(k);if(k!=="opening")setOpening(false);if(k==="map")getOnline().then(r=>{if(r)setOnlineData(r)})}}} style={{...S.tab,...(page===k||(page==="opening"&&k==="shop")?S.tabOn:{})}}>{l}</button>))}<button onClick={()=>setConfirmReset(true)} style={{...S.tab,marginLeft:"auto",color:"#eb4b4b"}}>Reset</button></div>
+    <div style={S.nav}>{[["shop","Shop"],["inv",`Inv (${st.inv.length})`],["stats","Stats"],["loan","Loan"],["flip","\uD83E\uDE99 Flip"],["pvp","\u2694\uFE0F PvP"],["live","\uD83D\uDD34 Live"],["lb","\uD83C\uDFC6 Top"],["chat","\uD83D\uDCAC Chat"],["dm",`\u2709 DM${dmUnread>0?" ("+dmUnread+")":""}`],["me","\uD83D\uDC64 Me"],["map","\uD83C\uDF0D Map"]].map(([k,l])=>(<button key={k} onClick={()=>{if(!opening||scrollDone||k==="shop"){setPage(k);if(k!=="opening")setOpening(false);if(k==="map")getOnline().then(r=>{if(r)setOnlineData(r)});if(k==="dm"&&account){api("/dm/inbox",{username:account.username,token:account.token}).then(r=>{if(r?.ok){setDmInbox(r);setDmUnread(0);api("/dm/read",{username:account.username,token:account.token})}})}}}} style={{...S.tab,...(page===k||(page==="opening"&&k==="shop")?S.tabOn:{}),color:k==="dm"&&dmUnread>0?"#f59e0b":undefined}}>{l}</button>))}<button onClick={()=>setConfirmReset(true)} style={{...S.tab,marginLeft:"auto",color:"#eb4b4b"}}>Reset</button></div>
 
     {/* SHOP */}
     {page==="shop"&&<div style={S.body}><div style={S.grid}>{CASES.map(c=>{const ok=st.bal>=c.price;return(<div key={c.id} style={{...S.card,borderColor:c.color+"44",opacity:ok?1:.35}}><div style={{...S.cardIcon,background:c.color+"12",borderColor:c.color+"28"}}><span style={{fontSize:"clamp(26px,6.5vw,40px)"}}>{c.icon}</span></div><div style={S.cardName}>{c.name}</div><div style={{...S.cardPrice,color:c.color}}>{money(c.price)}</div><div style={{display:"flex",gap:"clamp(4px,1vw,6px)",width:"100%"}}><button disabled={!ok} onClick={()=>doOpen(c)} style={{...S.btn,background:ok?c.color:"#333",color:"#fff",flex:1}}>Open</button><button onClick={()=>{setInspecting(c);setPage("inspect")}} style={{...S.btn,background:"#ffffff08",color:"#777",flex:1}}>Inspect</button></div></div>)})}</div></div>}
@@ -372,7 +395,7 @@ function App(){
         chatLog.map((m,i)=><div key={i} style={{display:"flex",gap:6,fontSize:"clamp(8px,2.2vw,11px)",padding:"4px 0"}}>
           <span style={{color:"#888",flexShrink:0,width:42}}>{m.ago||""}</span>
           <span style={{color:m.uid===USER_ID?"#4ade80":m.uid==="SYSTEM"?"#f59e0b":"#8b5cf6",fontWeight:700,flexShrink:0}}>{m.uname||"Anon"}</span>
-          <span style={{color:m.uid==="SYSTEM"?"#fbbf24":"#ccc"}}>{m.msg}</span>
+          <span style={{color:m.uid==="SYSTEM"?"#fbbf24":"#ccc"}} dangerouslySetInnerHTML={{__html:renderMd(m.msg)}}/>
         </div>)}
       </div>
       <div style={{display:"flex",gap:6}}>
@@ -380,6 +403,97 @@ function App(){
         <button onClick={()=>{if(chatMsg.trim()&&chatCd<=0){sendChat(chatMsg.trim()).then(r=>{if(r?.cooldown)setChatCd(r.cooldown);else if(r?.msgs){setChatLog(r.msgs);setChatCd(5)}});setChatMsg("")}}} disabled={chatCd>0||!chatMsg.trim()} style={{...S.btn,background:chatCd>0?"#333":"#8b5cf6",color:chatCd>0?"#666":"#fff"}}>{chatCd>0?chatCd+"s":"Send"}</button>
       </div>
     </div>}
+
+    {/* COIN FLIP */}
+    {page==="flip"&&<div style={S.body}>
+      <div style={{fontSize:"clamp(15px,4vw,20px)",fontWeight:700,marginBottom:12}}>{"\uD83E\uDE99"} Coin Flip <span style={{color:"#888",fontSize:"clamp(9px,2.2vw,11px)",fontWeight:400}}>49% win rate</span></div>
+      <div style={{background:"#0d1117",border:"1px solid #151820",borderRadius:12,padding:"clamp(16px,4vw,28px)",display:"flex",flexDirection:"column",alignItems:"center",gap:12}}>
+        <div style={{fontSize:"clamp(48px,14vw,80px)",transition:"transform 0.5s",transform:wonItem?.flipResult?"rotateY(360deg)":"none"}}>{wonItem?.flipResult==="heads"?"\uD83E\uDE99":wonItem?.flipResult==="tails"?"\uD83D\uDFE1":"\u2753"}</div>
+        {wonItem?.flipResult&&<div style={{fontSize:"clamp(16px,4vw,22px)",fontWeight:800,color:wonItem.flipWon?"#4ade80":"#eb4b4b",animation:"fadeUp .4s"}}>{wonItem.flipWon?"+"+money(wonItem.flipBet):"-"+money(wonItem.flipBet)}</div>}
+        <div style={{display:"flex",gap:6,alignItems:"center"}}><input type="number" placeholder="Bet amount" id="flipBet" style={{...S.input,width:"clamp(100px,30vw,160px)"}} min="1"/></div>
+        <div style={{display:"flex",gap:8}}>
+          <button onClick={async()=>{const bet=parseInt(document.getElementById("flipBet")?.value);if(!bet||bet<=0||bet>st.bal)return;const r=await api("/coinflip",{bet,choice:"heads",username:account?.username,token:account?.token});if(!r?.ok)return;setWonItem(w=>({...w,flipResult:r.result,flipWon:r.won,flipBet:bet}));setSt(p=>{const ns={...p,bal:p.bal+(r.won?bet:-bet)};save(ns,drops);return ns});if(r.won)sndReveal(true);else sndReveal(false)}} style={{...S.btn,background:"#f59e0b",color:"#000",padding:"10px 24px",fontSize:"clamp(12px,3vw,16px)",fontWeight:800}}>Heads</button>
+          <button onClick={async()=>{const bet=parseInt(document.getElementById("flipBet")?.value);if(!bet||bet<=0||bet>st.bal)return;const r=await api("/coinflip",{bet,choice:"tails",username:account?.username,token:account?.token});if(!r?.ok)return;setWonItem(w=>({...w,flipResult:r.result,flipWon:r.won,flipBet:bet}));setSt(p=>{const ns={...p,bal:p.bal+(r.won?bet:-bet)};save(ns,drops);return ns});if(r.won)sndReveal(true);else sndReveal(false)}} style={{...S.btn,background:"#8b5cf6",color:"#fff",padding:"10px 24px",fontSize:"clamp(12px,3vw,16px)",fontWeight:800}}>Tails</button>
+        </div>
+        <div style={{color:"#888",fontSize:"clamp(8px,2vw,10px)"}}>Server-side — provably fair</div>
+      </div>
+    </div>}
+
+    {/* PVP LOBBY */}
+    {page==="pvp"&&<div style={S.body}>
+      <div style={{fontSize:"clamp(15px,4vw,20px)",fontWeight:700,marginBottom:12}}>{"\u2694\uFE0F"} PvP — Profit Race</div>
+      {!account?<div style={{color:"#f59e0b",background:"#f59e0b11",padding:12,borderRadius:8,textAlign:"center"}}>Login required for PvP</div>:<>
+        <div style={{display:"flex",gap:6,marginBottom:12}}>
+          <button onClick={async()=>{const name=prompt("Lobby name:");if(!name)return;const pw=prompt("Password (empty for public):");const r=await api("/lobby/create",{username:account.username,name,lobbyPassword:pw||""});if(r?.lobbyId)alert("Created! ID: "+r.lobbyId)}} style={{...S.btn,background:"#4ade80",color:"#000",fontWeight:700}}>Create Lobby</button>
+          <button onClick={async()=>{const id=prompt("Lobby ID:");if(!id)return;const pw=prompt("Password (if any):");const r=await api("/lobby/join",{username:account.username,lobbyId:id,lobbyPassword:pw||""});if(r?.ok)alert("Joined!");else alert(r?.error||"Failed")}} style={{...S.btn,background:"#3b82f6",color:"#fff"}}>Join Lobby</button>
+        </div>
+        <div style={{fontSize:"clamp(11px,2.8vw,14px)",fontWeight:600,color:"#888",marginBottom:6}}>Open Lobbies</div>
+        <div id="lobbyList" style={{display:"flex",flexDirection:"column",gap:3}}>
+          <div style={{color:"#555",textAlign:"center",padding:10}}>Loading...</div>
+        </div>
+        <div style={{color:"#666",fontSize:"clamp(8px,2vw,10px)",marginTop:10}}>5 min race — $10,000 start — most profit wins. No loan. Server-calculated rolls.</div>
+      </>}
+    </div>}
+
+    {/* DMs */}
+    {page==="dm"&&<div style={S.body}>
+      <div style={{fontSize:"clamp(15px,4vw,20px)",fontWeight:700,marginBottom:12}}>{"\u2709"} Messages</div>
+      {!account?<div style={{color:"#f59e0b",padding:12,textAlign:"center"}}>Login required</div>:<>
+        <div style={{display:"flex",gap:4,marginBottom:10}}>
+          <input value={dmSearch} onChange={e=>setDmSearch(e.target.value.slice(0,20))} placeholder="Search username..." style={{...S.input,flex:1,width:"auto"}}/>
+          <button onClick={async()=>{if(dmSearch.length<2)return;const r=await api("/users/search",{q:dmSearch});if(r?.users)setDmResults(r.users)}} style={{...S.btn,background:"#3b82f6",color:"#fff"}}>Search</button>
+        </div>
+        {dmResults.length>0&&<div style={{display:"flex",gap:4,marginBottom:8,flexWrap:"wrap"}}>{dmResults.map(u=><button key={u.username} onClick={()=>{setDmTo(u.username);setDmResults([]);setDmSearch("")}} style={{...S.btn,background:"#ffffff08",color:"#4ade80",padding:"4px 8px",fontSize:"clamp(8px,2vw,10px)"}}>{u.username} (Lv{u.level})</button>)}</div>}
+        {dmTo&&<div style={{background:"#141820",border:"1px solid #1e2430",borderRadius:8,padding:10,marginBottom:10}}>
+          <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}><span style={{color:"#4ade80",fontWeight:700}}>To: {dmTo}</span><button onClick={()=>{setViewProfile(null);api("/profile/full",{target:dmTo,username:account?.username}).then(r=>{if(r?.profile)setViewProfile(r.profile)})}} style={{...S.btn,background:"#ffffff08",color:"#888",padding:"2px 8px",fontSize:"clamp(8px,2vw,9px)"}}>Profile</button></div>
+          <div style={{display:"flex",gap:4}}><input value={dmMsg} onChange={e=>setDmMsg(e.target.value.slice(0,500))} placeholder="Type message... (**bold** *italic* ~~strike~~ `code`)" style={{...S.input,flex:1,width:"auto"}} maxLength={500} onKeyDown={e=>{if(e.key==="Enter"&&dmMsg.trim()){api("/dm/send",{username:account.username,token:account.token,to:dmTo,msg:dmMsg.trim()}).then(r=>{if(r?.ok){setDmMsg("");api("/dm/inbox",{username:account.username,token:account.token}).then(r2=>{if(r2?.ok)setDmInbox(r2)})}else{alert(r?.error||"Failed")}})}}}/><button onClick={()=>{if(!dmMsg.trim())return;api("/dm/send",{username:account.username,token:account.token,to:dmTo,msg:dmMsg.trim()}).then(r=>{if(r?.ok){setDmMsg("");api("/dm/inbox",{username:account.username,token:account.token}).then(r2=>{if(r2?.ok)setDmInbox(r2)})}else{alert(r?.error||"Failed")}})}} style={{...S.btn,background:"#4ade80",color:"#000"}}>Send</button></div>
+        </div>}
+        <div style={{fontSize:"clamp(10px,2.5vw,12px)",fontWeight:600,color:"#888",marginBottom:4}}>Received</div>
+        <div style={{display:"flex",flexDirection:"column",gap:2,marginBottom:12,maxHeight:200,overflowY:"auto"}}>
+          {!dmInbox?.received?.length?<div style={{color:"#555",padding:8}}>No messages</div>:
+          dmInbox.received.map(m=><div key={m.id} className="slideIn" style={{display:"flex",gap:6,padding:"5px 8px",background:m.read?"#0d1117":"#3b82f611",borderLeft:"2px solid "+(m.read?"#333":"#3b82f6"),borderRadius:3,fontSize:"clamp(8px,2.2vw,11px)"}}><span style={{color:"#888",width:35,flexShrink:0}}>{m.ago}</span><span style={{color:"#4ade80",fontWeight:700,cursor:"pointer",flexShrink:0}} onClick={()=>setDmTo(m.from_user)}>{m.from_user}</span><span style={{color:"#ccc",flex:1}} dangerouslySetInnerHTML={{__html:renderMd(m.msg)}}/></div>)}
+        </div>
+        <div style={{fontSize:"clamp(10px,2.5vw,12px)",fontWeight:600,color:"#888",marginBottom:4}}>Sent</div>
+        <div style={{display:"flex",flexDirection:"column",gap:2,maxHeight:150,overflowY:"auto"}}>
+          {!dmInbox?.sent?.length?<div style={{color:"#555",padding:8}}>No messages</div>:
+          dmInbox.sent.map(m=><div key={m.id} style={{display:"flex",gap:6,padding:"5px 8px",background:"#0d1117",borderLeft:"2px solid #555",borderRadius:3,fontSize:"clamp(8px,2.2vw,11px)"}}><span style={{color:"#888",width:35,flexShrink:0}}>{m.ago}</span><span style={{color:"#8b5cf6",fontWeight:600,flexShrink:0}}>→ {m.to_user}</span><span style={{color:"#999",flex:1}} dangerouslySetInnerHTML={{__html:renderMd(m.msg)}}/></div>)}
+        </div>
+      </>}
+    </div>}
+
+    {/* PROFILE */}
+    {page==="me"&&<div style={S.body}>
+      <div style={{fontSize:"clamp(15px,4vw,20px)",fontWeight:700,marginBottom:12}}>{"\uD83D\uDC64"} My Profile</div>
+      {!account?<div style={{color:"#f59e0b",padding:12,textAlign:"center"}}>Login required</div>:<>
+        <div style={{background:"#0d1117",border:"1px solid #151820",borderRadius:12,padding:"clamp(14px,4vw,24px)",marginBottom:12}}>
+          <div style={{display:"flex",gap:12,alignItems:"center",marginBottom:12}}>
+            <div style={{width:48,height:48,borderRadius:"50%",background:"#1e2430",display:"flex",alignItems:"center",justifyContent:"center",fontSize:24,overflow:"hidden",flexShrink:0}}>{"\uD83D\uDC64"}</div>
+            <div><div style={{fontWeight:700,fontSize:"clamp(14px,3.5vw,18px)",color:"#e2e8f0"}}>{account.username}</div><div style={{color:"#888",fontSize:"clamp(9px,2.2vw,11px)"}}>Level {account.level||1} &middot; {account.role||"user"}</div></div>
+          </div>
+          <div style={{fontSize:"clamp(10px,2.5vw,12px)",fontWeight:600,color:"#888",marginBottom:4}}>Bio</div>
+          <div style={{display:"flex",gap:4,marginBottom:10}}><input value={editBio} onChange={e=>setEditBio(e.target.value.slice(0,200))} placeholder="Write something..." style={{...S.input,flex:1,width:"auto"}} maxLength={200}/><button onClick={async()=>{const r=await api("/profile/edit",{username:account.username,token:account.token,bio:editBio});if(r?.ok)setSaveStatus("Bio saved!")}} style={{...S.btn,background:"#4ade80",color:"#000"}}>Save</button></div>
+          <div style={{fontSize:"clamp(10px,2.5vw,12px)",fontWeight:600,color:"#888",marginBottom:4}}>Privacy</div>
+          <div style={{display:"flex",gap:4,marginBottom:10}}>{["public","private","friends"].map(p=><button key={p} onClick={async()=>{setEditPrivacy(p);await api("/profile/edit",{username:account.username,token:account.token,privacy:p});setSaveStatus("Privacy: "+p)}} style={{...S.btn,background:editPrivacy===p?"#3b82f6":"#ffffff08",color:editPrivacy===p?"#fff":"#888",flex:1,textTransform:"capitalize"}}>{p==="friends"?"Friends Only":p}</button>)}</div>
+          <div style={{fontSize:"clamp(10px,2.5vw,12px)",fontWeight:600,color:"#888",marginBottom:4}}>Profile Picture</div>
+          <div style={{display:"flex",gap:4,marginBottom:10,alignItems:"center"}}><input type="file" accept="image/*" onChange={async e=>{const file=e.target.files[0];if(!file)return;if(file.size>2500000){alert("Max 2.5MB");return}const reader=new FileReader();reader.onload=async()=>{const b64=reader.result;const r=await api("/profile/edit",{username:account.username,token:account.token,pfp:b64});if(r?.ok)setSaveStatus("PFP saved!")};reader.readAsDataURL(file)}} style={{fontSize:"clamp(9px,2.2vw,11px)",color:"#888"}}/></div>
+          <div style={{fontSize:"clamp(10px,2.5vw,12px)",fontWeight:600,color:"#888",marginBottom:4}}>Report a Player</div>
+          <div style={{display:"flex",gap:4,flexWrap:"wrap"}}><input value={reportTarget} onChange={e=>setReportTarget(e.target.value.slice(0,16))} placeholder="Username" style={{...S.input,flex:1,minWidth:80}}/><input value={reportReason} onChange={e=>setReportReason(e.target.value.slice(0,300))} placeholder="Reason" style={{...S.input,flex:2,minWidth:100}}/><button onClick={async()=>{if(!reportTarget||!reportReason)return;const r=await api("/report",{username:account.username,token:account.token,target:reportTarget,reason:reportReason});setReportMsg(r?.ok?"Report submitted!":r?.error||"Failed");setReportTarget("");setReportReason("")}} style={{...S.btn,background:"#eb4b4b22",color:"#eb4b4b"}}>Report</button></div>
+          {reportMsg&&<div style={{color:reportMsg.includes("submitted")?"#4ade80":"#eb4b4b",fontSize:"clamp(8px,2vw,10px)",marginTop:4}}>{reportMsg}</div>}
+        </div>
+      </>}
+    </div>}
+
+    {/* PROFILE VIEW MODAL */}
+    {viewProfile&&<div style={S.overlay} onClick={()=>setViewProfile(null)}><div style={S.modal} onClick={e=>e.stopPropagation()}>
+      <div style={{fontSize:36}}>{"\uD83D\uDC64"}</div>
+      <div style={{fontSize:"clamp(16px,4vw,22px)",fontWeight:700}}>{viewProfile.username}</div>
+      {viewProfile.privacy==="private"?<div style={{color:"#888"}}>This profile is private</div>:<>
+        <div style={{color:"#888",fontSize:"clamp(9px,2.2vw,11px)"}}>Level {viewProfile.level||1} &middot; {viewProfile.country||"?"}</div>
+        {viewProfile.bio&&<div style={{color:"#ccc",fontSize:"clamp(10px,2.5vw,12px)",fontStyle:"italic",textAlign:"center"}}>{viewProfile.bio}</div>}
+        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,width:"100%",fontSize:"clamp(9px,2.2vw,11px)"}}>{[["Wins",viewProfile.wins],["Losses",viewProfile.losses],["Streak",viewProfile.best_streak],["Opened",viewProfile.total_opened],["Earned","$"+(viewProfile.total_earned||0).toLocaleString()],["Spent","$"+(viewProfile.total_spent||0).toLocaleString()]].map(([l,v])=><div key={l} style={{background:"#080a0e",padding:"4px 8px",borderRadius:4}}><div style={{color:"#555",fontSize:8}}>{l}</div><div style={{fontWeight:600}}>{v||0}</div></div>)}</div>
+      </>}
+      <div style={{display:"flex",gap:4,width:"100%"}}><button onClick={()=>{setDmTo(viewProfile.username);setViewProfile(null);setPage("dm")}} style={{...S.btn,background:"#3b82f6",color:"#fff",flex:1}}>DM</button><button onClick={()=>setViewProfile(null)} style={{...S.btn,background:"#ffffff08",color:"#888",flex:1}}>Close</button></div>
+    </div></div>}
 
     {/* ONLINE MAP */}
     {page==="map"&&<div style={S.body}>
@@ -409,7 +523,7 @@ function App(){
   </div>);
 }
 
-const CSS=`@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700;800&display=swap');*{box-sizing:border-box;margin:0;padding:0}::-webkit-scrollbar{width:4px;height:4px}::-webkit-scrollbar-thumb{background:#222;border-radius:2px}::-webkit-scrollbar-track{background:transparent}@keyframes fadeUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}.fadeUp{animation:fadeUp .4s ease-out}button{cursor:pointer;font-family:inherit}button:disabled{opacity:.3;cursor:not-allowed}input:focus,select:focus{outline:1px solid #333}select{-webkit-appearance:none;appearance:none}`;
+const CSS=`@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700;800&display=swap');*{box-sizing:border-box;margin:0;padding:0}::-webkit-scrollbar{width:4px;height:4px}::-webkit-scrollbar-thumb{background:#222;border-radius:2px}::-webkit-scrollbar-track{background:transparent}@keyframes fadeUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}@keyframes glow{0%,100%{box-shadow:0 0 5px #ffd70033}50%{box-shadow:0 0 20px #ffd70066}}@keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-4px)}75%{transform:translateX(4px)}}@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}@keyframes slideIn{from{opacity:0;transform:translateX(-20px)}to{opacity:1;transform:translateX(0)}}@keyframes bounceIn{0%{opacity:0;transform:scale(.3)}50%{transform:scale(1.05)}70%{transform:scale(.95)}100%{opacity:1;transform:scale(1)}}.fadeUp{animation:fadeUp .4s ease-out}.bounceIn{animation:bounceIn .5s ease-out}.slideIn{animation:slideIn .3s ease-out}.pulse{animation:pulse 1.5s infinite}.glow{animation:glow 2s infinite}button{cursor:pointer;font-family:inherit;transition:transform .1s,opacity .1s}button:active:not(:disabled){transform:scale(.95)}button:disabled{opacity:.3;cursor:not-allowed}input:focus,select:focus{outline:1px solid #333}select{-webkit-appearance:none;appearance:none}`;
 
 const S={
   root:{fontFamily:"'JetBrains Mono',monospace",background:"#0a0c10",color:"#e2e8f0",minHeight:"100vh",display:"flex",flexDirection:"column",fontSize:"clamp(11px,2.8vw,14px)"},
@@ -459,13 +573,19 @@ ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(
   var _active = false;
   window.admin = async function(pwd) {
     if (_active) { console.log("%c[ADMIN] Panel already open", "color:#ffd700"); return; }
-    if (typeof pwd !== "string" || !pwd) { console.log("%c[ADMIN] Usage: admin('password')", "color:#eb4b4b"); return; }
+    // Auto-auth for admin/owner accounts
+    var acct = null;
+    try { acct = JSON.parse(localStorage.getItem("co-account")); } catch {}
+    var postBody;
+    if (pwd) { postBody = { password: pwd }; }
+    else if (acct && acct.token) { postBody = { username: acct.username, token: acct.token }; }
+    else { console.log("%c[ADMIN] Usage: admin('password') or login as admin first", "color:#eb4b4b"); return; }
     console.log("%c[ADMIN] Authenticating...", "color:#888");
     try {
       var r = await fetch(_API, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password: pwd })
+        body: JSON.stringify(postBody)
       });
       var d = await r.json();
       if (!r.ok) { console.log("%c[ADMIN] " + (d.error || "Failed"), "color:#eb4b4b"); return; }
@@ -502,13 +622,18 @@ ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(
   var _ownerActive = false;
   window.owner = async function(pwd) {
     if (_ownerActive) { console.log("%c[OWNER] Already open", "color:#ff0000"); return; }
-    if (typeof pwd !== "string" || !pwd) { console.log("%c[OWNER] Usage: owner('password')", "color:#eb4b4b"); return; }
+    var acct = null;
+    try { acct = JSON.parse(localStorage.getItem("co-account")); } catch {}
+    var postBody;
+    if (pwd) { postBody = { password: pwd }; }
+    else if (acct && acct.token) { postBody = { username: acct.username, token: acct.token }; }
+    else { console.log("%c[OWNER] Usage: owner('password') or login as owner", "color:#eb4b4b"); return; }
     console.log("%c[OWNER] Authenticating...", "color:#888");
     try {
       var r = await fetch("https://samptonweb.dpdns.org/api/caseopen/ownerpanel", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ password: pwd })
+        body: JSON.stringify(postBody)
       });
       var d = await r.json();
       if (!r.ok || !d.ok) { console.log("%c[OWNER] " + (d.error || "Failed"), "color:#eb4b4b"); return; }
