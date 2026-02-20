@@ -99,7 +99,7 @@ function App(){
   useEffect(()=>{if(showSlots)return;const id=setInterval(async()=>{try{const r=await _stGet("co-lock-"+slot);if(r?.value&&r.value!==TAB_ID){setShowSlots(true);setOpening(false);lockRef.current=false}}catch{}},2000);return()=>clearInterval(id)},[showSlots,slot]);
 
   // Poll server for live data + remote refresh check
-  const lastRefreshRef=useRef(0);
+  const lastRefreshRef=useRef(Date.now());
   useEffect(()=>{if(showSlots)return;let on=true;async function poll(){if(!on)return;try{const[f,l,c,ref]=await Promise.all([getFeed(),getLeaderboard(),getChat(),api("/refresh",{})]);if(f?.feed)setFeed(f.feed);if(l?.lb)setLb(l.lb);if(c?.msgs)setChatLog(c.msgs);if(ref?.refreshAt&&ref.refreshAt>lastRefreshRef.current){lastRefreshRef.current=ref.refreshAt;location.reload()}}catch{}};poll();const id=setInterval(poll,8000);return()=>{on=false;clearInterval(id)}},[showSlots]);
   // Chat cooldown countdown
   useEffect(()=>{if(chatCd<=0)return;const id=setTimeout(()=>setChatCd(c=>c-1),1000);return()=>clearTimeout(id)},[chatCd]);
