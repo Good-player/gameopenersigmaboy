@@ -126,6 +126,17 @@ function App(){
   const[events,setEvents]=useState([]);const[dismissedEvents,setDismissedEvents]=useState({});
   const stripRef=useRef(null);const lockRef=useRef(false);
 
+  // Verify account on mount - clear stale sessions from DB wipe
+  useEffect(()=>{
+    if(!account?.username||!account?.token)return;
+    (async()=>{
+      try{
+        const r=await api("/auth/load",{username:account.username,token:account.token});
+        if(r?.error==="Unauthorized"||r?.error){clearAccount();setAccount(null);console.log("[AUTH] Stale session cleared")}
+      }catch{}
+    })();
+  },[]);
+
   useEffect(()=>{(async()=>{try{const r=await _stGet("co-slots");if(r?.value)setSlotMeta(JSON.parse(r.value))}catch{}})()},[]);
   async function saveSlotMeta(m){setSlotMeta(m);try{await _stSet("co-slots",JSON.stringify(m))}catch{}}
   async function loadSlot(i){
@@ -138,11 +149,11 @@ function App(){
 
   // Poll server for live data + remote refresh check
   const lastRefreshRef=useRef(Date.now());
-  useEffect(()=>{if(showSlots)return;let on=true;async function poll(){if(!on)return;try{const[f,l,c,ref,ev]=await Promise.all([getFeed(),getLeaderboard(),getChat(),api("/refresh",{}),api("/events",{})]);if(f?.feed)setFeed(f.feed);if(l?.lb)setLb(l.lb);if(c?.msgs)setChatLog(c.msgs);if(ref?.refreshAt&&ref.refreshAt>lastRefreshRef.current){lastRefreshRef.current=ref.refreshAt;location.reload()}if(ev?.events)setEvents(ev.events);if(account){const dm=await api("/dm/inbox",{username:account.username,token:account.token});if(dm?.unread!==undefined)setDmUnread(dm.unread)}}catch{}};poll();const id=setInterval(poll,8000);return()=>{on=false;clearInterval(id)}},[showSlots]);
+  useEffect(()=>{if(showSlots)return;let on=true;let dmPollCount=0;async function poll(){if(!on)return;try{const[f,l,c,ref,ev]=await Promise.all([getFeed(),getLeaderboard(),getChat(),api("/refresh",{}),api("/events",{})]);if(f?.feed)setFeed(f.feed);if(l?.lb)setLb(l.lb);if(c?.msgs)setChatLog(c.msgs);if(ref?.refreshAt&&ref.refreshAt>lastRefreshRef.current){lastRefreshRef.current=ref.refreshAt;location.reload()}if(ev?.events)setEvents(ev.events);dmPollCount++;if(account?.username&&account?.token&&dmPollCount%4===0){const dm=await api("/dm/inbox",{username:account.username,token:account.token});if(dm?.error){clearAccount();setAccount(null)}else if(dm?.unread!==undefined)setDmUnread(dm.unread)}}catch{}};poll();const id=setInterval(poll,8000);return()=>{on=false;clearInterval(id)}},[showSlots,account]);
   // Chat cooldown countdown
   useEffect(()=>{if(chatCd<=0)return;const id=setTimeout(()=>setChatCd(c=>c-1),1000);return()=>clearTimeout(id)},[chatCd]);
   // Auto cloud save every 30s
-  useEffect(()=>{if(!account||showSlots)return;const id=setInterval(()=>{cloudSave()},30000);return()=>clearInterval(id)},[account,showSlots,slot]);
+  useEffect(()=>{if(!account?.username||!account?.token||showSlots)return;const id=setInterval(()=>{cloudSave()},30000);return()=>clearInterval(id)},[account,showSlots,slot]);
 
   const save=useCallback(async(s,d)=>{try{const lk=await _stGet("co-lock-"+slot);if(lk?.value&&lk.value!==TAB_ID)return;await _stSet("co-s"+slot,JSON.stringify({st:s,drops:d||[]}))}catch{}const inv=s.inv||[];const tv=inv.reduce((a,i)=>a+i.value,0);setSlotMeta(prev=>{const m=[...prev];m[slot]={bal:s.bal,items:inv.length,totalVal:tv,opened:s.stats?.opened||0};saveSlotMeta(m);return m})},[slot]);
   useEffect(()=>{if(showSlots)return;const id=setInterval(()=>{setSt(cur=>{setDrops(dd=>{save(cur,dd);return dd});return cur})},5000);return()=>clearInterval(id)},[save,showSlots]);
@@ -189,12 +200,13 @@ function App(){
     setAuthLoading(false);
   }
   async function cloudSave(){
-    if(!account)return;setSaveStatus("saving");
+    if(!account||!account.username||!account.token)return;setSaveStatus("saving");
     try{
       const slotData=await _stGet("co-s"+slot);
       const data=slotData?.value?JSON.parse(slotData.value):null;
       if(!data){setSaveStatus("No data");return}
       const r=await authSave(account.username,account.token,slot,data);
+      if(r?.error==="Unauthorized"){clearAccount();setAccount(null);setSaveStatus("Session expired");return}
       if(r?.ok)setSaveStatus("Saved!");else setSaveStatus(r?.error||"Failed");
     }catch{setSaveStatus("Error")}
     setTimeout(()=>setSaveStatus(""),3000);
@@ -531,11 +543,11 @@ const S={
   title:{fontSize:"clamp(16px,4.5vw,22px)",fontWeight:800,letterSpacing:3,color:"#ccc"},
   hdrRight:{display:"flex",alignItems:"center",gap:"clamp(4px,1.5vw,8px)",flexWrap:"wrap"},
   chip:{display:"flex",flexDirection:"column",alignItems:"center",background:"#0d1117",border:"1px solid #151820",borderRadius:8,padding:"2px clamp(8px,2.5vw,14px)"},
-  chipLbl:{color:"#444",fontSize:"clamp(7px,1.8vw,9px)",letterSpacing:1},
+  chipLbl:{color:"#777",fontSize:"clamp(7px,1.8vw,9px)",letterSpacing:1},
   rentChip:{background:"#f59e0b0a",border:"1px solid #f59e0b1a",borderRadius:8,padding:"4px 10px",fontSize:"clamp(9px,2.2vw,11px)",color:"#f59e0b",fontWeight:600},
   nav:{display:"flex",gap:3,padding:"6px clamp(12px,3vw,20px)",borderBottom:"1px solid #151820",flexWrap:"wrap"},
-  tab:{background:"transparent",border:"none",color:"#444",padding:"6px 12px",fontSize:"clamp(10px,2.5vw,13px)",fontWeight:600,borderRadius:6,transition:"all .15s"},
-  tabOn:{background:"#ffffff06",color:"#ccc"},
+  tab:{background:"transparent",border:"none",color:"#888",padding:"6px 12px",fontSize:"clamp(10px,2.5vw,13px)",fontWeight:600,borderRadius:6,transition:"all .15s"},
+  tabOn:{background:"#ffffff0a",color:"#e2e8f0"},
   body:{padding:"clamp(12px,3vw,20px)",flex:1,maxWidth:960,margin:"0 auto",width:"100%",overflowX:"hidden"},
   grid:{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(clamp(130px,28vw,180px),1fr))",gap:"clamp(8px,2vw,12px)"},
   card:{background:"#0d1117",border:"1px solid",borderRadius:12,padding:"clamp(10px,2.5vw,16px)",display:"flex",flexDirection:"column",alignItems:"center",gap:6},
