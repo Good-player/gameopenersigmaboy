@@ -104,6 +104,7 @@ function money(n){return"$"+n.toLocaleString()}
 function genFloat(){return Math.random()}
 function getCondition(f){if(f<.07)return CONDITIONS[0];if(f<.15)return CONDITIONS[1];if(f<.38)return CONDITIONS[2];if(f<.45)return CONDITIONS[3];return CONDITIONS[4]}
 function condAbbr(c){return c.split(" ").map(w=>w[0]).join("")}
+function dName(m){return(m.display_name&&m.display_name!==m.uname&&m.display_name!==m.username)?(m.display_name+" (@"+(m.uname||m.username)+")"):(m.uname||m.username||"Anon")}
 function uid(){return Date.now().toString(36)+Math.random().toString(36).slice(2,7)}
 const TAB_ID=uid();
 
@@ -126,13 +127,15 @@ function App(){
   const[viewProfile,setViewProfile]=useState(null);const[editBio,setEditBio]=useState("");const[editPrivacy,setEditPrivacy]=useState("public");
   const[reportTarget,setReportTarget]=useState("");const[reportReason,setReportReason]=useState("");const[reportMsg,setReportMsg]=useState("");
   const[events,setEvents]=useState([]);const[dismissedEvents,setDismissedEvents]=useState({});
+  const[friendsList,setFriendsList]=useState([]);
+  function showProfile(username){api("/profile/full",{target:username,username:account?.username}).then(r=>{if(r?.profile)setViewProfile(r.profile)})}
   const[lobbies,setLobbies]=useState([]);const[curLobby,setCurLobby]=useState(null);const[lobbyChat,setLobbyChat]=useState([]);const[lobbyChatMsg,setLobbyChatMsg]=useState("");const[lobbyTimer,setLobbyTimer]=useState(0);const[createLobbyName,setCreateLobbyName]=useState("");const[createLobbyPw,setCreateLobbyPw]=useState("");const[createLobbyMode,setCreateLobbyMode]=useState("profit_race");
   const stripRef=useRef(null);const lockRef=useRef(false);const lobbyPollRef=useRef(null);
 
   async function refreshLobbies(){const r=await api("/lobby/list",{});if(r?.lobbies)setLobbies(r.lobbies)}
   async function refreshLobby(id){const r=await api("/lobby/info",{lobbyId:id||curLobby?.id});if(r?.lobby){setCurLobby(r.lobby);if(r.chat)setLobbyChat(r.chat);if(r.players)setCurLobby(prev=>({...prev,...r.lobby,_players:r.players}))}}
   async function joinLobby(id,pw){const r=await api("/lobby/join",{username:account?.username,lobbyId:id,lobbyPassword:pw||""});if(r?.ok){await refreshLobby(id);return true}else{alert(r?.error||"Failed");return false}}
-  async function leaveLobby(){if(curLobby){await api("/lobby/kick",{username:account?.username,target:account?.username,lobbyId:curLobby.id});setCurLobby(null);setLobbyChat([]);clearInterval(lobbyPollRef.current)}}
+  async function leaveLobby(){if(curLobby){await api("/lobby/leave",{username:account?.username,lobbyId:curLobby.id});setCurLobby(null);setLobbyChat([]);clearInterval(lobbyPollRef.current);refreshLobbies()}}
   async function deleteLobby(){if(curLobby){await api("/lobby/end",{lobbyId:curLobby.id,username:account?.username});setCurLobby(null);setLobbyChat([]);clearInterval(lobbyPollRef.current);refreshLobbies()}}
 
   // Poll lobby while in one
@@ -201,7 +204,7 @@ function App(){
       const fn=authTab==="login"?authLogin:authRegister;
       const r=await fn(authUser,authPass);
       if(!r||r.error){setAuthErr(r?.error||"Failed");setAuthLoading(false);return}
-      const acc={username:r.username,token:r.token,role:r.role||"user"};
+      const acc={username:r.username,token:r.token,role:r.role||"user",display_name:r.display_name||r.username};
       setAccount(acc);saveAccount(acc);setShowAuth(false);setAuthUser("");setAuthPass("");
       // On login, if server has saved slots, offer to load
       if(r.slots&&r.slots.some(s=>s!==null)){
@@ -403,9 +406,9 @@ function App(){
       <div style={{display:"flex",flexDirection:"column",gap:3}}>
         {lb.length===0?<div style={{color:"#555",textAlign:"center",padding:20}}>No players yet.</div>:
         lb.map((p,i)=>{const medal=i===0?"\uD83E\uDD47":i===1?"\uD83E\uDD48":i===2?"\uD83E\uDD49":"";return(
-          <div key={i} style={{display:"grid",gridTemplateColumns:"28px 1fr 80px 80px",alignItems:"center",gap:8,padding:"8px 12px",background:i<3?"#ffd70008":"#0d1117",border:i<3?"1px solid #ffd70022":"1px solid #151820",borderRadius:6,fontSize:"clamp(9px,2.2vw,12px)"}}>
+          <div key={i} style={{display:"grid",gridTemplateColumns:"28px 1fr 80px 80px",alignItems:"center",gap:8,padding:"8px 12px",background:i<3?"#ffd70008":"#0d1117",border:i<3?"1px solid #ffd70022":"1px solid #151820",borderRadius:6,fontSize:"clamp(9px,2.2vw,12px)",cursor:"pointer"}} onClick={()=>showProfile(p.uname)}>
             <span style={{fontWeight:800,color:i<3?"#ffd700":"#888",textAlign:"center"}}>{medal||`#${i+1}`}</span>
-            <span style={{fontWeight:600,color:"#e2e8f0",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{p.uname||"Anon"}</span>
+            <span style={{fontWeight:600,color:"#e2e8f0",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{dName(p)} <span style={{color:"#666",fontSize:"clamp(7px,1.8vw,9px)"}}>Lv{p.level||1}</span></span>
             <span style={{color:"#4ade80",fontWeight:600,textAlign:"right"}}>{money(p.totalWon||0)}</span>
             <span style={{color:"#888",textAlign:"right"}}>{p.opens||0} opens</span>
           </div>
@@ -418,9 +421,10 @@ function App(){
       <div style={{fontSize:"clamp(15px,4vw,20px)",fontWeight:700,marginBottom:12}}>{"\uD83D\uDCAC"} Chat Room</div>
       <div style={{background:"#0d1117",border:"1px solid #151820",borderRadius:8,padding:10,height:"clamp(200px,50vh,400px)",overflowY:"auto",display:"flex",flexDirection:"column-reverse",gap:4,marginBottom:10}} id="__chatbox">
         {chatLog.length===0?<div style={{color:"#555",textAlign:"center",padding:20}}>No messages yet. Say hi!</div>:
-        chatLog.map((m,i)=><div key={i} style={{display:"flex",gap:6,fontSize:"clamp(8px,2.2vw,11px)",padding:"4px 0"}}>
+        chatLog.map((m,i)=><div key={i} style={{display:"flex",gap:6,fontSize:"clamp(8px,2.2vw,11px)",padding:"4px 0",alignItems:"flex-start"}}>
           <span style={{color:"#888",flexShrink:0,width:42}}>{m.ago||""}</span>
-          <span style={{color:m.uid===USER_ID?"#4ade80":m.uid==="SYSTEM"?"#f59e0b":"#8b5cf6",fontWeight:700,flexShrink:0}}>{m.uname||"Anon"}</span>
+          <div style={{width:18,height:18,borderRadius:"50%",background:"#1e2430",display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,flexShrink:0,cursor:"pointer",overflow:"hidden"}} onClick={()=>{if(m.uid!=="SYSTEM")showProfile(m.uname)}}>{m.pfp?<img src={m.pfp} style={{width:18,height:18,borderRadius:"50%",objectFit:"cover"}}/>:"\uD83D\uDC64"}</div>
+          <span style={{color:m.uid===USER_ID?"#4ade80":m.uid==="SYSTEM"?"#f59e0b":m.role==="owner"?"#ff4444":m.role==="admin"?"#ffd700":m.role==="mod"?"#8b5cf6":"#3b82f6",fontWeight:700,flexShrink:0,cursor:m.uid!=="SYSTEM"?"pointer":"default"}} onClick={()=>{if(m.uid!=="SYSTEM")showProfile(m.uname)}}>{dName(m)}</span>
           <span style={{color:m.uid==="SYSTEM"?"#fbbf24":"#ccc"}} dangerouslySetInnerHTML={{__html:renderMd(m.msg)}}/>
         </div>)}
       </div>
@@ -456,7 +460,9 @@ function App(){
             <div><div style={{fontWeight:700,fontSize:"clamp(14px,3.5vw,18px)"}}>{curLobby.name}</div><div style={{color:"#888",fontSize:"clamp(8px,2vw,10px)"}}>Mode: {curLobby.mode==="profit_race"?"Profit Race":"Coin Flip Duel"} · Host: {curLobby.host}{curLobby.password_hash?" · \uD83D\uDD12":""}</div></div>
             <div style={{display:"flex",gap:4}}>
               {curLobby.status==="waiting"&&curLobby.host===account.username&&<button onClick={async()=>{await api("/lobby/start",{lobbyId:curLobby.id,username:account.username});refreshLobby(curLobby.id)}} style={{...S.btn,background:"#4ade80",color:"#000",fontSize:"clamp(10px,2.5vw,13px)"}}>Start</button>}
-              <button onClick={deleteLobby} style={{...S.btn,background:"#eb4b4b22",color:"#eb4b4b",fontSize:"clamp(9px,2.2vw,11px)"}}>{curLobby.host===account.username?"Delete":"Leave"}</button>
+              {curLobby._spectating?<button onClick={()=>{setCurLobby(null);clearInterval(lobbyPollRef.current)}} style={{...S.btn,background:"#ffffff08",color:"#888",fontSize:"clamp(9px,2.2vw,11px)"}}>Stop Watching</button>:
+              curLobby.host===account.username?<button onClick={deleteLobby} style={{...S.btn,background:"#eb4b4b22",color:"#eb4b4b",fontSize:"clamp(9px,2.2vw,11px)"}}>Delete</button>:
+              <button onClick={leaveLobby} style={{...S.btn,background:"#f59e0b22",color:"#f59e0b",fontSize:"clamp(9px,2.2vw,11px)"}}>Leave</button>}
             </div>
           </div>
           {/* Timer */}
@@ -474,9 +480,9 @@ function App(){
             </div>)}
           </div>
           {/* Lobby opening (during game) */}
-          {curLobby.status==="playing"&&<div style={{marginBottom:10}}>
-            <div style={{fontSize:"clamp(10px,2.5vw,12px)",fontWeight:600,color:"#888",marginBottom:4}}>Open Cases</div>
-            <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>{CASES.filter(c=>c.price<=10000).map(c=><button key={c.id} onClick={async()=>{const r=await api("/lobby/roll",{username:account.username,lobbyId:curLobby.id,caseId:c.id});if(r?.timeUp){refreshLobby(curLobby.id);return}if(r?.ok&&r.result){setWonItem({name:r.result.name,rarity:r.result.rarity,value:r.result.value,icon:c.items.find(i=>i.name===r.result.name)?.icon||"?"});sndReveal(r.result.value>=c.price);refreshLobby(curLobby.id)}}} style={{...S.btn,background:c.color+"22",color:c.color,border:"1px solid "+c.color+"44",padding:"4px 8px",fontSize:"clamp(8px,2vw,10px)"}}>{c.icon} ${c.price}</button>)}</div>
+          {curLobby.status==="playing"&&!curLobby._spectating&&<div style={{marginBottom:10}}>
+            <div style={{fontSize:"clamp(10px,2.5vw,12px)",fontWeight:600,color:"#888",marginBottom:4}}>Open Cases {curLobby._myBal!==undefined&&<span style={{color:"#4ade80"}}> — ${curLobby._myBal?.toLocaleString()||"10,000"} left</span>}</div>
+            <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>{CASES.filter(c=>c.price<=10000).map(c=><button key={c.id} disabled={curLobby._myBal!==undefined&&curLobby._myBal<c.price} onClick={async()=>{const r=await api("/lobby/roll",{username:account.username,lobbyId:curLobby.id,caseId:c.id});if(r?.timeUp||r?.error==="Time up"){refreshLobby(curLobby.id);return}if(r?.cantAfford){setCurLobby(prev=>({...prev,_myBal:0}));return}if(r?.ok&&r.result){setWonItem({name:r.result.name,rarity:r.result.rarity,value:r.result.value,icon:c.items.find(i=>i.name===r.result.name)?.icon||"?"});sndReveal(r.result.value>=c.price);if(r.result.balance!==undefined)setCurLobby(prev=>({...prev,_myBal:r.result.balance}));refreshLobby(curLobby.id)}else if(r?.error){alert(r.error)}}} style={{...S.btn,background:c.color+"22",color:c.color,border:"1px solid "+c.color+"44",padding:"4px 8px",fontSize:"clamp(8px,2vw,10px)",opacity:(curLobby._myBal!==undefined&&curLobby._myBal<c.price)?0.3:1}}>{c.icon} ${c.price}</button>)}</div>
             {wonItem?.name&&<div className="bounceIn" style={{background:"#141820",borderRadius:8,padding:8,marginTop:6,textAlign:"center"}}><span style={{fontSize:20}}>{wonItem.icon}</span> <span style={{color:R[wonItem.rarity]?.color,fontWeight:700}}>{wonItem.name}</span> <span style={{color:"#4ade80"}}>${wonItem.value?.toLocaleString()}</span></div>}
           </div>}
           {/* Lobby Chat */}
@@ -514,9 +520,10 @@ function App(){
               <div style={{color:"#888",fontSize:"clamp(8px,2vw,10px)"}}>{l.mode==="profit_race"?"Profit Race":"Coin Flip"} · {l.player_count||0}/5 · {l.status} · Host: {l.host}</div>
             </div>
             {l.status==="waiting"&&<button onClick={async()=>{let pw="";if(l.password_hash){pw=prompt("Password:");if(pw===null)return}const ok=await joinLobby(l.id,pw);if(ok)await refreshLobby(l.id)}} style={{...S.btn,background:"#3b82f6",color:"#fff",padding:"6px 14px"}}>Join</button>}
+            {l.status==="playing"&&<button onClick={async()=>{const r=await api("/lobby/spectate",{lobbyId:l.id});if(r?.ok)setCurLobby({...r.lobby,_players:r.players,_spectating:true})}} style={{...S.btn,background:"#f59e0b22",color:"#f59e0b",padding:"6px 14px"}}>Watch</button>}
           </div>)}
         </div>
-        <div style={{color:"#666",fontSize:"clamp(8px,2vw,10px)",marginTop:10}}>Lobbies auto-delete after 5 min idle. Host can choose Profit Race ($10k, 5min) or Coin Flip Duel.</div>
+        <div style={{color:"#666",fontSize:"clamp(8px,2vw,10px)",marginTop:10}}>Lobbies auto-delete after 5 min idle. 2 min matches. idle. Host can choose Profit Race ($10k, 5min) or Coin Flip Duel.</div>
       </>}
     </div>}
 
@@ -571,6 +578,8 @@ function App(){
             <div style={{width:48,height:48,borderRadius:"50%",background:"#1e2430",display:"flex",alignItems:"center",justifyContent:"center",fontSize:24,overflow:"hidden",flexShrink:0}}>{"\uD83D\uDC64"}</div>
             <div><div style={{fontWeight:700,fontSize:"clamp(14px,3.5vw,18px)",color:"#e2e8f0"}}>{account.username}</div><div style={{color:"#888",fontSize:"clamp(9px,2.2vw,11px)"}}>Level {account.level||1} &middot; {account.role||"user"}</div></div>
           </div>
+          <div style={{fontSize:"clamp(10px,2.5vw,12px)",fontWeight:600,color:"#888",marginBottom:4}}>Display Name</div>
+          <div style={{display:"flex",gap:4,marginBottom:10}}><input defaultValue={account.display_name||account.username} id="editDname" placeholder="Your display name..." style={{...S.input,flex:1,width:"auto"}} maxLength={24}/><button onClick={async()=>{const v=document.getElementById("editDname")?.value||"";const r=await api("/profile/edit",{username:account.username,token:account.token,display_name:v});if(r?.ok){setSaveStatus("Name saved!");const a={...account,display_name:v};setAccount(a);saveAccount(a)}}} style={{...S.btn,background:"#4ade80",color:"#000"}}>Save</button></div>
           <div style={{fontSize:"clamp(10px,2.5vw,12px)",fontWeight:600,color:"#888",marginBottom:4}}>Bio</div>
           <div style={{display:"flex",gap:4,marginBottom:10}}><input value={editBio} onChange={e=>setEditBio(e.target.value.slice(0,200))} placeholder="Write something..." style={{...S.input,flex:1,width:"auto"}} maxLength={200}/><button onClick={async()=>{const r=await api("/profile/edit",{username:account.username,token:account.token,bio:editBio});if(r?.ok)setSaveStatus("Bio saved!")}} style={{...S.btn,background:"#4ade80",color:"#000"}}>Save</button></div>
           <div style={{fontSize:"clamp(10px,2.5vw,12px)",fontWeight:600,color:"#888",marginBottom:4}}>Privacy</div>
@@ -585,15 +594,21 @@ function App(){
     </div>}
 
     {/* PROFILE VIEW MODAL */}
-    {viewProfile&&<div style={S.overlay} onClick={()=>setViewProfile(null)}><div style={S.modal} onClick={e=>e.stopPropagation()}>
-      <div style={{fontSize:36}}>{"\uD83D\uDC64"}</div>
-      <div style={{fontSize:"clamp(16px,4vw,22px)",fontWeight:700}}>{viewProfile.username}</div>
-      {viewProfile.privacy==="private"?<div style={{color:"#888"}}>This profile is private</div>:<>
-        <div style={{color:"#888",fontSize:"clamp(9px,2.2vw,11px)"}}>Level {viewProfile.level||1} &middot; {viewProfile.country||"?"}</div>
-        {viewProfile.bio&&<div style={{color:"#ccc",fontSize:"clamp(10px,2.5vw,12px)",fontStyle:"italic",textAlign:"center"}}>{viewProfile.bio}</div>}
-        <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,width:"100%",fontSize:"clamp(9px,2.2vw,11px)"}}>{[["Wins",viewProfile.wins],["Losses",viewProfile.losses],["Streak",viewProfile.best_streak],["Opened",viewProfile.total_opened],["Earned","$"+(viewProfile.total_earned||0).toLocaleString()],["Spent","$"+(viewProfile.total_spent||0).toLocaleString()]].map(([l,v])=><div key={l} style={{background:"#080a0e",padding:"4px 8px",borderRadius:4}}><div style={{color:"#555",fontSize:8}}>{l}</div><div style={{fontWeight:600}}>{v||0}</div></div>)}</div>
-      </>}
-      <div style={{display:"flex",gap:4,width:"100%"}}><button onClick={()=>{setDmTo(viewProfile.username);setViewProfile(null);setPage("dm")}} style={{...S.btn,background:"#3b82f6",color:"#fff",flex:1}}>DM</button><button onClick={()=>setViewProfile(null)} style={{...S.btn,background:"#ffffff08",color:"#888",flex:1}}>Close</button></div>
+    {viewProfile&&<div style={S.overlay} onClick={()=>setViewProfile(null)}><div style={{...S.modal,maxWidth:"clamp(300px,85vw,440px)"}} onClick={e=>e.stopPropagation()}>
+      <div style={{width:56,height:56,borderRadius:"50%",background:"#1e2430",display:"flex",alignItems:"center",justifyContent:"center",fontSize:28,overflow:"hidden"}}>{viewProfile.pfp?<img src={viewProfile.pfp} style={{width:56,height:56,borderRadius:"50%",objectFit:"cover"}}/>:"\uD83D\uDC64"}</div>
+      <div style={{fontSize:"clamp(16px,4vw,22px)",fontWeight:700}}>{viewProfile.display_name||viewProfile.username}</div>
+      <div style={{color:"#888",fontSize:"clamp(9px,2.2vw,11px)"}}>@{viewProfile.username} · {viewProfile.role||"user"}</div>
+      <div style={{color:"#555",fontSize:"clamp(8px,2vw,9px)",fontFamily:"monospace"}}>ID: {viewProfile.uid||"?"}</div>
+      {viewProfile.bio&&viewProfile.privacy!=="private"&&<div style={{color:"#ccc",fontSize:"clamp(10px,2.5vw,12px)",fontStyle:"italic",textAlign:"center"}}>{viewProfile.bio}</div>}
+      {/* Always-public stats */}
+      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:4,width:"100%",fontSize:"clamp(8px,2vw,10px)"}}>
+        {[["Level",viewProfile.level||1],["Wins",viewProfile.wins||0],["Losses",viewProfile.losses||0],["Win Rate",(viewProfile.win_rate||"0.0")+"%"],["Streak",viewProfile.win_streak||0],["Best",viewProfile.best_streak||0],["Opened",viewProfile.total_opened||0],["Earned",viewProfile.total_earned!==undefined?"$"+(viewProfile.total_earned||0).toLocaleString():"?"],["Joined",viewProfile.created_at?new Date(viewProfile.created_at).toLocaleDateString():"?"]].map(([l,v])=><div key={l} style={{background:"#080a0e",padding:"4px 6px",borderRadius:4,textAlign:"center"}}><div style={{color:"#555",fontSize:7,textTransform:"uppercase"}}>{l}</div><div style={{fontWeight:600,color:l==="Win Rate"&&parseFloat(v)>50?"#4ade80":l==="Win Rate"&&parseFloat(v)<50?"#eb4b4b":"#e2e8f0"}}>{v}</div></div>)}</div>
+      {viewProfile.privacy==="private"&&<div style={{color:"#888",fontSize:10}}>Some details hidden (private profile)</div>}
+      <div style={{display:"flex",gap:4,width:"100%",flexWrap:"wrap"}}>
+        {account&&viewProfile.username!==account.username&&<button onClick={async()=>{const r=await api("/friends/add",{username:account.username,token:account.token,target:viewProfile.username});if(r?.ok)alert(r.action==="accepted"?"Friend request accepted!":"Friend request sent!");else alert(r?.error||"Failed")}} style={{...S.btn,background:viewProfile.friendStatus==="friends"?"#4ade8022":"#3b82f622",color:viewProfile.friendStatus==="friends"?"#4ade80":"#3b82f6",flex:1,border:"1px solid "+(viewProfile.friendStatus==="friends"?"#4ade8033":"#3b82f633")}}>{viewProfile.friendStatus==="friends"?"\u2705 Friends":viewProfile.friendStatus==="sent"?"\u231B Pending":viewProfile.friendStatus==="received"?"\u2705 Accept":"\u2795 Add Friend"}</button>}
+        <button onClick={()=>{setDmTo(viewProfile.username);setViewProfile(null);setPage("dm")}} style={{...S.btn,background:"#8b5cf622",color:"#8b5cf6",flex:1}}>DM</button>
+        <button onClick={()=>setViewProfile(null)} style={{...S.btn,background:"#ffffff08",color:"#888",flex:1}}>Close</button>
+      </div>
     </div></div>}
 
     {/* ONLINE MAP */}
