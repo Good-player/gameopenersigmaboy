@@ -8,7 +8,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
 </head>
-<body style="background:#0a0c10;color:#e2e8f0;margin:0;font-family:'JetBrains Mono',monospace">
+<body style="background:#0a0c10;color:#e2e8f0;margin:0;font-family:'JetBrains Mono',monospace"><style>*{color:inherit}button,a,span,div{color:inherit}</style>
 <div id="root"></div>
 <script type="text/babel">
 // localStorage polyfill for window.storage API
@@ -535,7 +535,7 @@ function App(){
   </div>);
 }
 
-const CSS=`@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700;800&display=swap');*{box-sizing:border-box;margin:0;padding:0}::-webkit-scrollbar{width:4px;height:4px}::-webkit-scrollbar-thumb{background:#222;border-radius:2px}::-webkit-scrollbar-track{background:transparent}@keyframes fadeUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}@keyframes glow{0%,100%{box-shadow:0 0 5px #ffd70033}50%{box-shadow:0 0 20px #ffd70066}}@keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-4px)}75%{transform:translateX(4px)}}@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}@keyframes slideIn{from{opacity:0;transform:translateX(-20px)}to{opacity:1;transform:translateX(0)}}@keyframes bounceIn{0%{opacity:0;transform:scale(.3)}50%{transform:scale(1.05)}70%{transform:scale(.95)}100%{opacity:1;transform:scale(1)}}.fadeUp{animation:fadeUp .4s ease-out}.bounceIn{animation:bounceIn .5s ease-out}.slideIn{animation:slideIn .3s ease-out}.pulse{animation:pulse 1.5s infinite}.glow{animation:glow 2s infinite}button{cursor:pointer;font-family:inherit;transition:transform .1s,opacity .1s}button:active:not(:disabled){transform:scale(.95)}button:disabled{opacity:.3;cursor:not-allowed}input:focus,select:focus{outline:1px solid #333}select{-webkit-appearance:none;appearance:none}`;
+const CSS=`@import url('https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;600;700;800&display=swap');*{box-sizing:border-box;margin:0;padding:0;color:inherit}::-webkit-scrollbar{width:4px;height:4px}::-webkit-scrollbar-thumb{background:#222;border-radius:2px}::-webkit-scrollbar-track{background:transparent}button{color:inherit!important}@keyframes fadeUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}@keyframes pulse{0%,100%{opacity:1}50%{opacity:.5}}@keyframes glow{0%,100%{box-shadow:0 0 5px #ffd70033}50%{box-shadow:0 0 20px #ffd70066}}@keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-4px)}75%{transform:translateX(4px)}}@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}@keyframes slideIn{from{opacity:0;transform:translateX(-20px)}to{opacity:1;transform:translateX(0)}}@keyframes bounceIn{0%{opacity:0;transform:scale(.3)}50%{transform:scale(1.05)}70%{transform:scale(.95)}100%{opacity:1;transform:scale(1)}}.fadeUp{animation:fadeUp .4s ease-out}.bounceIn{animation:bounceIn .5s ease-out}.slideIn{animation:slideIn .3s ease-out}.pulse{animation:pulse 1.5s infinite}.glow{animation:glow 2s infinite}button{cursor:pointer;font-family:inherit;transition:transform .1s,opacity .1s}button:active:not(:disabled){transform:scale(.95)}button:disabled{opacity:.3;cursor:not-allowed}input:focus,select:focus{outline:1px solid #333}select{-webkit-appearance:none;appearance:none}`;
 
 const S={
   root:{fontFamily:"'JetBrains Mono',monospace",background:"#0a0c10",color:"#e2e8f0",minHeight:"100vh",display:"flex",flexDirection:"column",fontSize:"clamp(11px,2.8vw,14px)"},
@@ -546,8 +546,8 @@ const S={
   chipLbl:{color:"#777",fontSize:"clamp(7px,1.8vw,9px)",letterSpacing:1},
   rentChip:{background:"#f59e0b0a",border:"1px solid #f59e0b1a",borderRadius:8,padding:"4px 10px",fontSize:"clamp(9px,2.2vw,11px)",color:"#f59e0b",fontWeight:600},
   nav:{display:"flex",gap:3,padding:"6px clamp(12px,3vw,20px)",borderBottom:"1px solid #151820",flexWrap:"wrap"},
-  tab:{background:"transparent",border:"none",color:"#fff",padding:"6px 12px",fontSize:"clamp(10px,2.5vw,13px)",fontWeight:600,borderRadius:6,transition:"all .15s"},
-  tabOn:{background:"#ffffff14",color:"#fff"},
+  tab:{background:"#1a1f2e",border:"1px solid #2a3040",color:"#e2e8f0",padding:"6px 12px",fontSize:"clamp(10px,2.5vw,13px)",fontWeight:600,borderRadius:6,transition:"all .15s"},
+  tabOn:{background:"#2a3548",color:"#fff",border:"1px solid #4ade8055"},
   body:{padding:"clamp(12px,3vw,20px)",flex:1,maxWidth:960,margin:"0 auto",width:"100%",overflowX:"hidden"},
   grid:{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(clamp(130px,28vw,180px),1fr))",gap:"clamp(8px,2vw,12px)"},
   card:{background:"#0d1117",border:"1px solid",borderRadius:12,padding:"clamp(10px,2.5vw,16px)",display:"flex",flexDirection:"column",alignItems:"center",gap:6},
