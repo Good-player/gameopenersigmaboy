@@ -62,6 +62,8 @@ function giveConsent(){localStorage.setItem("co-consent","yes")}
 // Simple markdown renderer (Discord-style)
 function renderMd(text){
   if(!text)return "";
+  // Escape HTML first to prevent XSS
+  text=text.replace(/&/g,"&amp;").replace(/</g,"&lt;").replace(/>/g,"&gt;").replace(/"/g,"&quot;");
   return text
     .replace(/\*\*(.+?)\*\*/g,"<b>$1</b>")
     .replace(/\*(.+?)\*/g,"<i>$1</i>")
@@ -124,7 +126,19 @@ function App(){
   const[viewProfile,setViewProfile]=useState(null);const[editBio,setEditBio]=useState("");const[editPrivacy,setEditPrivacy]=useState("public");
   const[reportTarget,setReportTarget]=useState("");const[reportReason,setReportReason]=useState("");const[reportMsg,setReportMsg]=useState("");
   const[events,setEvents]=useState([]);const[dismissedEvents,setDismissedEvents]=useState({});
-  const stripRef=useRef(null);const lockRef=useRef(false);
+  const[lobbies,setLobbies]=useState([]);const[curLobby,setCurLobby]=useState(null);const[lobbyChat,setLobbyChat]=useState([]);const[lobbyChatMsg,setLobbyChatMsg]=useState("");const[lobbyTimer,setLobbyTimer]=useState(0);const[createLobbyName,setCreateLobbyName]=useState("");const[createLobbyPw,setCreateLobbyPw]=useState("");const[createLobbyMode,setCreateLobbyMode]=useState("profit_race");
+  const stripRef=useRef(null);const lockRef=useRef(false);const lobbyPollRef=useRef(null);
+
+  async function refreshLobbies(){const r=await api("/lobby/list",{});if(r?.lobbies)setLobbies(r.lobbies)}
+  async function refreshLobby(id){const r=await api("/lobby/info",{lobbyId:id||curLobby?.id});if(r?.lobby){setCurLobby(r.lobby);if(r.chat)setLobbyChat(r.chat);if(r.players)setCurLobby(prev=>({...prev,...r.lobby,_players:r.players}))}}
+  async function joinLobby(id,pw){const r=await api("/lobby/join",{username:account?.username,lobbyId:id,lobbyPassword:pw||""});if(r?.ok){await refreshLobby(id);return true}else{alert(r?.error||"Failed");return false}}
+  async function leaveLobby(){if(curLobby){await api("/lobby/kick",{username:account?.username,target:account?.username,lobbyId:curLobby.id});setCurLobby(null);setLobbyChat([]);clearInterval(lobbyPollRef.current)}}
+  async function deleteLobby(){if(curLobby){await api("/lobby/end",{lobbyId:curLobby.id,username:account?.username});setCurLobby(null);setLobbyChat([]);clearInterval(lobbyPollRef.current);refreshLobbies()}}
+
+  // Poll lobby while in one
+  useEffect(()=>{if(!curLobby?.id)return;const id=setInterval(()=>refreshLobby(curLobby.id),3000);lobbyPollRef.current=id;return()=>clearInterval(id)},[curLobby?.id]);
+  // Lobby timer
+  useEffect(()=>{if(!curLobby?.started_at||curLobby?.status!=="playing")return;const id=setInterval(()=>{const elapsed=Date.now()-curLobby.started_at;const left=Math.max(0,(curLobby.duration||300)*1000-elapsed);setLobbyTimer(left);if(left<=0){clearInterval(id);api("/lobby/end",{lobbyId:curLobby.id}).then(r=>{if(r?.results)setCurLobby(prev=>({...prev,status:"finished",_results:r.results}))})}},500);return()=>clearInterval(id)},[curLobby?.started_at,curLobby?.status]);
 
   // Verify account on mount - clear stale sessions from DB wipe
   useEffect(()=>{
@@ -283,7 +297,7 @@ function App(){
     {events.filter(e=>!dismissedEvents[e.id]).map(e=><div key={e.id} className="slideIn" style={{background:e.type==="announcement"?"#f59e0b22":"#3b82f622",borderBottom:"1px solid "+(e.type==="announcement"?"#f59e0b44":"#3b82f644"),padding:"8px 14px",display:"flex",alignItems:"center",gap:8}}><span style={{fontSize:"clamp(14px,3.5vw,18px)"}}>{e.type==="announcement"?"\uD83D\uDCE2":e.type==="sale"?"\uD83D\uDCB0":"\uD83C\uDF89"}</span><div style={{flex:1}}><div style={{color:e.type==="announcement"?"#f59e0b":"#3b82f6",fontWeight:700,fontSize:"clamp(10px,2.5vw,13px)"}}>{e.title}</div>{e.description&&<div style={{color:"#ccc",fontSize:"clamp(8px,2vw,10px)"}}>{e.description}</div>}</div><button onClick={()=>setDismissedEvents(d=>({...d,[e.id]:true}))} style={{background:"transparent",border:"none",color:"#666",cursor:"pointer",fontSize:14}}>{"\u2715"}</button></div>)}
 
     {/* NAV */}
-    <div style={S.nav}>{[["shop","Shop"],["inv",`Inv (${st.inv.length})`],["stats","Stats"],["loan","Loan"],["flip","\uD83E\uDE99 Flip"],["pvp","\u2694\uFE0F PvP"],["live","\uD83D\uDD34 Live"],["lb","\uD83C\uDFC6 Top"],["chat","\uD83D\uDCAC Chat"],["dm",`\u2709 DM${dmUnread>0?" ("+dmUnread+")":""}`],["me","\uD83D\uDC64 Me"],["map","\uD83C\uDF0D Map"]].map(([k,l])=>(<button key={k} onClick={()=>{if(!opening||scrollDone||k==="shop"){setPage(k);if(k!=="opening")setOpening(false);if(k==="map")getOnline().then(r=>{if(r)setOnlineData(r)});if(k==="dm"&&account){api("/dm/inbox",{username:account.username,token:account.token}).then(r=>{if(r?.ok){setDmInbox(r);setDmUnread(0);api("/dm/read",{username:account.username,token:account.token})}})}}}} style={{...S.tab,...(page===k||(page==="opening"&&k==="shop")?S.tabOn:{}),color:k==="dm"&&dmUnread>0?"#f59e0b":undefined}}>{l}</button>))}<button onClick={()=>setConfirmReset(true)} style={{...S.tab,marginLeft:"auto",color:"#eb4b4b"}}>Reset</button></div>
+    <div style={S.nav}>{[["shop","Shop"],["inv",`Inv (${st.inv.length})`],["stats","Stats"],["loan","Loan"],["flip","\uD83E\uDE99 Flip"],["pvp","\u2694\uFE0F PvP"],["live","\uD83D\uDD34 Live"],["lb","\uD83C\uDFC6 Top"],["chat","\uD83D\uDCAC Chat"],["dm",`\u2709 DM${dmUnread>0?" ("+dmUnread+")":""}`],["me","\uD83D\uDC64 Me"],["map","\uD83C\uDF0D Map"]].map(([k,l])=>(<button key={k} onClick={()=>{if(!opening||scrollDone||k==="shop"){setPage(k);if(k!=="opening")setOpening(false);if(k==="map")getOnline().then(r=>{if(r)setOnlineData(r)});if(k==="pvp")refreshLobbies();if(k==="dm"&&account){api("/dm/inbox",{username:account.username,token:account.token}).then(r=>{if(r?.ok){setDmInbox(r);setDmUnread(0);api("/dm/read",{username:account.username,token:account.token})}})}}}} style={{...S.tab,...(page===k||(page==="opening"&&k==="shop")?S.tabOn:{}),color:k==="dm"&&dmUnread>0?"#f59e0b":undefined}}>{l}</button>))}{account&&["admin","owner","mod"].includes(account.role)&&<button onClick={()=>{if(account.role==="owner")window.owner();else window.admin()}} style={{...S.tab,background:"#ff000022",color:"#ff4444",border:"1px solid #ff000044"}}>{account.role==="owner"?"\uD83D\uDC51 Owner":"\uD83D\uDEE1 Admin"}</button>}<button onClick={()=>setConfirmReset(true)} style={{...S.tab,marginLeft:"auto",color:"#eb4b4b"}}>Reset</button></div>
 
     {/* SHOP */}
     {page==="shop"&&<div style={S.body}><div style={S.grid}>{CASES.map(c=>{const ok=st.bal>=c.price;return(<div key={c.id} style={{...S.card,borderColor:c.color+"44",opacity:ok?1:.35}}><div style={{...S.cardIcon,background:c.color+"12",borderColor:c.color+"28"}}><span style={{fontSize:"clamp(26px,6.5vw,40px)"}}>{c.icon}</span></div><div style={S.cardName}>{c.name}</div><div style={{...S.cardPrice,color:c.color}}>{money(c.price)}</div><div style={{display:"flex",gap:"clamp(4px,1vw,6px)",width:"100%"}}><button disabled={!ok} onClick={()=>doOpen(c)} style={{...S.btn,background:ok?c.color:"#333",color:"#fff",flex:1}}>Open</button><button onClick={()=>{setInspecting(c);setPage("inspect")}} style={{...S.btn,background:"#ffffff08",color:"#777",flex:1}}>Inspect</button></div></div>)})}</div></div>}
@@ -433,44 +447,119 @@ function App(){
 
     {/* PVP LOBBY */}
     {page==="pvp"&&<div style={S.body}>
-      <div style={{fontSize:"clamp(15px,4vw,20px)",fontWeight:700,marginBottom:12}}>{"\u2694\uFE0F"} PvP — Profit Race</div>
-      {!account?<div style={{color:"#f59e0b",background:"#f59e0b11",padding:12,borderRadius:8,textAlign:"center"}}>Login required for PvP</div>:<>
-        <div style={{display:"flex",gap:6,marginBottom:12}}>
-          <button onClick={async()=>{const name=prompt("Lobby name:");if(!name)return;const pw=prompt("Password (empty for public):");const r=await api("/lobby/create",{username:account.username,name,lobbyPassword:pw||""});if(r?.lobbyId)alert("Created! ID: "+r.lobbyId)}} style={{...S.btn,background:"#4ade80",color:"#000",fontWeight:700}}>Create Lobby</button>
-          <button onClick={async()=>{const id=prompt("Lobby ID:");if(!id)return;const pw=prompt("Password (if any):");const r=await api("/lobby/join",{username:account.username,lobbyId:id,lobbyPassword:pw||""});if(r?.ok)alert("Joined!");else alert(r?.error||"Failed")}} style={{...S.btn,background:"#3b82f6",color:"#fff"}}>Join Lobby</button>
+      <div style={{fontSize:"clamp(15px,4vw,20px)",fontWeight:700,marginBottom:12}}>{"\u2694\uFE0F"} PvP Arena</div>
+      {!account?<div style={{color:"#f59e0b",background:"#f59e0b11",padding:12,borderRadius:8,textAlign:"center"}}>Login required for PvP</div>:
+      curLobby?<div>
+        {/* IN-LOBBY VIEW */}
+        <div style={{background:"#0d1117",border:"1px solid #151820",borderRadius:12,padding:"clamp(12px,3vw,20px)",marginBottom:10}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+            <div><div style={{fontWeight:700,fontSize:"clamp(14px,3.5vw,18px)"}}>{curLobby.name}</div><div style={{color:"#888",fontSize:"clamp(8px,2vw,10px)"}}>Mode: {curLobby.mode==="profit_race"?"Profit Race":"Coin Flip Duel"} · Host: {curLobby.host}{curLobby.password_hash?" · \uD83D\uDD12":""}</div></div>
+            <div style={{display:"flex",gap:4}}>
+              {curLobby.status==="waiting"&&curLobby.host===account.username&&<button onClick={async()=>{await api("/lobby/start",{lobbyId:curLobby.id,username:account.username});refreshLobby(curLobby.id)}} style={{...S.btn,background:"#4ade80",color:"#000",fontSize:"clamp(10px,2.5vw,13px)"}}>Start</button>}
+              <button onClick={deleteLobby} style={{...S.btn,background:"#eb4b4b22",color:"#eb4b4b",fontSize:"clamp(9px,2.2vw,11px)"}}>{curLobby.host===account.username?"Delete":"Leave"}</button>
+            </div>
+          </div>
+          {/* Timer */}
+          {curLobby.status==="playing"&&<div style={{background:"#141820",borderRadius:8,padding:"8px 14px",marginBottom:8,textAlign:"center"}}><div style={{color:"#f59e0b",fontWeight:800,fontSize:"clamp(20px,6vw,32px)"}}>{Math.floor(lobbyTimer/60000)}:{String(Math.floor((lobbyTimer%60000)/1000)).padStart(2,"0")}</div><div style={{color:"#888",fontSize:"clamp(8px,2vw,10px)"}}>Time remaining · $10,000 start · No loan</div></div>}
+          {curLobby.status==="finished"&&<div style={{background:"#4ade8011",border:"1px solid #4ade8033",borderRadius:8,padding:10,marginBottom:8,textAlign:"center"}}><div style={{color:"#4ade80",fontWeight:800,fontSize:"clamp(14px,3.5vw,18px)"}}>Game Over!</div></div>}
+          {/* Players */}
+          <div style={{fontSize:"clamp(10px,2.5vw,12px)",fontWeight:600,color:"#888",marginBottom:4}}>Players ({curLobby._players?.length||0}/5)</div>
+          <div style={{display:"flex",flexDirection:"column",gap:2,marginBottom:10}}>
+            {(curLobby._players||[]).map((p,i)=><div key={p.username} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 10px",background:i===0&&curLobby.status==="finished"?"#4ade8011":"#141820",borderRadius:6,borderLeft:"3px solid "+(p.username===curLobby.host?"#f59e0b":"#333")}}>
+              <span style={{color:i===0&&curLobby.status==="finished"?"#ffd700":"#888",fontWeight:700,width:20}}>{curLobby.status==="finished"?"#"+(i+1):""}</span>
+              <span style={{fontWeight:700,color:"#e2e8f0",flex:1,cursor:"pointer"}} onClick={()=>{api("/profile/full",{target:p.username,username:account?.username}).then(r=>{if(r?.profile)setViewProfile(r.profile)})}}>{p.username}</span>
+              {curLobby.status!=="waiting"&&<span style={{color:p.profit>=0?"#4ade80":"#eb4b4b",fontWeight:700,fontSize:"clamp(10px,2.5vw,13px)"}}>{p.profit>=0?"+":""}${(p.profit||0).toLocaleString()}</span>}
+              {curLobby.status!=="waiting"&&<span style={{color:"#888",fontSize:"clamp(8px,2vw,10px)"}}>{p.opens||0} opens</span>}
+              {curLobby.status==="waiting"&&curLobby.host===account.username&&p.username!==account.username&&!["admin","owner","mod"].includes(p.role)&&<button onClick={async()=>{await api("/lobby/kick",{username:account.username,target:p.username,lobbyId:curLobby.id});refreshLobby(curLobby.id)}} style={{background:"#eb4b4b22",color:"#eb4b4b",border:"none",padding:"2px 6px",borderRadius:3,cursor:"pointer",fontSize:9}}>Kick</button>}
+            </div>)}
+          </div>
+          {/* Lobby opening (during game) */}
+          {curLobby.status==="playing"&&<div style={{marginBottom:10}}>
+            <div style={{fontSize:"clamp(10px,2.5vw,12px)",fontWeight:600,color:"#888",marginBottom:4}}>Open Cases</div>
+            <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>{CASES.filter(c=>c.price<=10000).map(c=><button key={c.id} onClick={async()=>{const r=await api("/lobby/roll",{username:account.username,lobbyId:curLobby.id,caseId:c.id});if(r?.timeUp){refreshLobby(curLobby.id);return}if(r?.ok&&r.result){setWonItem({name:r.result.name,rarity:r.result.rarity,value:r.result.value,icon:c.items.find(i=>i.name===r.result.name)?.icon||"?"});sndReveal(r.result.value>=c.price);refreshLobby(curLobby.id)}}} style={{...S.btn,background:c.color+"22",color:c.color,border:"1px solid "+c.color+"44",padding:"4px 8px",fontSize:"clamp(8px,2vw,10px)"}}>{c.icon} ${c.price}</button>)}</div>
+            {wonItem?.name&&<div className="bounceIn" style={{background:"#141820",borderRadius:8,padding:8,marginTop:6,textAlign:"center"}}><span style={{fontSize:20}}>{wonItem.icon}</span> <span style={{color:R[wonItem.rarity]?.color,fontWeight:700}}>{wonItem.name}</span> <span style={{color:"#4ade80"}}>${wonItem.value?.toLocaleString()}</span></div>}
+          </div>}
+          {/* Lobby Chat */}
+          <div style={{fontSize:"clamp(10px,2.5vw,12px)",fontWeight:600,color:"#888",marginBottom:4}}>Lobby Chat</div>
+          <div style={{background:"#080a0e",borderRadius:6,padding:6,height:120,overflowY:"auto",display:"flex",flexDirection:"column-reverse",gap:2,marginBottom:6}}>
+            {lobbyChat.length===0?<div style={{color:"#555",textAlign:"center",fontSize:10}}>No messages</div>:
+            lobbyChat.map((m,i)=><div key={i} style={{fontSize:"clamp(8px,2vw,10px)"}}><span style={{color:"#888"}}>{m.ago} </span><span style={{color:"#8b5cf6",fontWeight:700}}>{m.uname}</span> <span style={{color:"#ccc"}}>{m.msg}</span></div>)}
+          </div>
+          <div style={{display:"flex",gap:4}}><input value={lobbyChatMsg} onChange={e=>setLobbyChatMsg(e.target.value.slice(0,200))} onKeyDown={e=>{if(e.key==="Enter"&&lobbyChatMsg.trim()){api("/lobby/chat",{username:account.username,lobbyId:curLobby.id,msg:lobbyChatMsg.trim()});setLobbyChatMsg("")}}} placeholder="Type..." style={{...S.input,flex:1,width:"auto",padding:"4px 8px",fontSize:10}} maxLength={200}/><button onClick={()=>{if(!lobbyChatMsg.trim())return;api("/lobby/chat",{username:account.username,lobbyId:curLobby.id,msg:lobbyChatMsg.trim()});setLobbyChatMsg("")}} style={{...S.btn,background:"#8b5cf6",color:"#fff",padding:"4px 10px",fontSize:10}}>Send</button></div>
         </div>
-        <div style={{fontSize:"clamp(11px,2.8vw,14px)",fontWeight:600,color:"#888",marginBottom:6}}>Open Lobbies</div>
-        <div id="lobbyList" style={{display:"flex",flexDirection:"column",gap:3}}>
-          <div style={{color:"#555",textAlign:"center",padding:10}}>Loading...</div>
+      </div>:
+      <>
+        {/* CREATE LOBBY */}
+        <div style={{background:"#0d1117",border:"1px solid #151820",borderRadius:12,padding:"clamp(12px,3vw,18px)",marginBottom:12}}>
+          <div style={{fontWeight:700,marginBottom:8,fontSize:"clamp(11px,2.8vw,14px)"}}>Create Lobby</div>
+          <div style={{display:"flex",gap:4,flexWrap:"wrap",marginBottom:6}}>
+            <input value={createLobbyName} onChange={e=>setCreateLobbyName(e.target.value.slice(0,30))} placeholder="Lobby name" style={{...S.input,flex:2,minWidth:100}} maxLength={30}/>
+            <input value={createLobbyPw} onChange={e=>setCreateLobbyPw(e.target.value.slice(0,20))} placeholder="Password (optional)" style={{...S.input,flex:1,minWidth:80}} maxLength={20} type="password"/>
+          </div>
+          <div style={{display:"flex",gap:4,marginBottom:8}}>
+            {[["profit_race","Profit Race"],["coinflip_duel","Coin Flip Duel"]].map(([v,l])=><button key={v} onClick={()=>setCreateLobbyMode(v)} style={{...S.btn,background:createLobbyMode===v?"#3b82f6":"#ffffff08",color:createLobbyMode===v?"#fff":"#888",flex:1,fontSize:"clamp(9px,2.2vw,11px)"}}>{l}</button>)}
+          </div>
+          <button onClick={async()=>{const name=createLobbyName.trim()||account.username+"'s lobby";const r=await api("/lobby/create",{username:account.username,name,lobbyPassword:createLobbyPw,mode:createLobbyMode});if(r?.lobbyId){setCreateLobbyName("");setCreateLobbyPw("");await refreshLobby(r.lobbyId)}else{alert(r?.error||"Failed")}}} style={{...S.btn,background:"#4ade80",color:"#000",fontWeight:700,width:"100%"}}>Create Lobby</button>
         </div>
-        <div style={{color:"#666",fontSize:"clamp(8px,2vw,10px)",marginTop:10}}>5 min race — $10,000 start — most profit wins. No loan. Server-calculated rolls.</div>
+        {/* LOBBY LIST */}
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+          <div style={{fontWeight:600,color:"#888",fontSize:"clamp(10px,2.5vw,12px)"}}>Open Lobbies ({lobbies.length})</div>
+          <button onClick={refreshLobbies} style={{...S.btn,background:"#ffffff08",color:"#888",padding:"3px 8px",fontSize:"clamp(8px,2vw,10px)"}}>Refresh</button>
+        </div>
+        <div style={{display:"flex",flexDirection:"column",gap:4}}>
+          {lobbies.length===0?<div style={{color:"#555",textAlign:"center",padding:16}}>No lobbies. Create one!</div>:
+          lobbies.map(l=><div key={l.id} className="slideIn" style={{background:"#0d1117",border:"1px solid #151820",borderRadius:8,padding:"10px 14px",display:"flex",alignItems:"center",gap:10}}>
+            <div style={{flex:1}}>
+              <div style={{fontWeight:700,fontSize:"clamp(11px,2.8vw,14px)"}}>{l.name} {l.password_hash?"\uD83D\uDD12":""}</div>
+              <div style={{color:"#888",fontSize:"clamp(8px,2vw,10px)"}}>{l.mode==="profit_race"?"Profit Race":"Coin Flip"} · {l.player_count||0}/5 · {l.status} · Host: {l.host}</div>
+            </div>
+            {l.status==="waiting"&&<button onClick={async()=>{let pw="";if(l.password_hash){pw=prompt("Password:");if(pw===null)return}const ok=await joinLobby(l.id,pw);if(ok)await refreshLobby(l.id)}} style={{...S.btn,background:"#3b82f6",color:"#fff",padding:"6px 14px"}}>Join</button>}
+          </div>)}
+        </div>
+        <div style={{color:"#666",fontSize:"clamp(8px,2vw,10px)",marginTop:10}}>Lobbies auto-delete after 5 min idle. Host can choose Profit Race ($10k, 5min) or Coin Flip Duel.</div>
       </>}
     </div>}
 
-    {/* DMs */}
+    {/* DMs - Discord-style */}
     {page==="dm"&&<div style={S.body}>
       <div style={{fontSize:"clamp(15px,4vw,20px)",fontWeight:700,marginBottom:12}}>{"\u2709"} Messages</div>
-      {!account?<div style={{color:"#f59e0b",padding:12,textAlign:"center"}}>Login required</div>:<>
-        <div style={{display:"flex",gap:4,marginBottom:10}}>
-          <input value={dmSearch} onChange={e=>setDmSearch(e.target.value.slice(0,20))} placeholder="Search username..." style={{...S.input,flex:1,width:"auto"}}/>
-          <button onClick={async()=>{if(dmSearch.length<2)return;const r=await api("/users/search",{q:dmSearch});if(r?.users)setDmResults(r.users)}} style={{...S.btn,background:"#3b82f6",color:"#fff"}}>Search</button>
+      {!account?<div style={{color:"#f59e0b",padding:12,textAlign:"center"}}>Login required</div>:<div style={{display:"flex",gap:10,height:"clamp(300px,60vh,500px)"}}>
+        {/* Left sidebar - conversations */}
+        <div style={{width:"clamp(100px,30vw,180px)",background:"#0d1117",border:"1px solid #151820",borderRadius:8,display:"flex",flexDirection:"column",flexShrink:0,overflow:"hidden"}}>
+          <div style={{padding:"8px 10px",borderBottom:"1px solid #151820"}}>
+            <div style={{display:"flex",gap:3}}><input value={dmSearch} onChange={e=>setDmSearch(e.target.value.slice(0,20))} placeholder="Find user..." style={{...S.sel,flex:1,padding:"4px 6px",fontSize:10}} onKeyDown={e=>{if(e.key==="Enter"&&dmSearch.length>=2){api("/users/search",{q:dmSearch}).then(r=>{if(r?.users)setDmResults(r.users)})}}}/><button onClick={async()=>{if(dmSearch.length<2)return;const r=await api("/users/search",{q:dmSearch});if(r?.users)setDmResults(r.users)}} style={{...S.btn,background:"#3b82f6",color:"#fff",padding:"3px 6px",fontSize:9}}>Go</button></div>
+            {dmResults.length>0&&<div style={{display:"flex",flexDirection:"column",gap:1,marginTop:4}}>{dmResults.map(u=><button key={u.username} onClick={()=>{setDmTo(u.username);setDmResults([]);setDmSearch("")}} style={{background:"#141820",border:"none",color:"#4ade80",padding:"4px 6px",borderRadius:3,cursor:"pointer",fontSize:9,textAlign:"left",fontFamily:"inherit"}}>{u.username} <span style={{color:"#666"}}>Lv{u.level}</span></button>)}</div>}
+          </div>
+          <div style={{flex:1,overflowY:"auto"}}>
+            {/* Conversation list from received messages */}
+            {(()=>{const convos={};(dmInbox?.received||[]).forEach(m=>{if(!convos[m.from_user])convos[m.from_user]={user:m.from_user,lastMsg:m.msg,ago:m.ago,unread:!m.read}});(dmInbox?.sent||[]).forEach(m=>{if(!convos[m.to_user])convos[m.to_user]={user:m.to_user,lastMsg:"You: "+m.msg,ago:m.ago}});return Object.values(convos).map(c=><button key={c.user} onClick={()=>setDmTo(c.user)} style={{display:"flex",gap:6,alignItems:"center",padding:"8px 10px",background:dmTo===c.user?"#1e2430":"transparent",border:"none",borderBottom:"1px solid #0a0c10",cursor:"pointer",width:"100%",fontFamily:"inherit"}}>
+              <div style={{width:28,height:28,borderRadius:"50%",background:"#1e2430",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,flexShrink:0,cursor:"pointer"}} onClick={e=>{e.stopPropagation();api("/profile/full",{target:c.user,username:account?.username}).then(r=>{if(r?.profile)setViewProfile(r.profile)})}}>{"\uD83D\uDC64"}</div>
+              <div style={{flex:1,overflow:"hidden",textAlign:"left"}}><div style={{fontWeight:c.unread?700:600,fontSize:"clamp(9px,2.2vw,11px)",color:c.unread?"#e2e8f0":"#888"}}>{c.user}</div><div style={{fontSize:8,color:"#555",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.lastMsg?.slice(0,25)}</div></div>
+              {c.unread&&<div style={{width:6,height:6,borderRadius:"50%",background:"#3b82f6",flexShrink:0}}/>}
+            </button>)})()}
+          </div>
         </div>
-        {dmResults.length>0&&<div style={{display:"flex",gap:4,marginBottom:8,flexWrap:"wrap"}}>{dmResults.map(u=><button key={u.username} onClick={()=>{setDmTo(u.username);setDmResults([]);setDmSearch("")}} style={{...S.btn,background:"#ffffff08",color:"#4ade80",padding:"4px 8px",fontSize:"clamp(8px,2vw,10px)"}}>{u.username} (Lv{u.level})</button>)}</div>}
-        {dmTo&&<div style={{background:"#141820",border:"1px solid #1e2430",borderRadius:8,padding:10,marginBottom:10}}>
-          <div style={{display:"flex",justifyContent:"space-between",marginBottom:6}}><span style={{color:"#4ade80",fontWeight:700}}>To: {dmTo}</span><button onClick={()=>{setViewProfile(null);api("/profile/full",{target:dmTo,username:account?.username}).then(r=>{if(r?.profile)setViewProfile(r.profile)})}} style={{...S.btn,background:"#ffffff08",color:"#888",padding:"2px 8px",fontSize:"clamp(8px,2vw,9px)"}}>Profile</button></div>
-          <div style={{display:"flex",gap:4}}><input value={dmMsg} onChange={e=>setDmMsg(e.target.value.slice(0,500))} placeholder="Type message... (**bold** *italic* ~~strike~~ `code`)" style={{...S.input,flex:1,width:"auto"}} maxLength={500} onKeyDown={e=>{if(e.key==="Enter"&&dmMsg.trim()){api("/dm/send",{username:account.username,token:account.token,to:dmTo,msg:dmMsg.trim()}).then(r=>{if(r?.ok){setDmMsg("");api("/dm/inbox",{username:account.username,token:account.token}).then(r2=>{if(r2?.ok)setDmInbox(r2)})}else{alert(r?.error||"Failed")}})}}}/><button onClick={()=>{if(!dmMsg.trim())return;api("/dm/send",{username:account.username,token:account.token,to:dmTo,msg:dmMsg.trim()}).then(r=>{if(r?.ok){setDmMsg("");api("/dm/inbox",{username:account.username,token:account.token}).then(r2=>{if(r2?.ok)setDmInbox(r2)})}else{alert(r?.error||"Failed")}})}} style={{...S.btn,background:"#4ade80",color:"#000"}}>Send</button></div>
-        </div>}
-        <div style={{fontSize:"clamp(10px,2.5vw,12px)",fontWeight:600,color:"#888",marginBottom:4}}>Received</div>
-        <div style={{display:"flex",flexDirection:"column",gap:2,marginBottom:12,maxHeight:200,overflowY:"auto"}}>
-          {!dmInbox?.received?.length?<div style={{color:"#555",padding:8}}>No messages</div>:
-          dmInbox.received.map(m=><div key={m.id} className="slideIn" style={{display:"flex",gap:6,padding:"5px 8px",background:m.read?"#0d1117":"#3b82f611",borderLeft:"2px solid "+(m.read?"#333":"#3b82f6"),borderRadius:3,fontSize:"clamp(8px,2.2vw,11px)"}}><span style={{color:"#888",width:35,flexShrink:0}}>{m.ago}</span><span style={{color:"#4ade80",fontWeight:700,cursor:"pointer",flexShrink:0}} onClick={()=>setDmTo(m.from_user)}>{m.from_user}</span><span style={{color:"#ccc",flex:1}} dangerouslySetInnerHTML={{__html:renderMd(m.msg)}}/></div>)}
+        {/* Right - message area */}
+        <div style={{flex:1,display:"flex",flexDirection:"column",background:"#0d1117",border:"1px solid #151820",borderRadius:8,overflow:"hidden"}}>
+          {!dmTo?<div style={{flex:1,display:"flex",alignItems:"center",justifyContent:"center",color:"#555"}}>Select a conversation</div>:<>
+            {/* Header */}
+            <div style={{padding:"8px 12px",borderBottom:"1px solid #151820",display:"flex",alignItems:"center",gap:8}}>
+              <div style={{width:28,height:28,borderRadius:"50%",background:"#1e2430",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,cursor:"pointer"}} onClick={()=>{api("/profile/full",{target:dmTo,username:account?.username}).then(r=>{if(r?.profile)setViewProfile(r.profile)})}}>{"\uD83D\uDC64"}</div>
+              <span style={{fontWeight:700,color:"#e2e8f0",flex:1}}>{dmTo}</span>
+              <button onClick={()=>{api("/profile/full",{target:dmTo,username:account?.username}).then(r=>{if(r?.profile)setViewProfile(r.profile)})}} style={{...S.btn,background:"#ffffff08",color:"#888",padding:"2px 8px",fontSize:9}}>Profile</button>
+            </div>
+            {/* Messages */}
+            <div style={{flex:1,overflowY:"auto",padding:10,display:"flex",flexDirection:"column-reverse",gap:4}}>
+              {(()=>{const all=[...(dmInbox?.received||[]).filter(m=>m.from_user===dmTo).map(m=>({...m,dir:"in",t:m.created_at})),...(dmInbox?.sent||[]).filter(m=>m.to_user===dmTo).map(m=>({...m,dir:"out",t:m.created_at}))].sort((a,b)=>b.t-a.t);return all.length===0?<div style={{color:"#555",textAlign:"center"}}>No messages yet</div>:all.map((m,i)=><div key={m.id||i} className="slideIn" style={{display:"flex",justifyContent:m.dir==="out"?"flex-end":"flex-start"}}><div style={{maxWidth:"75%",background:m.dir==="out"?"#3b82f622":"#141820",border:"1px solid "+(m.dir==="out"?"#3b82f633":"#1e2430"),borderRadius:10,borderBottomRightRadius:m.dir==="out"?2:10,borderBottomLeftRadius:m.dir==="in"?2:10,padding:"6px 10px"}}><div style={{fontSize:"clamp(9px,2.3vw,12px)",color:"#ccc"}} dangerouslySetInnerHTML={{__html:renderMd(m.msg)}}/><div style={{fontSize:8,color:"#555",textAlign:m.dir==="out"?"right":"left",marginTop:2}}>{m.ago}</div></div></div>)})()}
+            </div>
+            {/* Input */}
+            <div style={{padding:"8px 10px",borderTop:"1px solid #151820",display:"flex",gap:4}}>
+              <input value={dmMsg} onChange={e=>setDmMsg(e.target.value.slice(0,500))} placeholder="Message..." style={{...S.input,flex:1,width:"auto",padding:"6px 10px",fontSize:"clamp(10px,2.5vw,12px)"}} maxLength={500} onKeyDown={e=>{if(e.key==="Enter"&&dmMsg.trim()){api("/dm/send",{username:account.username,token:account.token,to:dmTo,msg:dmMsg.trim()}).then(r=>{if(r?.ok){setDmMsg("");api("/dm/inbox",{username:account.username,token:account.token}).then(r2=>{if(r2?.ok)setDmInbox(r2)})}else{alert(r?.error||"Failed")}})}}}/>
+              <button onClick={()=>{if(!dmMsg.trim())return;api("/dm/send",{username:account.username,token:account.token,to:dmTo,msg:dmMsg.trim()}).then(r=>{if(r?.ok){setDmMsg("");api("/dm/inbox",{username:account.username,token:account.token}).then(r2=>{if(r2?.ok)setDmInbox(r2)})}else{alert(r?.error||"Failed")}})}} style={{...S.btn,background:"#3b82f6",color:"#fff",padding:"6px 12px"}}>Send</button>
+            </div>
+          </>}
         </div>
-        <div style={{fontSize:"clamp(10px,2.5vw,12px)",fontWeight:600,color:"#888",marginBottom:4}}>Sent</div>
-        <div style={{display:"flex",flexDirection:"column",gap:2,maxHeight:150,overflowY:"auto"}}>
-          {!dmInbox?.sent?.length?<div style={{color:"#555",padding:8}}>No messages</div>:
-          dmInbox.sent.map(m=><div key={m.id} style={{display:"flex",gap:6,padding:"5px 8px",background:"#0d1117",borderLeft:"2px solid #555",borderRadius:3,fontSize:"clamp(8px,2.2vw,11px)"}}><span style={{color:"#888",width:35,flexShrink:0}}>{m.ago}</span><span style={{color:"#8b5cf6",fontWeight:600,flexShrink:0}}>→ {m.to_user}</span><span style={{color:"#999",flex:1}} dangerouslySetInnerHTML={{__html:renderMd(m.msg)}}/></div>)}
-        </div>
-      </>}
+      </div>}
     </div>}
 
     {/* PROFILE */}
@@ -649,7 +738,8 @@ ReactDOM.createRoot(document.getElementById('root')).render(React.createElement(
       });
       var d = await r.json();
       if (!r.ok || !d.ok) { console.log("%c[OWNER] " + (d.error || "Failed"), "color:#eb4b4b"); return; }
-      window.__ownerPwd = pwd;
+      window.__ownerPwd = pwd || "";
+      window.__ownerAcct = acct;
       var container = document.createElement("div");
       container.id = "__owner_container";
       container.innerHTML = d.html;
