@@ -172,7 +172,7 @@ function App(){
 
   // Poll server for live data + remote refresh check
   const lastRefreshRef=useRef(Date.now());
-  useEffect(()=>{if(showSlots)return;let on=true;let dmPollCount=0;async function poll(){if(!on)return;try{const[c,ref]=await Promise.all([getChat(),api("/refresh",{})]);if(c?.msgs)setChatLog(c.msgs);if(ref?.refreshAt&&ref.refreshAt>lastRefreshRef.current){lastRefreshRef.current=ref.refreshAt;location.reload()}dmPollCount++;if(dmPollCount%5===0){const[f,l,ev]=await Promise.all([getFeed(),getLeaderboard(),api("/events",{})]);if(f?.feed)setFeed(f.feed);if(l?.lb)setLb(l.lb);if(ev?.events)setEvents(ev.events)}if(account?.username&&account?.token){const dm=await api("/dm/inbox",{username:account.username,token:account.token});if(dm?.ok&&dm.unread!==undefined){if(dm.unread>dmUnread&&dmUnread>=0){setToast({msg:dm.unread+" new message"+(dm.unread>1?"s":""),color:"#3b82f6"})}setDmUnread(dm.unread);if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||prev?.sent}))}}if(account?.username&&account?.token&&dmPollCount%3===0){const st=await api("/status",{username:account.username,token:account.token});if(st?.banned){setBanModal(st.banReason||"Banned");clearAccount();setAccount(null)}if(st?.warned&&!warnModal)setWarnModal(st.warnReason||"Warning")}}catch{}};poll();const id=setInterval(poll,2000);return()=>{on=false;clearInterval(id)}},[showSlots,account]);
+  useEffect(()=>{if(showSlots)return;let on=true;let dmPollCount=0;async function poll(){if(!on)return;try{const[c,ref]=await Promise.all([getChat(),api("/refresh",{})]);if(c?.msgs)setChatLog(c.msgs);if(ref?.refreshAt&&ref.refreshAt>lastRefreshRef.current){lastRefreshRef.current=ref.refreshAt;location.reload()}dmPollCount++;if(dmPollCount%5===0){const[f,l,ev]=await Promise.all([getFeed(),getLeaderboard(),api("/events",{})]);if(f?.feed)setFeed(f.feed);if(l?.lb)setLb(l.lb);if(ev?.events)setEvents(ev.events)}if(account?.username&&account?.token&&dmPollCount%2===0){const dm=await api("/dm/inbox",{username:account.username,token:account.token});if(dm?.ok&&dm.unread!==undefined){if(dm.unread>dmUnread&&dmUnread>=0){setToast({msg:dm.unread+" new message"+(dm.unread>1?"s":""),color:"#3b82f6"})}setDmUnread(dm.unread);if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||prev?.sent}))}}if(account?.username&&account?.token&&dmPollCount%3===0){const st=await api("/status",{username:account.username,token:account.token});if(st?.banned){setBanModal(st.banReason||"Banned");clearAccount();setAccount(null)}if(st?.warned&&!warnModal)setWarnModal(st.warnReason||"Warning")}}catch{}};poll();const id=setInterval(poll,4000);return()=>{on=false;clearInterval(id)}},[showSlots,account]);
   // Chat cooldown countdown
   useEffect(()=>{if(chatCd<=0)return;const id=setTimeout(()=>setChatCd(c=>c-1),1000);return()=>clearTimeout(id)},[chatCd]);
   useEffect(()=>{if(!toast)return;const id=setTimeout(()=>setToast(null),3000);return()=>clearTimeout(id)},[toast]);
@@ -397,8 +397,8 @@ function App(){
         feed.map((f,i)=><div key={i} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 10px",background:"#0d1117",borderLeft:`2px solid ${R[f.rarity]?.color||"#555"}`,borderRadius:4,fontSize:"clamp(8px,2.2vw,11px)"}}>
           <span style={{color:"#888",flexShrink:0,width:50}}>{f.ago||""}</span>
           <span style={{color:"#ccc",fontWeight:600}}>{f.uname||"Anon"}</span>
-          <span style={{color:"#888"}}>opened</span>
-          <span style={{color:R[f.rarity]?.color,fontWeight:600}}>{f.icon} {f.item}</span>
+          <span style={{color:"#888"}}>{f.case_name==="horse"?"won":"opened"}</span>
+          <span style={{color:R[f.rarity]?.color,fontWeight:600}}>{f.case_name==="horse"?<MI n="emoji_nature" s={12} c={R[f.rarity]?.color}/>:f.icon} {f.item}</span>
           <span style={{color:"#4ade80",fontWeight:600,marginLeft:"auto",flexShrink:0}}>{money(f.value)}</span>
         </div>)}
       </div>
