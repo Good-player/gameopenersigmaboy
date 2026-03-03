@@ -126,6 +126,7 @@ function App(){
   const[dmInbox,setDmInbox]=useState(null);const[dmTo,setDmTo]=useState("");const[dmMsg,setDmMsg]=useState("");const[dmSearch,setDmSearch]=useState("");const[dmResults,setDmResults]=useState([]);const[dmUnread,setDmUnread]=useState(0);
   const[viewProfile,setViewProfile]=useState(null);const[editBio,setEditBio]=useState("");const[editPrivacy,setEditPrivacy]=useState("public");
   const[reportTarget,setReportTarget]=useState("");const[reportReason,setReportReason]=useState("");const[reportMsg,setReportMsg]=useState("");
+  const[toast,setToast]=useState(null);const[reportModal,setReportModal]=useState(null);const[pvpEliminated,setPvpEliminated]=useState(false);const[pvpWinModal,setPvpWinModal]=useState(null);
   const[events,setEvents]=useState([]);const[dismissedEvents,setDismissedEvents]=useState({});
   const[friendsList,setFriendsList]=useState([]);
   function showProfile(username){api("/profile/full",{target:username,username:account?.username}).then(r=>{if(r?.profile)setViewProfile(r.profile)})}
@@ -135,13 +136,13 @@ function App(){
   async function refreshLobbies(){const r=await api("/lobby/list",{});if(r?.lobbies)setLobbies(r.lobbies)}
   async function refreshLobby(id){const r=await api("/lobby/info",{lobbyId:id||curLobby?.id});if(r?.lobby){setCurLobby(r.lobby);if(r.chat)setLobbyChat(r.chat);if(r.players)setCurLobby(prev=>({...prev,...r.lobby,_players:r.players}))}}
   async function joinLobby(id,pw){const r=await api("/lobby/join",{username:account?.username,lobbyId:id,lobbyPassword:pw||""});if(r?.ok){await refreshLobby(id);return true}else{alert(r?.error||"Failed");return false}}
-  async function leaveLobby(){if(curLobby){await api("/lobby/leave",{username:account?.username,lobbyId:curLobby.id});setCurLobby(null);setLobbyChat([]);clearInterval(lobbyPollRef.current);refreshLobbies()}}
-  async function deleteLobby(){if(curLobby){await api("/lobby/end",{lobbyId:curLobby.id,username:account?.username});setCurLobby(null);setLobbyChat([]);clearInterval(lobbyPollRef.current);refreshLobbies()}}
+  async function leaveLobby(){if(curLobby){setPvpEliminated(false);setPvpWinModal(null);await api("/lobby/leave",{username:account?.username,lobbyId:curLobby.id});setCurLobby(null);setLobbyChat([]);clearInterval(lobbyPollRef.current);refreshLobbies()}}
+  async function deleteLobby(){if(curLobby){setPvpEliminated(false);setPvpWinModal(null);await api("/lobby/end",{lobbyId:curLobby.id,username:account?.username});setCurLobby(null);setLobbyChat([]);clearInterval(lobbyPollRef.current);refreshLobbies()}}
 
   // Poll lobby while in one
   useEffect(()=>{if(!curLobby?.id)return;const id=setInterval(()=>refreshLobby(curLobby.id),3000);lobbyPollRef.current=id;return()=>clearInterval(id)},[curLobby?.id]);
   // Lobby timer
-  useEffect(()=>{if(!curLobby?.started_at||curLobby?.status!=="playing")return;const id=setInterval(()=>{const elapsed=Date.now()-curLobby.started_at;const left=Math.max(0,(curLobby.duration||300)*1000-elapsed);setLobbyTimer(left);if(left<=0){clearInterval(id);api("/lobby/end",{lobbyId:curLobby.id}).then(r=>{if(r?.results)setCurLobby(prev=>({...prev,status:"finished",_results:r.results}))})}},500);return()=>clearInterval(id)},[curLobby?.started_at,curLobby?.status]);
+  useEffect(()=>{if(!curLobby?.started_at||curLobby?.status!=="playing")return;const id=setInterval(()=>{const elapsed=Date.now()-curLobby.started_at;const left=Math.max(0,(curLobby.duration||300)*1000-elapsed);setLobbyTimer(left);if(left<=0){clearInterval(id);api("/lobby/end",{lobbyId:curLobby.id,username:account?.username}).then(r=>{if(r?.results){setCurLobby(prev=>({...prev,status:"finished",_results:r.results}));setPvpWinModal({winner:r.winner,results:r.results})}})}},500);return()=>clearInterval(id)},[curLobby?.started_at,curLobby?.status]);
 
   // Verify account on mount - clear stale sessions from DB wipe
   useEffect(()=>{
@@ -169,6 +170,7 @@ function App(){
   useEffect(()=>{if(showSlots)return;let on=true;let dmPollCount=0;async function poll(){if(!on)return;try{const[f,l,c,ref,ev]=await Promise.all([getFeed(),getLeaderboard(),getChat(),api("/refresh",{}),api("/events",{})]);if(f?.feed)setFeed(f.feed);if(l?.lb)setLb(l.lb);if(c?.msgs)setChatLog(c.msgs);if(ref?.refreshAt&&ref.refreshAt>lastRefreshRef.current){lastRefreshRef.current=ref.refreshAt;location.reload()}if(ev?.events)setEvents(ev.events);dmPollCount++;if(account?.username&&account?.token&&dmPollCount%4===0){const dm=await api("/dm/inbox",{username:account.username,token:account.token});if(dm?.error){clearAccount();setAccount(null)}else if(dm?.unread!==undefined)setDmUnread(dm.unread)}}catch{}};poll();const id=setInterval(poll,8000);return()=>{on=false;clearInterval(id)}},[showSlots,account]);
   // Chat cooldown countdown
   useEffect(()=>{if(chatCd<=0)return;const id=setTimeout(()=>setChatCd(c=>c-1),1000);return()=>clearTimeout(id)},[chatCd]);
+  useEffect(()=>{if(!toast)return;const id=setTimeout(()=>setToast(null),3000);return()=>clearTimeout(id)},[toast]);
   // Auto cloud save every 30s
   useEffect(()=>{if(!account?.username||!account?.token||showSlots)return;const id=setInterval(()=>{cloudSave()},30000);return()=>clearInterval(id)},[account,showSlots,slot]);
 
@@ -426,6 +428,7 @@ function App(){
           <div style={{width:18,height:18,borderRadius:"50%",background:"#1e2430",display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,flexShrink:0,cursor:"pointer",overflow:"hidden"}} onClick={()=>{if(m.uid!=="SYSTEM")showProfile(m.uname)}}>{m.pfp?<img src={m.pfp} style={{width:18,height:18,borderRadius:"50%",objectFit:"cover"}}/>:"\uD83D\uDC64"}</div>
           <span style={{color:m.uid===USER_ID?"#4ade80":m.uid==="SYSTEM"?"#f59e0b":m.role==="owner"?"#ff4444":m.role==="admin"?"#ffd700":m.role==="mod"?"#8b5cf6":"#3b82f6",fontWeight:700,flexShrink:0,cursor:m.uid!=="SYSTEM"?"pointer":"default"}} onClick={()=>{if(m.uid!=="SYSTEM")showProfile(m.uname)}}>{dName(m)}</span>
           <span style={{color:m.uid==="SYSTEM"?"#fbbf24":"#ccc"}} dangerouslySetInnerHTML={{__html:renderMd(m.msg)}}/>
+          {m.uid!=="SYSTEM"&&m.uid!==USER_ID&&account&&<span onClick={()=>setReportModal({targetUser:m.uname,messageId:m.id,channel:"global"})} style={{color:"#555",cursor:"pointer",fontSize:9,marginLeft:2,opacity:0.3,flexShrink:0}} title="Report">\uD83D\uDEA9</span>}
         </div>)}
       </div>
       <div style={{display:"flex",gap:6}}>
@@ -467,7 +470,7 @@ function App(){
           </div>
           {/* Timer */}
           {curLobby.status==="playing"&&<div style={{background:"#141820",borderRadius:8,padding:"8px 14px",marginBottom:8,textAlign:"center"}}><div style={{color:"#f59e0b",fontWeight:800,fontSize:"clamp(20px,6vw,32px)"}}>{Math.floor(lobbyTimer/60000)}:{String(Math.floor((lobbyTimer%60000)/1000)).padStart(2,"0")}</div><div style={{color:"#888",fontSize:"clamp(8px,2vw,10px)"}}>Time remaining · $10,000 start · No loan</div></div>}
-          {curLobby.status==="finished"&&<div style={{background:"#4ade8011",border:"1px solid #4ade8033",borderRadius:8,padding:10,marginBottom:8,textAlign:"center"}}><div style={{color:"#4ade80",fontWeight:800,fontSize:"clamp(14px,3.5vw,18px)"}}>Game Over!</div></div>}
+          {curLobby.status==="finished"&&<div style={{background:"#4ade8011",border:"1px solid #4ade8033",borderRadius:8,padding:10,marginBottom:8,textAlign:"center"}}><div style={{color:"#4ade80",fontWeight:800,fontSize:"clamp(14px,3.5vw,18px)"}}>Game Over!</div>{pvpWinModal&&<div style={{marginTop:6}}><div style={{color:"#4ade80",fontWeight:700}}>{pvpWinModal.winner===account?.username?"\uD83C\uDF89 YOU WON!":pvpWinModal.winner+" wins!"}</div>{(pvpWinModal.results||[]).map((p,i)=><div key={p.username} style={{display:"flex",justifyContent:"center",gap:8,fontSize:11,padding:2,color:i===0?"#ffd700":p.eliminated?"#eb4b4b88":"#ccc"}}><span>#{i+1}</span><span>{p.username}</span><span style={{color:p.profit>=0?"#4ade80":"#eb4b4b"}}>{p.profit>=0?"+":""}${(p.profit||0).toLocaleString()}</span>{p.eliminated&&<span style={{color:"#eb4b4b",fontSize:8}}>OUT</span>}</div>)}</div>}</div>}
           {/* Players */}
           <div style={{fontSize:"clamp(10px,2.5vw,12px)",fontWeight:600,color:"#888",marginBottom:4}}>Players ({curLobby._players?.length||0}/5)</div>
           <div style={{display:"flex",flexDirection:"column",gap:2,marginBottom:10}}>
@@ -475,14 +478,15 @@ function App(){
               <span style={{color:i===0&&curLobby.status==="finished"?"#ffd700":"#888",fontWeight:700,width:20}}>{curLobby.status==="finished"?"#"+(i+1):""}</span>
               <span style={{fontWeight:700,color:"#e2e8f0",flex:1,cursor:"pointer"}} onClick={()=>{api("/profile/full",{target:p.username,username:account?.username}).then(r=>{if(r?.profile)setViewProfile(r.profile)})}}>{p.username}</span>
               {curLobby.status!=="waiting"&&<span style={{color:p.profit>=0?"#4ade80":"#eb4b4b",fontWeight:700,fontSize:"clamp(10px,2.5vw,13px)"}}>{p.profit>=0?"+":""}${(p.profit||0).toLocaleString()}</span>}
-              {curLobby.status!=="waiting"&&<span style={{color:"#888",fontSize:"clamp(8px,2vw,10px)"}}>{p.opens||0} opens</span>}
+              {curLobby.status!=="waiting"&&<span style={{color:"#888",fontSize:"clamp(8px,2vw,10px)"}}>{p.opens||0} opens</span>}{p.eliminated&&<span style={{color:"#eb4b4b",background:"#eb4b4b22",padding:"1px 4px",borderRadius:3,fontSize:8,fontWeight:700}}>OUT</span>}
               {curLobby.status==="waiting"&&curLobby.host===account.username&&p.username!==account.username&&!["admin","owner","mod"].includes(p.role)&&<button onClick={async()=>{await api("/lobby/kick",{username:account.username,target:p.username,lobbyId:curLobby.id});refreshLobby(curLobby.id)}} style={{background:"#eb4b4b22",color:"#eb4b4b",border:"none",padding:"2px 6px",borderRadius:3,cursor:"pointer",fontSize:9}}>Kick</button>}
             </div>)}
           </div>
           {/* Lobby opening (during game) */}
           {curLobby.status==="playing"&&!curLobby._spectating&&<div style={{marginBottom:10}}>
-            <div style={{fontSize:"clamp(10px,2.5vw,12px)",fontWeight:600,color:"#888",marginBottom:4}}>Open Cases {curLobby._myBal!==undefined&&<span style={{color:"#4ade80"}}> — ${curLobby._myBal?.toLocaleString()||"10,000"} left</span>}</div>
-            <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>{CASES.filter(c=>c.price<=10000).map(c=><button key={c.id} disabled={curLobby._myBal!==undefined&&curLobby._myBal<c.price} onClick={async()=>{const r=await api("/lobby/roll",{username:account.username,lobbyId:curLobby.id,caseId:c.id});if(r?.timeUp||r?.error==="Time up"){refreshLobby(curLobby.id);return}if(r?.cantAfford){setCurLobby(prev=>({...prev,_myBal:0}));return}if(r?.ok&&r.result){setWonItem({name:r.result.name,rarity:r.result.rarity,value:r.result.value,icon:c.items.find(i=>i.name===r.result.name)?.icon||"?"});sndReveal(r.result.value>=c.price);if(r.result.balance!==undefined)setCurLobby(prev=>({...prev,_myBal:r.result.balance}));refreshLobby(curLobby.id)}else if(r?.error){alert(r.error)}}} style={{...S.btn,background:c.color+"22",color:c.color,border:"1px solid "+c.color+"44",padding:"4px 8px",fontSize:"clamp(8px,2vw,10px)",opacity:(curLobby._myBal!==undefined&&curLobby._myBal<c.price)?0.3:1}}>{c.icon} ${c.price}</button>)}</div>
+            {pvpEliminated&&<div style={{background:"#eb4b4b11",border:"1px solid #eb4b4b33",borderRadius:8,padding:8,textAlign:"center",marginBottom:6}}><div style={{color:"#eb4b4b",fontWeight:700}}>Eliminated! Spectating...</div></div>}
+            <div style={{fontSize:"clamp(10px,2.5vw,12px)",fontWeight:600,color:"#888",marginBottom:4,opacity:pvpEliminated?0.3:1}}>Open Cases {curLobby._myBal!==undefined&&<span style={{color:"#4ade80"}}> — ${curLobby._myBal?.toLocaleString()||"10,000"} left</span>}</div>
+            <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>{CASES.filter(c=>c.price<=10000).map(c=><button key={c.id} disabled={curLobby._myBal!==undefined&&curLobby._myBal<c.price} onClick={async()=>{const r=await api("/lobby/roll",{username:account.username,lobbyId:curLobby.id,caseId:c.id});if(r?.timeUp||r?.error==="Time up"){refreshLobby(curLobby.id);return}if(r?.cantAfford||r?.eliminated){setPvpEliminated(true);setCurLobby(prev=>({...prev,_myBal:0}));setToast({msg:r?.error||"Bankrupt!",color:"#eb4b4b"});if(r?.matchEnded)setPvpWinModal({winner:r?.winner,results:r?.matchResults||r?.results});return}if(r?.throttle){setToast({msg:"Slow down! 2/sec max",color:"#f59e0b"});return}if(r?.ok&&r.result){setWonItem({name:r.result.name,rarity:r.result.rarity,value:r.result.value,icon:c.items.find(i=>i.name===r.result.name)?.icon||"?"});sndReveal(r.result.value>=c.price);if(r.result.balance!==undefined)setCurLobby(prev=>({...prev,_myBal:r.result.balance}));if(r.result.eliminated){setPvpEliminated(true);setToast({msg:"Eliminated!",color:"#eb4b4b"})}if(r.result.matchEnded)setPvpWinModal({winner:r.result.winner,results:r.result.matchResults});refreshLobby(curLobby.id)}else if(r?.error){setToast({msg:r.error,color:"#eb4b4b"})}}} style={{...S.btn,background:c.color+"22",color:c.color,border:"1px solid "+c.color+"44",padding:"4px 8px",fontSize:"clamp(8px,2vw,10px)",opacity:(curLobby._myBal!==undefined&&curLobby._myBal<c.price)?0.3:1}}>{c.icon} ${c.price}</button>)}</div>
             {wonItem?.name&&<div className="bounceIn" style={{background:"#141820",borderRadius:8,padding:8,marginTop:6,textAlign:"center"}}><span style={{fontSize:20}}>{wonItem.icon}</span> <span style={{color:R[wonItem.rarity]?.color,fontWeight:700}}>{wonItem.name}</span> <span style={{color:"#4ade80"}}>${wonItem.value?.toLocaleString()}</span></div>}
           </div>}
           {/* Lobby Chat */}
@@ -607,6 +611,8 @@ function App(){
       <div style={{display:"flex",gap:4,width:"100%",flexWrap:"wrap"}}>
         {account&&viewProfile.username!==account.username&&<button onClick={async()=>{const r=await api("/friends/add",{username:account.username,token:account.token,target:viewProfile.username});if(r?.ok)alert(r.action==="accepted"?"Friend request accepted!":"Friend request sent!");else alert(r?.error||"Failed")}} style={{...S.btn,background:viewProfile.friendStatus==="friends"?"#4ade8022":"#3b82f622",color:viewProfile.friendStatus==="friends"?"#4ade80":"#3b82f6",flex:1,border:"1px solid "+(viewProfile.friendStatus==="friends"?"#4ade8033":"#3b82f633")}}>{viewProfile.friendStatus==="friends"?"\u2705 Friends":viewProfile.friendStatus==="sent"?"\u231B Pending":viewProfile.friendStatus==="received"?"\u2705 Accept":"\u2795 Add Friend"}</button>}
         <button onClick={()=>{setDmTo(viewProfile.username);setViewProfile(null);setPage("dm")}} style={{...S.btn,background:"#8b5cf622",color:"#8b5cf6",flex:1}}>DM</button>
+        {account&&viewProfile.username!==account.username&&<button onClick={()=>{const amt=prompt("Gift amount ($):");if(!amt||isNaN(parseInt(amt))||parseInt(amt)<=0)return;api("/gift",{username:account.username,token:account.token,to:viewProfile.username,amount:parseInt(amt)}).then(r=>{if(r?.ok)setToast({msg:"Gifted $"+parseInt(amt).toLocaleString()+" to "+viewProfile.username,color:"#4ade80"});else setToast({msg:r?.error||"Failed",color:"#eb4b4b"})})}} style={{...S.btn,background:"#ffd70022",color:"#ffd700",flex:1,border:"1px solid #ffd70033"}}>\uD83C\uDF81 Gift $</button>}
+        {account&&viewProfile.username!==account.username&&<button onClick={()=>setReportModal({targetUser:viewProfile.username,channel:"profile"})} style={{...S.btn,background:"#eb4b4b11",color:"#eb4b4b"}}>\uD83D\uDEA9</button>}
         <button onClick={()=>setViewProfile(null)} style={{...S.btn,background:"#ffffff08",color:"#888",flex:1}}>Close</button>
       </div>
     </div></div>}
@@ -635,6 +641,17 @@ function App(){
       </div>
       <div style={{color:"#666",fontSize:"clamp(8px,2vw,10px)",textAlign:"center"}}>Location based on country only. No precise tracking.</div>
     </div>}
+
+    {/* TOAST */}
+    {toast&&<div style={{position:"fixed",top:20,left:"50%",transform:"translateX(-50%)",background:toast.color+"22",border:"1px solid "+toast.color+"44",color:toast.color,padding:"10px 20px",borderRadius:8,fontWeight:700,fontSize:"clamp(10px,2.5vw,13px)",zIndex:99999,pointerEvents:"none",animation:"fadeUp .3s ease-out"}}>{toast.msg}</div>}
+
+    {/* REPORT MODAL */}
+    {reportModal&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.85)",zIndex:99998,display:"flex",alignItems:"center",justifyContent:"center"}} onClick={()=>setReportModal(null)}><div style={{background:"#0d1117",border:"1px solid #1e2430",borderRadius:12,padding:20,maxWidth:360,width:"90vw",display:"flex",flexDirection:"column",gap:8}} onClick={e=>e.stopPropagation()}>
+      <div style={{fontWeight:700,fontSize:16,color:"#eb4b4b"}}>\uD83D\uDEA9 Report {reportModal.targetUser}</div>
+      <div style={{color:"#888",fontSize:10}}>Select a reason:</div>
+      {["Sexual harassment","Explicit/NSFW content","Hate speech","Spam/Advertising","Threats/Violence","Impersonation","Scam/Fraud","Other"].map(preset=><button key={preset} onClick={async()=>{const r=await api("/report/chat",{username:account.username,token:account.token,targetUser:reportModal.targetUser,preset,messageId:reportModal.messageId||0,channel:reportModal.channel||"global",reason:""});setReportModal(null);setToast(r?.ok?{msg:"Report submitted!",color:"#4ade80"}:{msg:r?.error||"Failed",color:"#eb4b4b"})}} style={{background:"#141820",border:"1px solid #1e2430",borderRadius:6,padding:"8px 12px",color:"#ccc",cursor:"pointer",textAlign:"left",fontSize:11,fontFamily:"inherit"}}>{preset}</button>)}
+      <button onClick={()=>setReportModal(null)} style={{background:"#ffffff08",border:"none",padding:"8px 16px",borderRadius:6,color:"#888",cursor:"pointer",fontFamily:"inherit",marginTop:4}}>Cancel</button>
+    </div></div>}
 
   </div>);
 }
