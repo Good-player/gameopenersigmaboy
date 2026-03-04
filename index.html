@@ -23,6 +23,7 @@ function setUserName(n){localStorage.setItem("co-uname",n.replace(/[<>&"']/g,"")
 const USER_ID=getUserId();
 
 // Server API
+const isMobile=/Android|iPhone|iPad|iPod|webOS/i.test(navigator.userAgent)||window.innerWidth<600;
 const API_BASE="https://samptonweb.dpdns.org/api/caseopen";
 async function api(path,body){try{const r=await fetch(API_BASE+path,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({uid:USER_ID,uname:getUserName(),...body})});return await r.json()}catch{return null}}
 
@@ -174,6 +175,7 @@ function App(){
     try{const test=await api("/refresh",{});if(test)step(55,"Server connected...")}catch{step(55,"Offline mode...")}
     step(65,"Loading chat...");
     try{const c=await getChat(true);if(c?.msgs){if(c.pfps)Object.entries(c.pfps).forEach(([uid,pfp])=>{pfpCache.current[uid]=pfp});chatPfpsLoaded=true;setChatLog(c.msgs.map(m=>({...m,pfp:pfpCache.current[m.uid]||""})))}}catch{}
+    step(75,"Loading events...");try{const ev=await api("/events",{});if(ev?.events)setEvents(ev.events)}catch{}
     step(80,"Loading feed...");
     try{const[f,l]=await Promise.all([getFeed(),getLeaderboard()]);if(f?.feed)setFeed(f.feed);if(l?.lb)setLb(l.lb)}catch{}
     step(95,"Preparing...");
@@ -209,7 +211,7 @@ function App(){
   useEffect(()=>{if(!banModal||typeof banModal!=="object"||!banModal.expires||banModal.expires<=0){setBanTimer("");return}const tick=()=>{const left=banModal.expires-Date.now();if(left<=0){setBanTimer("Expired! Reload to continue");return}const hr=Math.floor(left/3600000),mn=Math.floor((left%3600000)/60000),sc=Math.floor((left%60000)/1000);setBanTimer((hr>0?hr+"h ":"")+(mn>0?mn+"m ":"")+sc+"s")};tick();const iv=setInterval(tick,1000);return()=>clearInterval(iv)},[banModal]);
 
   async function doOpen(c){
-    if(lockRef.current||st.bal<c.price)return;lockRef.current=true;setOpening(true);setScrollDone(false);setSelCase(c);sndOpen();
+    const sd=events.find(e=>e.type==="sale"&&e.discount>0);const cPrice=sd?Math.floor(c.price*(1-sd.discount/100)):c.price;if(lockRef.current||st.bal<cPrice)return;lockRef.current=true;setOpening(true);setScrollDone(false);setSelCase(c);sndOpen();
     // Server-side roll
     const rollResp=await api("/roll",{caseId:c.id,username:account?.username||"",token:account?.token||""});
     if(!rollResp?.ok||!rollResp.result){lockRef.current=false;setOpening(false);return}
@@ -218,19 +220,19 @@ function App(){
     setWonItem({...winner,id:uid()});setWonFloat(fl);setWonQuote(quotes[Math.floor(Math.random()*quotes.length)]);
     const items=[];for(let i=0;i<SCROLL_COUNT;i++)items.push(i===WIN_IDX?winner:c.items[Math.floor(Math.random()*c.items.length)]);
     setScrollItems(items);setPage("opening");
-    setSt(p=>{const ns={...p,bal:p.bal-c.price,stats:{...p.stats,spent:p.stats.spent+c.price,opened:p.stats.opened+1}};save(ns,drops);return ns});
+    setSt(p=>{const ns={...p,bal:p.bal-cPrice,stats:{...p.stats,spent:p.stats.spent+cPrice,opened:p.stats.opened+1}};save(ns,drops);return ns});
     requestAnimationFrame(()=>{requestAnimationFrame(()=>{if(!stripRef.current)return;const el=stripRef.current,parent=el.parentElement;el.style.transition="none";el.style.transform="translateX(0)";requestAnimationFrame(()=>{if(!stripRef.current)return;const firstItem=el.children[0];if(!firstItem)return;const itemW=firstItem.offsetWidth,center=parent.offsetWidth/2,pad=itemW*.1,off=WIN_IDX*itemW+pad+(Math.random()*(itemW-pad*2))-center;el.style.transition="transform 5s cubic-bezier(0.15,0.85,0.20,1.01)";el.style.transform=`translateX(-${off}px)`})})});
     setTimeout(()=>{setScrollDone(true);const isEpicDrop=["covert","chroma","legendary"].includes(winner.rarity);if(isEpicDrop){document.body.classList.add("shakeHard");setTimeout(()=>document.body.classList.remove("shakeHard"),500)}sndReveal(winner.value>=c.price,winner.rarity);let rp=0;setSt(prev=>{let rc=prev.rentCtr+1;if(rc>=RENT_EVERY){rp=RENT_AMT;rc=0}setRentPaid(rp);const newBal=prev.bal-rp;const isBig=winner.value>=c.price*3;const he={n:prev.stats.opened,bal:newBal};if(isBig)he.label=winner.name+" "+money(winner.value);const itemId=uid();setLastWonId(itemId);const ns={...prev,bal:newBal,inv:[...prev.inv,{...winner,id:itemId,from:c.id,t:Date.now(),float:fl}],stats:{...prev.stats,won:prev.stats.won+winner.value,best:winner.value>prev.stats.bestVal?winner.name:prev.stats.best,bestVal:Math.max(prev.stats.bestVal,winner.value)},loan:prev.loan,rentCtr:rc,history:[...(prev.history||[]),he].slice(-200),starred:prev.starred||{}};const nd={name:winner.name,rarity:winner.rarity,value:winner.value,cond:getCondition(fl),icon:winner.icon};setDrops(dd=>{const r=[nd,...dd].slice(0,20);save(ns,r);return r});setTimeout(()=>{checkReset(ns);lockRef.current=false},400);return ns})},5400);
   }
 
   async function doMultiOpen(c,count){
-    if(lockRef.current||st.bal<c.price*count)return;lockRef.current=true;
-    setSt(p=>({...p,bal:p.bal-c.price*count}));
+    const sd=events.find(e=>e.type==="sale"&&e.discount>0);const cPrice=sd?Math.floor(c.price*(1-sd.discount/100)):c.price;if(lockRef.current||st.bal<cPrice*count)return;lockRef.current=true;
+    setSt(p=>({...p,bal:p.bal-cPrice*count}));
     const r=await api("/roll/multi",{caseId:c.id,count,username:account?.username||"",token:account?.token||""});
-    if(!r?.ok||!r.results){lockRef.current=false;setSt(p=>({...p,bal:p.bal+c.price*count}));setToast({msg:"Failed",color:"#eb4b4b"});return}
+    if(!r?.ok||!r.results){lockRef.current=false;setSt(p=>({...p,bal:p.bal+cPrice*count}));setToast({msg:"Failed",color:"#eb4b4b"});return}
     const items=r.results.map(rr=>({...rr,id:uid(),icon:c.items.find(i=>i.name===rr.name)?.icon||"?",from:c.id,t:Date.now()}));
     setMultiResults({items,case:c,totalValue:r.totalValue,totalCost:c.price*count});
-    setSt(p=>{const ns={...p,inv:[...p.inv,...items],stats:{...p.stats,spent:p.stats.spent+c.price*count,won:p.stats.won+r.totalValue,opened:p.stats.opened+count}};save(ns,drops);return ns});
+    setSt(p=>{const ns={...p,inv:[...p.inv,...items],stats:{...p.stats,spent:p.stats.spent+cPrice*count,won:p.stats.won+r.totalValue,opened:p.stats.opened+count}};save(ns,drops);return ns});
     sndReveal(r.totalValue>c.price*count);setPage("multi");lockRef.current=false;
   }
   function openAgain(){setLastWonId(null);if(!selCase||st.bal<selCase.price){setPage("shop");setOpening(false);return}doOpen(selCase)}
@@ -247,13 +249,18 @@ function App(){
       if(!r||r.error){if(r?.banned){setBanModal({reason:r.banReason||r.error||"Banned",expires:r.banExpires||0});setShowAuth(false)}else{setAuthErr(r?.error||"Failed")}setAuthLoading(false);return}
       const acc={username:r.username,token:r.token,role:r.role||"user",display_name:r.display_name||r.username};
       setAccount(acc);saveAccount(acc);setShowAuth(false);setAuthUser("");setAuthPass("");
-      // On login, if server has saved slots, offer to load
+      // Cloud/Local sync resolution
       if(r.slots&&r.slots.some(s=>s!==null)){
-        if(confirm("Load saved data from cloud?\n\nOK = Load cloud saves to all slots\nCancel = Keep local data & upload to cloud")){
+        const localSlots=[];for(let i=0;i<3;i++){try{const d=await _stGet("co-s"+i);localSlots.push(d?.value?JSON.parse(d.value):null)}catch{localSlots.push(null)}}
+        const cloudBals=r.slots.map(s=>s?.st?.bal||0);
+        const localBals=localSlots.map(s=>s?.st?.bal||0);
+        const cloudItems=r.slots.map(s=>s?.st?.inv?.length||0);
+        const localItems=localSlots.map(s=>s?.st?.inv?.length||0);
+        const msg="Cloud vs Local data:\n\n"+[0,1,2].map(i=>"Slot "+(i+1)+": Cloud $"+cloudBals[i].toLocaleString()+" ("+cloudItems[i]+" items) | Local $"+localBals[i].toLocaleString()+" ("+localItems[i]+" items)").join("\n")+"\n\nOK = Load from CLOUD\nCancel = Keep LOCAL (uploads to cloud)";
+        if(confirm(msg)){
           for(let i=0;i<3;i++){if(r.slots[i]){await _stSet("co-s"+i,JSON.stringify(r.slots[i]))}}
           location.reload();
         } else {
-          // Save all local slots to cloud
           for(let i=0;i<3;i++){try{const d=await _stGet("co-s"+i);if(d?.value){await api("/auth/save",{username:r.username,token:r.token,slot:i,data:JSON.parse(d.value)})}}catch{}}
           setToast({msg:"Local saves uploaded to cloud",color:"#4ade80"});
         }
@@ -296,6 +303,7 @@ function App(){
 
   function getFilteredSorted(inv,starred){let items=[...inv];if(invFilter==="starred")items=items.filter(i=>starred[i.id]);else if(invFilter!=="all")items=items.filter(i=>i.rarity===invFilter);if(invSort==="newest")items.reverse();else if(invSort==="value-high")items.sort((a,b)=>b.value-a.value);else if(invSort==="value-low")items.sort((a,b)=>a.value-b.value);else if(invSort==="rarity")items.sort((a,b)=>RKEYS.indexOf(b.rarity)-RKEYS.indexOf(a.rarity));else if(invSort==="name")items.sort((a,b)=>a.name.localeCompare(b.name));return items}
 
+  const activeSale=events.find(e=>e.type==="sale"&&e.discount>0);const saleDiscount=activeSale?activeSale.discount:0;
   const rentIn=RENT_EVERY-st.rentCtr,invTotal=st.inv.reduce((s,i)=>s+i.value,0),profit=(st.stats.sold||0)+invTotal-st.stats.spent,unstarredCount=st.inv.filter(i=>!st.starred?.[i.id]).length,unstarredVal=st.inv.filter(i=>!st.starred?.[i.id]).reduce((s,i)=>s+i.value,0);
   function caseStats(cId){const items=st.inv.filter(i=>i.from===cId);const sp=items.length*(CASES.find(c=>c.id===cId)?.price||0);const ea=items.reduce((s,i)=>s+i.value,0);const counts={};RKEYS.forEach(k=>{counts[k]=items.filter(i=>i.rarity===k).length});return{opened:items.length,spent:sp,earned:ea,counts}}
   const filteredInv=getFilteredSorted(st.inv,st.starred||{});
@@ -343,13 +351,13 @@ function App(){
     {/* HEADER */}
     <div style={S.hdr}><div style={{display:"flex",alignItems:"center",gap:"clamp(6px,1.5vw,10px)"}}><button onClick={()=>setShowSlots(true)} style={{...S.btn,background:"#ffffff08",color:"#888",padding:"clamp(4px,1vw,6px) clamp(6px,1.5vw,10px)",fontSize:"clamp(9px,2.2vw,11px)"}}>Slot {slot+1}</button><div style={S.title}>CASES</div></div><div style={S.hdrRight}><button onClick={()=>setShowAuth(true)} style={{...S.btn,background:account?"#4ade8022":"#ffffff08",color:account?"#4ade80":"#888",padding:"6px 12px",fontSize:"clamp(9px,2.2vw,12px)",border:account?"1px solid #4ade8033":"1px solid #333",fontWeight:700}}>{account?"✓ "+account.username:"Login"}</button>{account&&<><button onClick={cloudSave} style={{...S.btn,background:"#3b82f6",color:"#fff",padding:"6px 14px",fontSize:"clamp(10px,2.5vw,13px)",fontWeight:700}}><><MI n="cloud_upload" s={14}/> Save</></button><button onClick={cloudLoad} style={{...S.btn,background:"#8b5cf622",color:"#8b5cf6",padding:"6px 10px",fontSize:"clamp(9px,2.2vw,11px)"}}><><MI n="cloud_download" s={14}/> Load</></button></>}{saveStatus&&<span style={{color:saveStatus==="Saved!"?"#4ade80":"#fbbf24",fontSize:"clamp(9px,2.2vw,11px)",fontWeight:700,animation:"fadeUp .3s"}}>{saveStatus}</span>}<div style={S.chip}><span style={S.chipLbl}>BAL</span><span style={{color:st.bal<100?"#eb4b4b":"#4ade80",fontWeight:700,fontSize:"clamp(14px,3.5vw,20px)"}}>{money(st.bal)}</span></div>{st.loan>0&&<div style={{...S.chip,borderColor:"#eb4b4b33"}}><span style={S.chipLbl}>DEBT</span><span style={{color:"#eb4b4b",fontWeight:700,fontSize:"clamp(12px,3vw,18px)"}}>{money(st.loan)}</span></div>}<div style={S.rentChip}>Rent: {money(RENT_AMT)} in {rentIn} opens</div></div></div>
     {!account&&<div style={{background:"#f59e0b11",borderBottom:"1px solid #f59e0b22",padding:"4px 12px",textAlign:"center",fontSize:"clamp(8px,2vw,10px)",color:"#f59e0b"}}>Login to save progress to cloud. Your data is local only!</div>}
-    {events.filter(e=>!dismissedEvents[e.id]).map(e=><div key={e.id} className="slideIn" style={{background:e.type==="announcement"?"#f59e0b22":"#3b82f622",borderBottom:"1px solid "+(e.type==="announcement"?"#f59e0b44":"#3b82f644"),padding:"8px 14px",display:"flex",alignItems:"center",gap:8}}><span style={{fontSize:"clamp(14px,3.5vw,18px)"}}>{e.type==="announcement"?<MI n="campaign" s={16}/>:e.type==="sale"?<MI n="sell" s={16}/>:<MI n="celebration" s={16}/>}</span><div style={{flex:1}}><div style={{color:e.type==="announcement"?"#f59e0b":"#3b82f6",fontWeight:700,fontSize:"clamp(10px,2.5vw,13px)"}}>{e.title}</div>{e.description&&<div style={{color:"#ccc",fontSize:"clamp(8px,2vw,10px)"}}>{e.description}</div>}</div><button onClick={()=>setDismissedEvents(d=>({...d,[e.id]:true}))} style={{background:"transparent",border:"none",color:"#666",cursor:"pointer",fontSize:14}}><MI n="close" s={14}/></button></div>)}
+    {events.filter(e=>!dismissedEvents[e.id]).map(e=>{const ec=e.type==="announcement"?"#f59e0b":e.type==="sale"?"#4ade80":e.type==="maintenance"?"#eb4b4b":e.type==="warning"?"#f97316":e.type==="update"?"#8b5cf6":"#3b82f6";const ei=e.type==="announcement"?"campaign":e.type==="sale"?"local_offer":e.type==="maintenance"?"build":e.type==="warning"?"warning":e.type==="update"?"system_update":"celebration";return <div key={e.id} className="slideIn" style={{background:ec+"18",borderBottom:"1px solid "+ec+"33",padding:"6px 12px",display:"flex",alignItems:"center",gap:8}}><MI n={ei} s={16} c={ec}/><div style={{flex:1}}><div style={{color:ec,fontWeight:700,fontSize:"clamp(10px,2.5vw,12px)"}}>{e.title}{e.discount>0&&<span style={{background:"#4ade80",color:"#000",padding:"1px 6px",borderRadius:4,fontSize:9,fontWeight:800,marginLeft:6}}>{e.discount}% OFF</span>}</div>{e.description&&<div style={{color:"#aaa",fontSize:"clamp(8px,2vw,10px)"}}>{e.description}</div>}</div><button onClick={()=>setDismissedEvents(d=>({...d,[e.id]:true}))} style={{background:"transparent",border:"none",color:"#555",cursor:"pointer"}}><MI n="close" s={14}/></button></div>})}
 
     {/* NAV */}
     <div style={S.nav}>{[["shop","Shop"],["inv",`Inv (${st.inv.length})`],["stats","Stats"],["loan","Loan"],["flip","Flip"],["pvp","PvP"],["live","Live"],["lb","Top"],["chat","Chat"],["dm",`DM${dmUnread>0?" ("+dmUnread+")":""}`],["me","Me"],["map","Map"],["horse","Horses"]].map(([k,l])=>(<button key={k} onClick={()=>{if(!opening||scrollDone||k==="shop"){setPage(k);if(k!=="opening")setOpening(false);if(k==="map")getOnline().then(r=>{if(r)setOnlineData(r)});if(k==="pvp")refreshLobbies();if(k==="dm"&&account){api("/dm/inbox",{username:account.username,token:account.token}).then(r=>{if(r?.ok){setDmInbox(r);setDmUnread(0);api("/dm/read",{username:account.username,token:account.token})}}).catch(()=>{setTimeout(()=>{api("/dm/inbox",{username:account.username,token:account.token}).then(r2=>{if(r2?.ok){setDmInbox(r2);setDmUnread(0)}})},2000)})}}}} style={{...S.tab,...(page===k||(page==="opening"&&k==="shop")?S.tabOn:{}),color:k==="dm"&&dmUnread>0?"#f59e0b":undefined}}>{l}</button>))}{account&&["admin","owner","mod"].includes(account.role)&&<button onClick={()=>{if(account.role==="owner")window.owner();else window.admin()}} style={{...S.tab,background:"#ff000022",color:"#ff4444",border:"1px solid #ff000044"}}>{account.role==="owner"?"Owner":"Admin"}</button>}<button onClick={()=>setConfirmReset(true)} style={{...S.tab,marginLeft:"auto",color:"#eb4b4b"}}>Reset</button></div>
 
     {/* SHOP */}
-    {page==="shop"&&<div style={S.body}><div style={S.grid}>{CASES.map(c=>{const ok=st.bal>=c.price;return(<div key={c.id} style={{...S.card,borderColor:c.color+"44",opacity:ok?1:.35}}><div style={{...S.cardIcon,background:c.color+"12",borderColor:c.color+"28"}}><span style={{fontSize:"clamp(26px,6.5vw,40px)"}}>{c.icon}</span></div><div style={S.cardName}>{c.name}</div><div style={{...S.cardPrice,color:c.color}}>{money(c.price)}</div><div style={{display:"flex",flexDirection:"column",gap:3,width:"100%"}}><div style={{display:"flex",gap:3}}><button disabled={!ok} onClick={()=>doOpen(c)} style={{...S.btn,background:ok?c.color:"#333",color:"#fff",flex:2,padding:"clamp(5px,1.2vw,8px) 0",fontSize:"clamp(9px,2.3vw,12px)"}}>Open</button><button disabled={st.bal<c.price*10} onClick={()=>doMultiOpen(c,10)} style={{...S.btn,background:st.bal>=c.price*10?c.color+"aa":"#222",color:st.bal>=c.price*10?"#fff":"#555",flex:1,padding:"clamp(5px,1.2vw,8px) 0",fontSize:"clamp(8px,2vw,10px)"}}>x10</button></div><button onClick={()=>{setInspecting(c);setPage("inspect")}} style={{...S.btn,background:"#ffffff06",color:"#666",padding:"3px 0",fontSize:"clamp(8px,2vw,10px)"}}>Inspect</button></div></div>)})}</div></div>}
+    {page==="shop"&&<div style={S.body}><div style={S.grid}>{CASES.map(c=>{const cP=saleDiscount>0?Math.floor(c.price*(1-saleDiscount/100)):c.price;const ok=st.bal>=cP;return(<div key={c.id} style={{...S.card,borderColor:c.color+"44",opacity:ok?1:.35}}><div style={{...S.cardIcon,background:c.color+"12",borderColor:c.color+"28"}}><span style={{fontSize:"clamp(26px,6.5vw,40px)"}}>{c.icon}</span></div><div style={S.cardName}>{c.name}</div><div style={{...S.cardPrice,color:c.color}}>{saleDiscount>0&&<span style={{textDecoration:"line-through",color:"#666",fontSize:"clamp(9px,2.5vw,12px)",marginRight:4}}>{money(c.price)}</span>}{money(saleDiscount>0?Math.floor(c.price*(1-saleDiscount/100)):c.price)}</div><div style={{display:"flex",flexDirection:"column",gap:3,width:"100%"}}><div style={{display:"flex",gap:3}}><button disabled={!ok} onClick={()=>doOpen(c)} style={{...S.btn,background:ok?c.color:"#333",color:"#fff",flex:2,padding:"clamp(5px,1.2vw,8px) 0",fontSize:"clamp(9px,2.3vw,12px)"}}>Open</button><button disabled={st.bal<cP*10} onClick={()=>doMultiOpen(c,10)} style={{...S.btn,background:st.bal>=cP*10?c.color+"aa":"#222",color:st.bal>=cP*10?"#fff":"#555",flex:1,padding:"clamp(5px,1.2vw,8px) 0",fontSize:"clamp(8px,2vw,10px)"}}>x10</button></div><button onClick={()=>{setInspecting(c);setPage("inspect")}} style={{...S.btn,background:"#ffffff06",color:"#666",padding:"3px 0",fontSize:"clamp(8px,2vw,10px)"}}>Inspect</button></div></div>)})}</div></div>}
 
     {/* OPENING */}
     {page==="opening"&&<div style={S.body}>
@@ -760,12 +768,12 @@ const S={
   chip:{display:"flex",flexDirection:"column",alignItems:"center",background:"#0d1117",border:"1px solid #151820",borderRadius:8,padding:"2px clamp(8px,2.5vw,14px)"},
   chipLbl:{color:"#777",fontSize:"clamp(7px,1.8vw,9px)",letterSpacing:1},
   rentChip:{background:"#f59e0b0a",border:"1px solid #f59e0b1a",borderRadius:8,padding:"4px 10px",fontSize:"clamp(9px,2.2vw,11px)",color:"#f59e0b",fontWeight:600},
-  nav:{display:"flex",gap:3,padding:"6px clamp(12px,3vw,20px)",borderBottom:"1px solid #151820",flexWrap:"wrap"},
+  nav:{display:"flex",overflowX:"auto",WebkitOverflowScrolling:"touch",scrollbarWidth:"none",gap:3,padding:"6px clamp(12px,3vw,20px)",borderBottom:"1px solid #151820",flexWrap:"wrap"},
   tab:{background:"#1a1f2e",border:"1px solid #2a3040",color:"#e2e8f0",padding:"6px 12px",fontSize:"clamp(10px,2.5vw,13px)",fontWeight:600,borderRadius:6,transition:"all .15s"},
   tabOn:{background:"#2a3548",color:"#fff",border:"1px solid #4ade8055"},
   body:{padding:"clamp(12px,3vw,20px)",flex:1,maxWidth:960,margin:"0 auto",width:"100%",overflowX:"hidden"},
   grid:{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(clamp(130px,28vw,180px),1fr))",gap:"clamp(8px,2vw,12px)"},
-  card:{background:"#0d1117",border:"1px solid",borderRadius:12,padding:"clamp(10px,2.5vw,16px)",display:"flex",flexDirection:"column",alignItems:"center",gap:6},
+  card:{background:"#0d1117",minWidth:0,border:"1px solid",borderRadius:12,padding:"clamp(10px,2.5vw,16px)",display:"flex",flexDirection:"column",alignItems:"center",gap:6},
   cardIcon:{width:"clamp(44px,12vw,64px)",height:"clamp(44px,12vw,64px)",borderRadius:12,border:"1px solid",display:"flex",alignItems:"center",justifyContent:"center"},
   cardName:{fontWeight:700,fontSize:"clamp(10px,2.6vw,13px)",textAlign:"center"},
   cardPrice:{fontWeight:800,fontSize:"clamp(13px,3.5vw,18px)"},
