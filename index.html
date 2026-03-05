@@ -723,13 +723,13 @@ function App(){
         </div>}
         {bjTable.phase==="finished"&&<div className="bounceIn" style={{textAlign:"center",padding:12}}>
           {(()=>{const me=bjTable.players.find(p=>p.user===account?.username);if(!me)return <div style={{color:"#888"}}>Round over</div>;return <div><div style={{fontSize:20,fontWeight:800,color:me.result==="win"||me.result==="blackjack"?"#4ade80":me.result==="push"?"#f59e0b":"#eb4b4b"}}>{me.result==="blackjack"?"♠ BLACKJACK! ♠":me.result==="win"?"YOU WIN!":me.result==="push"?"PUSH":"You lost"}</div>{me.payout>0&&<div style={{color:"#4ade80",fontSize:16,fontWeight:700}}>+{money(me.payout)}</div>}</div>})()}
-          <button onClick={()=>{const me=bjTable.players.find(p=>p.user===account?.username);if(me?.payout>0)setSt(p=>{const ns={...p,bal:p.bal+me.payout};save(ns,drops);return ns});setBjTable(null)}} style={{...S.btn,background:"#3b82f6",color:"#fff",padding:"8px 20px",marginTop:8}}>Back</button>
+          <button onClick={()=>{const me=bjTable.players.find(p=>p.user===account?.username);if(me?.payout>0)setSt(p=>{const ns={...p,bal:p.bal+me.payout};save(ns,drops);return ns});api("/bj/leave",{username:account?.username||"",tableId:"main"});setBjTable(null)}} style={{...S.btn,background:"#3b82f6",color:"#fff",padding:"8px 20px",marginTop:8}}>Back</button>
         </div>}
-        {bjTable.phase==="waiting"&&<div style={{textAlign:"center",color:"#888",marginTop:8,fontSize:11}}>Waiting for players...</div>}
-        {bjTable.phase==="intermission"&&<div style={{textAlign:"center",color:"#f59e0b",marginTop:8,fontSize:11}}>Intermission - join now!</div>}
+        {bjTable.phase==="waiting"&&<div style={{textAlign:"center",color:"#888",marginTop:8,fontSize:11}}>Waiting for players... ({bjTable.players.length}/5 joined)</div>}
+        {bjTable.phase==="intermission"&&<div style={{textAlign:"center",color:"#f59e0b",marginTop:8,fontSize:11}}>Intermission - {bjTable.players.length}/5 players - starting soon!</div>}
         <div style={{display:"flex",justifyContent:"space-between",marginTop:8}}>
           <button onClick={async()=>{const r=await apiL("/bj/state",{tableId:"main",username:account?.username||""});if(r?.table)setBjTable(r.table)}} style={{...S.btn,background:"#ffffff08",color:"#888",fontSize:10}}>Refresh</button>
-          <button onClick={()=>setBjTable(null)} style={{...S.btn,background:"#eb4b4b22",color:"#eb4b4b",fontSize:10}}>Leave</button>
+          <button onClick={()=>{api("/bj/leave",{username:account?.username||"",tableId:"main"});setBjTable(null)}} style={{...S.btn,background:"#eb4b4b22",color:"#eb4b4b",fontSize:10}}>Leave</button>
         </div>
       </div>}
     </div>}
@@ -739,7 +739,7 @@ function App(){
       <div style={{fontSize:"clamp(16px,4vw,22px)",fontWeight:800,marginBottom:8}}>₿ Bitcoin Investment</div>
       {(()=>{
       const chartW=Math.min(600,typeof window!=="undefined"?window.innerWidth-40:560),chartH=180;
-      const prices=btcHistory;const minP=Math.min(...prices.map(p=>p.v)),maxP=Math.max(...prices.map(p=>p.v)),rangeP=maxP-minP||1;
+      const prices=btcHistory||[];const minP=prices.length?Math.min(...prices.map(p=>p.v)):0,maxP=prices.length?Math.max(...prices.map(p=>p.v)):1,rangeP=maxP-minP||1;
       const pts=prices.map((p,i)=>{const x=(i/(prices.length-1||1))*chartW;const y=chartH-((p.v-minP)/rangeP)*chartH*0.85-10;return x+","+y}).join(" ");
       return <div>
         <div style={{display:"flex",gap:12,flexWrap:"wrap",marginBottom:12,alignItems:"center"}}>
