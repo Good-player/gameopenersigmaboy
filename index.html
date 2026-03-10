@@ -1,8 +1,189 @@
-Tyvärr vi behöver stänga av den här spelen för idag.
-Du kan inte spela imorgon klockan 8:15 till 15:00.
+```html
+<!DOCTYPE html>
+<html>
+<head>
+<title>game closed</title>
 
-På grund av skolan.
-Men din saves kommer sparas. Så du kan fortsätt efter skolan.
+<style>
+body{
+background:#0000cc;
+color:white;
+font-family:"Comic Sans MS", Arial;
+overflow:hidden;
+margin:0;
+}
+
+#main{
+position:absolute;
+top:50%;
+left:50%;
+transform:translate(-50%,-50%);
+width:650px;
+background:#000099;
+border:6px ridge white;
+padding:25px;
+font-size:20px;
+line-height:1.4;
+z-index:1000;
+}
+
+.chaos{
+position:absolute;
+font-weight:bold;
+white-space:nowrap;
+pointer-events:none;
+}
+
+.popup{
+position:absolute;
+width:220px;
+background:#c0c0c0;
+border:3px solid black;
+font-family:Arial;
+color:black;
+z-index:500;
+}
+
+.popupTop{
+background:#000080;
+color:white;
+padding:3px;
+font-size:12px;
+}
+
+.popupText{
+padding:8px;
+font-size:13px;
+}
+
+#video{
+position:absolute;
+width:360px;
+height:215px;
+border:4px solid white;
+z-index:300;
+}
+</style>
+</head>
+
+<body>
+
+<div id="main">
+Tyvärr vi behöver stänga av den här spelen för idag. Du kan inte spela imorgon klockan 8:15 till 15:00. På grund av skolan. Men din saves kommer sparas. Så du kan fortsätt efter skolan. Sigma sigma boy sigma boy sigma boy. yaytwyatyaurjjroirortoroiiij0ḯi SKibidi otielt TOILOOILLOIKLIKLIKLOOLOLOLEETOOLOLOLOLOLOLOLOLOLOLOLO;LOLOLOLO;OL;OLOLOLOLOLOLOLOLOLO;OOL SKIBIDIIII IIOTILET LETS SKIBIDII SIGMA BOYYYYYYYY RAHHHHHNHHHNHJNJUIJKMIKJMJIKJMNJIKJMNJKIKJMNJIKJNJKIOKJN
+</div>
+
+<iframe id="video"
+src="https://www.youtube.com/embed/dQw4w9WgXcQ?autoplay=1&loop=1&playlist=dQw4w9WgXcQ"
+allow="autoplay"></iframe>
+
+<script>
+
+const words=[
+"SIGMA","SKIBIDI","LOLOLO","RAHHH","TOILOOI",
+"SIGMA BOY","SKIBIDIIII","yaytwyatyaurjj","IIOTILET"
+];
+
+function spawnWord(){
+let w=document.createElement("div");
+w.className="chaos";
+w.innerText=words[Math.floor(Math.random()*words.length)];
+document.body.appendChild(w);
+
+let x=Math.random()*window.innerWidth;
+let y=Math.random()*window.innerHeight;
+let vx=(Math.random()-0.5)*14;
+let vy=(Math.random()-0.5)*14;
+
+w.style.fontSize=(Math.random()*50+10)+"px";
+
+function move(){
+x+=vx;
+y+=vy;
+
+if(x<0||x>window.innerWidth)vx*=-1;
+if(y<0||y>window.innerHeight)vy*=-1;
+
+w.style.left=x+"px";
+w.style.top=y+"px";
+w.style.transform="rotate("+Date.now()%360+"deg)";
+
+requestAnimationFrame(move);
+}
+
+move();
+
+setTimeout(()=>w.remove(),8000);
+}
+
+setInterval(spawnWord,80);
 
 
-Sigma sigma boy sigma boy sigma boy. yaytwyatyaurjjroirortoroiiij0ḯi SKibidi otielt TOILOOILLOIKLIKLIKLOOLOLOLEETOOLOLOLOLOLOLOLOLOLOLOLO;LOLOLOLO;OL;OLOLOLOLOLOLOLOLOLO;OOL SKIBIDIIII IIOTILET LETS SKIBIDII SIGMA BOYYYYYYYY RAHHHHHNHHHNHJNJUIJKMIKJMJIKJMNJIKJMNJKIKJMNJIKJNJKIOKJN
+
+function popup(){
+let p=document.createElement("div");
+p.className="popup";
+
+let x=Math.random()*(window.innerWidth-240);
+let y=Math.random()*(window.innerHeight-120);
+
+p.style.left=x+"px";
+p.style.top=y+"px";
+
+p.innerHTML=
+"<div class='popupTop'>Windows Message</div>"+
+"<div class='popupText'>sigma error detected</div>";
+
+document.body.appendChild(p);
+
+setTimeout(()=>p.remove(),6000);
+}
+
+setInterval(popup,3000);
+
+
+
+let video=document.getElementById("video");
+let vx=6;
+let vy=5;
+let x=100;
+let y=100;
+
+function moveVideo(){
+x+=vx;
+y+=vy;
+
+if(x<0||x>window.innerWidth-360)vx*=-1;
+if(y<0||y>window.innerHeight-215)vy*=-1;
+
+video.style.left=x+"px";
+video.style.top=y+"px";
+
+requestAnimationFrame(moveVideo);
+}
+
+moveVideo();
+
+
+
+setInterval(()=>{
+document.body.style.background=
+"#"+Math.floor(Math.random()*16777215).toString(16);
+},900);
+
+
+
+function shake(){
+let amount=5;
+document.body.style.transform=
+"translate("+
+(Math.random()*amount-amount/2)+"px,"+
+(Math.random()*amount-amount/2)+"px)";
+}
+
+setInterval(shake,60);
+
+</script>
+
+</body>
+</html>
+```
