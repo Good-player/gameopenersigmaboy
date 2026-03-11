@@ -25,6 +25,24 @@ const USER_ID=getUserId();
 
 // Server API
 const isMobile=/Android|iPhone|iPad|iPod|webOS/i.test(navigator.userAgent)||window.innerWidth<600;
+function isPlayTime(){
+  const now=new Date();
+  const swe=new Date(now.toLocaleString("en-US",{timeZone:"Europe/Stockholm"}));
+  const day=swe.getDay(),hr=swe.getHours();
+  if(day===0||day===6)return true; // Sat/Sun no limit
+  if(day===5)return hr>=8&&hr<14; // Friday 8-14
+  return hr>=8&&hr<15; // Mon-Thu 8-15
+}
+function getNextPlayTime(){
+  const now=new Date();
+  const swe=new Date(now.toLocaleString("en-US",{timeZone:"Europe/Stockholm"}));
+  const day=swe.getDay(),hr=swe.getHours();
+  if(day===0||day===6)return null;
+  if(hr<8)return"Today at 08:00";
+  if(day===5&&hr>=14)return"Saturday (no limit)";
+  if(hr>=15)return day===4?"Saturday (no limit)":"Tomorrow at 08:00";
+  return null;
+}
 const API_BASE="https://samptonweb.dpdns.org/api/caseopen";
 const API_LIGHT="https://samptonweb.wat-the-heck-lol12.workers.dev/api/caseopen";
 async function api(path,body){try{const r=await fetch(API_BASE+path,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({uid:USER_ID,uname:getUserName(),...body})});const d=await r.json();if(window.__setOnline)window.__setOnline(true);return d}catch{if(window.__setOnline)window.__setOnline(false);return null}}
@@ -323,6 +341,9 @@ function App(){
 
   // SAVE SLOT SCREEN
   if(appLoading)return(<div style={{...S.root,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:16}}><style>{CSS}</style><div style={{fontSize:"clamp(24px,7vw,36px)",fontWeight:800,letterSpacing:4,color:"#e2e8f0",marginBottom:8}}>CASES</div><div style={{width:"clamp(200px,60vw,320px)",height:8,background:"#1e2430",borderRadius:4,overflow:"hidden"}}><div style={{height:"100%",background:"linear-gradient(90deg,#4ade80,#3b82f6,#8b5cf6)",borderRadius:4,transition:"width 0.3s ease",width:loadProgress+"%"}}/></div><div style={{color:"#888",fontSize:11}}>{loadMsg}</div><div style={{color:"#333",fontSize:9,marginTop:8}}>v2.0</div></div>);
+  const[playAllowed,setPlayAllowed]=useState(isPlayTime());
+  useEffect(()=>{const iv=setInterval(()=>setPlayAllowed(isPlayTime()),30000);return()=>clearInterval(iv)},[]);
+  if(!playAllowed&&!["owner","admin"].includes(account?.role))return(<div style={{...S.root,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:16}}><style>{CSS}</style><MI n="schedule" s={48} c="#f59e0b"/><div style={{color:"#f59e0b",fontSize:"clamp(18px,5vw,24px)",fontWeight:800}}>Outside Play Hours</div><div style={{color:"#888",fontSize:12,textAlign:"center",maxWidth:300}}>{(()=>{const now=new Date();const swe=new Date(now.toLocaleString("en-US",{timeZone:"Europe/Stockholm"}));const day=swe.getDay();const schedule=day===5?"Friday: 08:00 - 14:00":"Mon-Thu: 08:00 - 15:00";return <div><div style={{marginBottom:8}}>{schedule}</div><div>Sat-Sun: No limit</div><div style={{color:"#f59e0b",marginTop:12,fontWeight:600}}>Next: {getNextPlayTime()||"Now!"}</div><div style={{color:"#555",marginTop:8,fontSize:10}}>Stockholm time: {swe.toLocaleTimeString("sv-SE",{hour:"2-digit",minute:"2-digit"})}</div></div>})()}</div></div>);
   if(showSlots)return(<div style={S.root}><style>{CSS}</style><div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"clamp(20px,5vw,40px)",gap:"clamp(16px,4vw,28px)"}}><div style={{fontSize:"clamp(20px,6vw,32px)",fontWeight:800,letterSpacing:3,color:"#ccc"}}>CASES</div><div style={{color:"#666",fontSize:"clamp(10px,2.5vw,13px)"}}>Select a save slot</div><div style={{display:"flex",flexDirection:"column",gap:"clamp(8px,2vw,12px)",width:"100%",maxWidth:400}}>{[0,1,2].map(i=>{const m=slotMeta[i];return(<button key={i} onClick={()=>loadSlot(i)} style={{...S.slotBtn,borderColor:slot===i?"#4ade80":"#1e2430"}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",width:"100%"}}><span style={{fontWeight:700,fontSize:"clamp(12px,3vw,16px)"}}>Slot {i+1}</span>{m?<span style={{color:"#4ade80",fontWeight:600,fontSize:"clamp(10px,2.5vw,13px)"}}>{money(m.bal)}</span>:<span style={{color:"#555",fontSize:"clamp(10px,2.5vw,12px)"}}>Empty</span>}</div>{m&&<div style={{display:"flex",gap:"clamp(10px,3vw,18px)",fontSize:"clamp(8px,2vw,10px)",color:"#888"}}><span>{m.items} items</span><span>Inv: {money(m.totalVal)}</span><span>{m.opened} opened</span></div>}</button>)})}</div></div></div>);
 
   return(<div style={S.root}><style>{CSS}</style>
