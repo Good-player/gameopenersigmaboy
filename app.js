@@ -126,12 +126,34 @@ let _actx;function actx(){if(!_actx)_actx=new(window.AudioContext||window.webkit
 function playTone(freq,dur,type="sine",vol=0.15){try{const c=actx(),o=c.createOscillator(),g=c.createGain();o.type=type;o.frequency.value=freq;g.gain.value=vol;g.gain.exponentialRampToValueAtTime(0.001,c.currentTime+dur);o.connect(g);g.connect(c.destination);o.start();o.stop(c.currentTime+dur)}catch{}}
 function sndOpen(){playTone(440,.08,"square",.1);setTimeout(()=>playTone(660,.08,"square",.1),60)}
 // Case-select tick (CS-style click as items pass marker)
-let _tickAudio=null;
+// Uses Web Audio API: load mp3 once into a buffer, play instances at consistent volume.
+let _tickBuf=null,_tickCtx=null,_tickLoading=null;
+async function _ensureTick(){
+  if(_tickBuf)return _tickBuf;
+  if(_tickLoading)return _tickLoading;
+  _tickLoading=(async()=>{
+    try{
+      _tickCtx=_tickCtx||new (window.AudioContext||window.webkitAudioContext)();
+      const r=await fetch("sound/caseselect.mp3");
+      const ab=await r.arrayBuffer();
+      _tickBuf=await _tickCtx.decodeAudioData(ab);
+      return _tickBuf;
+    }catch{return null}
+  })();
+  return _tickLoading;
+}
+// Preload at module load so first ticks fire instantly
+_ensureTick();
 function sndTick(){
+  if(!_tickBuf||!_tickCtx)return;
   try{
-    if(!_tickAudio){_tickAudio=new Audio("sound/caseselect.mp3");_tickAudio.preload="auto";_tickAudio.volume=0.4}
-    // Clone for overlap so rapid ticks don't cut each other off
-    const a=_tickAudio.cloneNode();a.volume=0.4;a.play().catch(()=>{})
+    if(_tickCtx.state==="suspended")_tickCtx.resume();
+    const src=_tickCtx.createBufferSource();
+    src.buffer=_tickBuf;
+    const g=_tickCtx.createGain();
+    g.gain.value=0.35;
+    src.connect(g);g.connect(_tickCtx.destination);
+    src.start();
   }catch{}
 }
 function sndReveal(isWin,rarity){if(rarity==="legendary"){playTone(440,.15,"sine",.18);setTimeout(()=>playTone(554,.15,"sine",.18),100);setTimeout(()=>playTone(659,.15,"sine",.18),200);setTimeout(()=>playTone(880,.3,"sine",.2),300);setTimeout(()=>playTone(1100,.4,"sine",.15),500)}else if(rarity==="chroma"){playTone(523,.12,"sine",.15);setTimeout(()=>playTone(659,.12,"sine",.15),80);setTimeout(()=>playTone(784,.12,"sine",.15),160);setTimeout(()=>playTone(1047,.25,"sine",.18),240)}else if(rarity==="covert"){playTone(523,.1,"sine",.14);setTimeout(()=>playTone(659,.1,"sine",.14),80);setTimeout(()=>playTone(784,.2,"sine",.16),160)}else if(isWin){playTone(523,.1,"sine",.12);setTimeout(()=>playTone(659,.1,"sine",.12),80);setTimeout(()=>playTone(784,.15,"sine",.14),160)}else{playTone(330,.15,"triangle",.1);setTimeout(()=>playTone(260,.2,"triangle",.08),120)}}
