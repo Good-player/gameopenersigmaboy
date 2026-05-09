@@ -754,7 +754,45 @@ function App(){
           const bw=(W-20)/buckets.length;
           let bx=W/2,by=20,vx=0,vy=0,pathIdx=0,finished=false;
           const draw=()=>{g.fillStyle="#0d1117";g.fillRect(0,0,W,H);g.fillStyle="#888";pegs.forEach(p=>{g.beginPath();g.arc(p.x,p.y,pegR,0,Math.PI*2);g.fill()});buckets.forEach((m,i)=>{const bx2=10+i*bw;const c=m>=2?"#4ade80":m>=1?"#f59e0b":"#eb4b4b";g.fillStyle=c+"33";g.fillRect(bx2,H-40,bw-2,30);g.fillStyle=c;g.font="bold 10px sans-serif";g.textAlign="center";g.fillText(m+"x",bx2+bw/2,H-22)});g.fillStyle="#fbbf24";g.beginPath();g.arc(bx,by,ballR,0,Math.PI*2);g.fill();g.strokeStyle="#fff";g.lineWidth=1;g.stroke()};
-          const step=()=>{if(finished)return;vy+=0.25;by+=vy;bx+=vx;for(const p of pegs){const dx=bx-p.x,dy=by-p.y,d=Math.sqrt(dx*dx+dy*dy);if(d<pegR+ballR){const goRight=pathIdx<r.path.length?r.path[pathIdx]:(Math.random()<0.5?0:1);pathIdx++;vx=(goRight?1:-1)*1.5+((Math.random()-0.5)*0.3);vy=Math.abs(vy)*0.6;by=p.y-pegR-ballR-0.5}}if(bx<ballR){bx=ballR;vx=-vx*0.5}if(bx>W-ballR){bx=W-ballR;vx=-vx*0.5}if(by>H-40){finished=true;setTimeout(()=>{setSt(p=>{const ns={...p,bal:p.bal+r.payout};save(ns,drops);return ns});setPlinkoResult({bucket:r.bucket,multiplier:r.multiplier,payout:r.payout,profit:r.profit});setPlinkoAnim(false);if(r.profit>0){document.body.classList.add("shakeHard");setTimeout(()=>document.body.classList.remove("shakeHard"),400);sndReveal(true)}else sndReveal(false)},300);return}draw();requestAnimationFrame(step)};
+          let lastPegId=-1;
+          const step=()=>{if(finished)return;
+            vy+=0.35;
+            // Substep to avoid tunneling at high velocity
+            const steps=Math.max(1,Math.ceil(Math.abs(vy)/3));
+            for(let s=0;s<steps;s++){
+              bx+=vx/steps;by+=vy/steps;
+              // Find closest overlapping peg
+              let closest=null,closestD=Infinity,closestId=-1;
+              for(let i=0;i<pegs.length;i++){const p=pegs[i];const dx=bx-p.x,dy=by-p.y,d=Math.sqrt(dx*dx+dy*dy);if(d<pegR+ballR&&d<closestD){closest=p;closestD=d;closestId=i}}
+              if(closest&&closestId!==lastPegId){
+                // Push ball out along collision normal
+                const nx=(bx-closest.x)/(closestD||1),ny=(by-closest.y)/(closestD||1);
+                bx=closest.x+nx*(pegR+ballR+0.5);
+                by=closest.y+ny*(pegR+ballR+0.5);
+                // Use server path to bias direction L/R, but reflect velocity properly
+                const goRight=pathIdx<r.path.length?r.path[pathIdx]:(Math.random()<0.5?0:1);
+                pathIdx++;
+                // Velocity: reflect along normal then bias horizontally per server path
+                const dotV=vx*nx+vy*ny;
+                vx=vx-2*dotV*nx;
+                vy=vy-2*dotV*ny;
+                // Apply bounce damping
+                vx*=0.55;vy*=0.55;
+                // Add horizontal bias from server path so ball ends in correct bucket
+                vx+=(goRight?1:-1)*1.2;
+                // Clamp velocity
+                if(Math.abs(vx)>4)vx=Math.sign(vx)*4;
+                if(vy<0.5)vy=0.5;
+                lastPegId=closestId;
+              }else if(!closest){
+                lastPegId=-1;
+              }
+            }
+            if(bx<ballR){bx=ballR;vx=Math.abs(vx)*0.5}
+            if(bx>W-ballR){bx=W-ballR;vx=-Math.abs(vx)*0.5}
+            if(by>H-40){finished=true;setTimeout(()=>{setSt(p=>{const ns={...p,bal:p.bal+r.payout};save(ns,drops);return ns});setPlinkoResult({bucket:r.bucket,multiplier:r.multiplier,payout:r.payout,profit:r.profit});setPlinkoAnim(false);if(r.profit>0){document.body.classList.add("shakeHard");setTimeout(()=>document.body.classList.remove("shakeHard"),400);sndReveal(true)}else sndReveal(false)},300);return}
+            draw();requestAnimationFrame(step)
+          };
           step();
         }} style={{...S.btn,background:plinkoAnim?"#333":"#4ade80",color:"#000",padding:"8px 20px",fontWeight:700}}>{plinkoAnim?"...":"Drop!"}</button>
       </div>
