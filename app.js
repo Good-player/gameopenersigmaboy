@@ -125,6 +125,15 @@ const TAB_ID=uid();
 let _actx;function actx(){if(!_actx)_actx=new(window.AudioContext||window.webkitAudioContext)();return _actx}
 function playTone(freq,dur,type="sine",vol=0.15){try{const c=actx(),o=c.createOscillator(),g=c.createGain();o.type=type;o.frequency.value=freq;g.gain.value=vol;g.gain.exponentialRampToValueAtTime(0.001,c.currentTime+dur);o.connect(g);g.connect(c.destination);o.start();o.stop(c.currentTime+dur)}catch{}}
 function sndOpen(){playTone(440,.08,"square",.1);setTimeout(()=>playTone(660,.08,"square",.1),60)}
+// Case-select tick (CS-style click as items pass marker)
+let _tickAudio=null;
+function sndTick(){
+  try{
+    if(!_tickAudio){_tickAudio=new Audio("sound/caseselect.mp3");_tickAudio.preload="auto";_tickAudio.volume=0.4}
+    // Clone for overlap so rapid ticks don't cut each other off
+    const a=_tickAudio.cloneNode();a.volume=0.4;a.play().catch(()=>{})
+  }catch{}
+}
 function sndReveal(isWin,rarity){if(rarity==="legendary"){playTone(440,.15,"sine",.18);setTimeout(()=>playTone(554,.15,"sine",.18),100);setTimeout(()=>playTone(659,.15,"sine",.18),200);setTimeout(()=>playTone(880,.3,"sine",.2),300);setTimeout(()=>playTone(1100,.4,"sine",.15),500)}else if(rarity==="chroma"){playTone(523,.12,"sine",.15);setTimeout(()=>playTone(659,.12,"sine",.15),80);setTimeout(()=>playTone(784,.12,"sine",.15),160);setTimeout(()=>playTone(1047,.25,"sine",.18),240)}else if(rarity==="covert"){playTone(523,.1,"sine",.14);setTimeout(()=>playTone(659,.1,"sine",.14),80);setTimeout(()=>playTone(784,.2,"sine",.16),160)}else if(isWin){playTone(523,.1,"sine",.12);setTimeout(()=>playTone(659,.1,"sine",.12),80);setTimeout(()=>playTone(784,.15,"sine",.14),160)}else{playTone(330,.15,"triangle",.1);setTimeout(()=>playTone(260,.2,"triangle",.08),120)}}
 function sndSell(){playTone(880,.06,"square",.08);setTimeout(()=>playTone(1100,.06,"square",.08),50)}
 
@@ -229,7 +238,23 @@ function App(){
     const items=[];for(let i=0;i<SCROLL_COUNT;i++)items.push(i===WIN_IDX?winner:c.items[Math.floor(Math.random()*c.items.length)]);
     setScrollItems(items);setPage("opening");
     setSt(p=>{const ns={...p,bal:p.bal-cPrice,stats:{...p.stats,spent:p.stats.spent+cPrice,opened:p.stats.opened+1}};save(ns,drops);return ns});
-    requestAnimationFrame(()=>{requestAnimationFrame(()=>{if(!stripRef.current)return;const el=stripRef.current,parent=el.parentElement;el.style.transition="none";el.style.transform="translateX(0)";requestAnimationFrame(()=>{if(!stripRef.current)return;const firstItem=el.children[0];if(!firstItem)return;const itemW=firstItem.offsetWidth,center=parent.offsetWidth/2,pad=itemW*.1,off=WIN_IDX*itemW+pad+(Math.random()*(itemW-pad*2))-center;el.style.transition="transform 5s cubic-bezier(0.15,0.85,0.20,1.01)";el.style.transform=`translateX(-${off}px)`})})});
+    requestAnimationFrame(()=>{requestAnimationFrame(()=>{if(!stripRef.current)return;const el=stripRef.current,parent=el.parentElement;el.style.transition="none";el.style.transform="translateX(0)";requestAnimationFrame(()=>{if(!stripRef.current)return;const firstItem=el.children[0];if(!firstItem)return;const itemW=firstItem.offsetWidth,center=parent.offsetWidth/2,pad=itemW*.1,off=WIN_IDX*itemW+pad+(Math.random()*(itemW-pad*2))-center;el.style.transition="transform 5s cubic-bezier(0.15,0.85,0.20,1.01)";el.style.transform=`translateX(-${off}px)`;
+      // Tick sound on each item boundary crossing the marker
+      let lastIdx=-1;
+      const trackTick=()=>{
+        if(!stripRef.current)return;
+        const tx=new DOMMatrix(getComputedStyle(stripRef.current).transform).e;
+        // Position of the center marker in strip-local coords = -tx + center
+        const markerInStrip=-tx+center;
+        const idx=Math.floor(markerInStrip/itemW);
+        if(idx!==lastIdx&&lastIdx>=0)sndTick();
+        lastIdx=idx;
+        // Stop tracking once arrived (after ~5.2s)
+        if(performance.now()-tickStart<5200)requestAnimationFrame(trackTick);
+      };
+      const tickStart=performance.now();
+      requestAnimationFrame(trackTick);
+    })})});
     setTimeout(()=>{setScrollDone(true);const isEpicDrop=["covert","chroma","legendary"].includes(winner.rarity);if(isEpicDrop){document.body.classList.add("shakeHard");setTimeout(()=>document.body.classList.remove("shakeHard"),500)}sndReveal(winner.value>=c.price,winner.rarity);let rp=0;setSt(prev=>{let rc=prev.rentCtr+1;if(rc>=RENT_EVERY){rp=RENT_AMT;rc=0}setRentPaid(rp);const newBal=prev.bal-rp;const isBig=winner.value>=c.price*3;const he={n:prev.stats.opened,bal:newBal};if(isBig)he.label=winner.name+" "+money(winner.value);const itemId=uid();setLastWonId(itemId);const ns={...prev,bal:newBal,inv:[...prev.inv,{...winner,id:itemId,from:c.id,t:Date.now(),float:fl}],stats:{...prev.stats,won:prev.stats.won+winner.value,best:winner.value>prev.stats.bestVal?winner.name:prev.stats.best,bestVal:Math.max(prev.stats.bestVal,winner.value)},loan:prev.loan,rentCtr:rc,history:[...(prev.history||[]),he].slice(-200),starred:prev.starred||{}};const nd={name:winner.name,rarity:winner.rarity,value:winner.value,cond:getCondition(fl),icon:winner.icon};setDrops(dd=>{const r=[nd,...dd].slice(0,20);save(ns,r);return r});setTimeout(()=>{checkReset(ns);lockRef.current=false},400);return ns})},5400);
   }
 
