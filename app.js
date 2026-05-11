@@ -262,16 +262,16 @@ function App(){
     setSt(p=>{const ns={...p,bal:p.bal-cPrice,stats:{...p.stats,spent:p.stats.spent+cPrice,opened:p.stats.opened+1}};save(ns,drops);return ns});
     requestAnimationFrame(()=>{requestAnimationFrame(()=>{if(!stripRef.current)return;const el=stripRef.current,parent=el.parentElement;el.style.transition="none";el.style.transform="translateX(0)";requestAnimationFrame(()=>{if(!stripRef.current)return;const firstItem=el.children[0];if(!firstItem)return;const itemW=firstItem.offsetWidth,center=parent.offsetWidth/2,pad=itemW*.1,off=WIN_IDX*itemW+pad+(Math.random()*(itemW-pad*2))-center;el.style.transition="transform 5s cubic-bezier(0.15,0.85,0.20,1.01)";el.style.transform=`translateX(-${off}px)`;
       // Tick sound on each item boundary crossing the marker
-      let lastIdx=-1;
+      // Initialize lastIdx to the starting position so first crossing fires a tick
+      const initialMarkerInStrip=center; // tx=0 at start, so marker is at center pixel of strip
+      let lastIdx=Math.floor(initialMarkerInStrip/itemW);
       const trackTick=()=>{
         if(!stripRef.current)return;
         const tx=new DOMMatrix(getComputedStyle(stripRef.current).transform).e;
-        // Position of the center marker in strip-local coords = -tx + center
         const markerInStrip=-tx+center;
         const idx=Math.floor(markerInStrip/itemW);
-        if(idx!==lastIdx&&lastIdx>=0)sndTick();
+        if(idx!==lastIdx)sndTick();
         lastIdx=idx;
-        // Stop tracking once arrived (after ~5.2s)
         if(performance.now()-tickStart<5200)requestAnimationFrame(trackTick);
       };
       const tickStart=performance.now();
