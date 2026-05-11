@@ -370,9 +370,12 @@ function App(){
     const red=new Set([1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36]);
     const segAng=(Math.PI*2)/nums.length;
     const cx=W/2,cy=W/2,rad=W/2-12;
+    // If we have a last result, draw wheel rotated to show that number at top
+    const lastIdx=rouletteResult?nums.indexOf(rouletteResult.number):-1;
+    const rot=lastIdx>=0?(-lastIdx*segAng):0;
     g.fillStyle="#3f1a05";g.beginPath();g.arc(cx,cy,W/2-2,0,Math.PI*2);g.fill();
     nums.forEach((n,i)=>{
-      const a0=-Math.PI/2+i*segAng-segAng/2,a1=a0+segAng;
+      const a0=-Math.PI/2+i*segAng-segAng/2+rot,a1=a0+segAng;
       g.beginPath();g.moveTo(cx,cy);g.arc(cx,cy,rad,a0,a1);g.closePath();
       g.fillStyle=n===0?"#16a34a":red.has(n)?"#dc2626":"#111";g.fill();
       g.strokeStyle="#000";g.lineWidth=0.5;g.stroke();
@@ -382,7 +385,7 @@ function App(){
     g.fillStyle="#f59e0b";g.beginPath();g.arc(cx,cy,rad*0.1,0,Math.PI*2);g.fill();
     g.fillStyle="#fbbf24";g.strokeStyle="#000";g.lineWidth=2;
     g.beginPath();g.moveTo(cx,4);g.lineTo(cx-10,22);g.lineTo(cx+10,22);g.closePath();g.fill();g.stroke();
-  },[page]);
+  },[page,rouletteResult]);
 
   useEffect(()=>{if(page!=="btc")return;
     // Load cached values from localStorage on tab enter (no API call needed)
@@ -394,30 +397,6 @@ function App(){
     // If price is 0 (first ever load), fetch once
     if(btcPrice===0){apiL("/btc/price",{}).then(r=>{if(r?.price){setBtcPrice(r.price);setBtcLastUpdate(Date.now());try{localStorage.setItem("co-btc-cache",JSON.stringify({price:r.price,ts:Date.now(),history:btcHistory}))}catch{}}})}
   },[page,btcDays]);
-  // Global-clock-aligned 1-minute refresh while BTC tab is open
-  useEffect(()=>{
-    if(page!=="roulette")return;
-    const cv=rouletteCanvasRef.current;if(!cv)return;
-    const W=cv.offsetWidth;if(!W)return;
-    cv.width=W*2;cv.height=W*2;
-    const g=cv.getContext("2d");g.scale(2,2);
-    const nums=[0,32,15,19,4,21,2,25,17,34,6,27,13,36,11,30,8,23,10,5,24,16,33,1,20,14,31,9,22,18,29,7,28,12,35,3,26];
-    const red=new Set([1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36]);
-    const segAng=(Math.PI*2)/nums.length;
-    const cx=W/2,cy=W/2,rad=W/2-12;
-    g.fillStyle="#3f1a05";g.beginPath();g.arc(cx,cy,W/2-2,0,Math.PI*2);g.fill();
-    nums.forEach((n,i)=>{
-      const a0=-Math.PI/2+i*segAng-segAng/2,a1=a0+segAng;
-      g.beginPath();g.moveTo(cx,cy);g.arc(cx,cy,rad,a0,a1);g.closePath();
-      g.fillStyle=n===0?"#16a34a":red.has(n)?"#dc2626":"#111";g.fill();
-      g.strokeStyle="#000";g.lineWidth=0.5;g.stroke();
-      g.save();g.translate(cx,cy);g.rotate(a0+segAng/2);g.fillStyle="#fff";g.font="bold "+Math.max(10,W*0.04)+"px sans-serif";g.textAlign="center";g.textBaseline="middle";g.fillText(String(n),rad*0.82,0);g.restore();
-    });
-    g.fillStyle="#2d1505";g.beginPath();g.arc(cx,cy,rad*0.25,0,Math.PI*2);g.fill();
-    g.fillStyle="#f59e0b";g.beginPath();g.arc(cx,cy,rad*0.1,0,Math.PI*2);g.fill();
-    g.fillStyle="#fbbf24";g.strokeStyle="#000";g.lineWidth=2;
-    g.beginPath();g.moveTo(cx,4);g.lineTo(cx-10,22);g.lineTo(cx+10,22);g.closePath();g.fill();g.stroke();
-  },[page]);
 
   useEffect(()=>{if(page!=="btc")return;
     let timerId=null,nextTimer=null;
@@ -952,10 +931,15 @@ function App(){
             const nums=[0,32,15,19,4,21,2,25,17,34,6,27,13,36,11,30,8,23,10,5,24,16,33,1,20,14,31,9,22,18,29,7,28,12,35,3,26];
             const red=new Set([1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36]);
             const segAng=(Math.PI*2)/nums.length;
-            // Target rotation: pointer is at TOP (12 o'clock = -PI/2). To put nums[targetIdx] at top, rotate wheel by -targetIdx*segAng - PI/2 + offset
+            // Static draw uses: a0 = -PI/2 + i*segAng - segAng/2  (so num[0] centered at top when rot=0)
+            // Spin draw will use: a0 = -PI/2 + i*segAng - segAng/2 + rot
+            // At rot=0 it matches static (no jump). To land on targetIdx at top, we need rot such that
+            // (-PI/2 + targetIdx*segAng - segAng/2 + rot) + segAng/2 == -PI/2 (mod 2PI)
+            // i.e. rot == -targetIdx*segAng (mod 2PI)
             const targetIdx=nums.indexOf(r.number);
-            const baseRotForTop=-Math.PI/2-targetIdx*segAng-segAng/2;
-            const totalRot=-(Math.PI*2*6)+baseRotForTop; // 6 full spins counter-clockwise + land
+            const landRot=-targetIdx*segAng;
+            // Add 6 full counter-clockwise spins for visual effect
+            const totalRot=-(Math.PI*2*6)+landRot;
             const t0=performance.now();
             const dur=4500;
             const drawWheel=(rot)=>{
@@ -964,9 +948,9 @@ function App(){
               // Outer ring
               g.fillStyle="#3f1a05";
               g.beginPath();g.arc(cx,cy,W/2-2,0,Math.PI*2);g.fill();
-              // Segments
+              // Segments (using same coords as static draw + rot offset)
               nums.forEach((n,i)=>{
-                const a0=rot+i*segAng,a1=a0+segAng;
+                const a0=-Math.PI/2+i*segAng-segAng/2+rot,a1=a0+segAng;
                 g.beginPath();g.moveTo(cx,cy);g.arc(cx,cy,rad,a0,a1);g.closePath();
                 g.fillStyle=n===0?"#16a34a":red.has(n)?"#dc2626":"#111";
                 g.fill();
