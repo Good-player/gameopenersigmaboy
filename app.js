@@ -174,7 +174,7 @@ function App(){
   const[dmInbox,setDmInbox]=useState(null);const[dmTo,setDmTo]=useState("");const[dmMsg,setDmMsg]=useState("");const[dmSearch,setDmSearch]=useState("");const[dmResults,setDmResults]=useState([]);const[dmUnread,setDmUnread]=useState(0);
   const[viewProfile,setViewProfile]=useState(null);const[editBio,setEditBio]=useState("");const[editPrivacy,setEditPrivacy]=useState("public");
   const[reportTarget,setReportTarget]=useState("");const[reportReason,setReportReason]=useState("");const[reportMsg,setReportMsg]=useState("");
-  const[toast,setToast]=useState(null);const[reportModal,setReportModal]=useState(null);const[pvpEliminated,setPvpEliminated]=useState(false);const[horseRace,setHorseRace]=useState(null);const[horseAnim,setHorseAnim]=useState(0);const[horseBet,setHorseBet]=useState("");const[horsePick,setHorsePick]=useState(0);const[horseHistory,setHorseHistory]=useState([]);const[multiResults,setMultiResults]=useState(null);const[bjTable,setBjTable]=useState(null);const[bjBet,setBjBet]=useState("10000");const[bjHasCard,setBjHasCard]=useState(false);const[btcPrice,setBtcPrice]=useState(0);const[btcHistory,setBtcHistory]=useState([]);const[btcPortfolio,setBtcPortfolio]=useState({active:[],sold:[]});const[btcInvestAmt,setBtcInvestAmt]=useState("");const[btcDays,setBtcDays]=useState(7);const[btcLastUpdate,setBtcLastUpdate]=useState(0);const[btcNextUpdate,setBtcNextUpdate]=useState(0);const[btcTick,setBtcTick]=useState(0);const[btcChange24h,setBtcChange24h]=useState(0);const[plinkoBet,setPlinkoBet]=useState("1000");const[plinkoRisk,setPlinkoRisk]=useState("medium");const[plinkoRows,setPlinkoRows]=useState(12);const[plinkoResult,setPlinkoResult]=useState(null);const[plinkoAnim,setPlinkoAnim]=useState(false);const[rouletteBets,setRouletteBets]=useState([]);const[rouletteResult,setRouletteResult]=useState(null);const[rouletteAnim,setRouletteAnim]=useState(false);const[rouletteAmt,setRouletteAmt]=useState("1000");const[schoolData,setSchoolData]=useState(null);const[weatherData,setWeatherData]=useState(null);const[schoolLoading,setSchoolLoading]=useState(false);const horseCanvasRef=useRef(null);const horseAnimRef=useRef(null);const syncLockRef=useRef(false);const plinkoCanvasRef=useRef(null);const rouletteCanvasRef=useRef(null);const[pvpWinModal,setPvpWinModal]=useState(null);const[warnModal,setWarnModal]=useState(null);const[banModal,setBanModal]=useState(null);const[banTimer,setBanTimer]=useState("");const[playAllowed,setPlayAllowed]=useState(isPlayTime());const[giftModal,setGiftModal]=useState(null);const[giftAmt,setGiftAmt]=useState("");
+  const[toast,setToast]=useState(null);const[reportModal,setReportModal]=useState(null);const[pvpEliminated,setPvpEliminated]=useState(false);const[horseRace,setHorseRace]=useState(null);const[horseAnim,setHorseAnim]=useState(0);const[horseBet,setHorseBet]=useState("");const[horsePick,setHorsePick]=useState(0);const[horseHistory,setHorseHistory]=useState([]);const[multiResults,setMultiResults]=useState(null);const[bjTable,setBjTable]=useState(null);const[bjBet,setBjBet]=useState("10000");const[bjHasCard,setBjHasCard]=useState(false);const[btcPrice,setBtcPrice]=useState(0);const[btcHistory,setBtcHistory]=useState([]);const[btcPortfolio,setBtcPortfolio]=useState({active:[],sold:[]});const[btcInvestAmt,setBtcInvestAmt]=useState("");const[btcDays,setBtcDays]=useState(7);const[btcLastUpdate,setBtcLastUpdate]=useState(0);const[btcNextUpdate,setBtcNextUpdate]=useState(0);const[btcTick,setBtcTick]=useState(0);const[btcChange24h,setBtcChange24h]=useState(0);const[plinkoBet,setPlinkoBet]=useState("1000");const[plinkoRisk,setPlinkoRisk]=useState("medium");const[plinkoRows,setPlinkoRows]=useState(12);const[plinkoResult,setPlinkoResult]=useState(null);const[plinkoAnim,setPlinkoAnim]=useState(false);const[rouletteBets,setRouletteBets]=useState([]);const[rouletteResult,setRouletteResult]=useState(null);const[rouletteAnim,setRouletteAnim]=useState(false);const[rouletteAmt,setRouletteAmt]=useState("1000");const[schoolData,setSchoolData]=useState(null);const[weatherData,setWeatherData]=useState(null);const[schoolLoading,setSchoolLoading]=useState(false);const[smhiWarnings,setSmhiWarnings]=useState(null);const[pollenData,setPollenData]=useState(null);const[expandedSection,setExpandedSection]=useState({});const horseCanvasRef=useRef(null);const horseAnimRef=useRef(null);const syncLockRef=useRef(false);const plinkoCanvasRef=useRef(null);const rouletteCanvasRef=useRef(null);const[pvpWinModal,setPvpWinModal]=useState(null);const[warnModal,setWarnModal]=useState(null);const[banModal,setBanModal]=useState(null);const[banTimer,setBanTimer]=useState("");const[playAllowed,setPlayAllowed]=useState(isPlayTime());const[giftModal,setGiftModal]=useState(null);const[giftAmt,setGiftAmt]=useState("");
   const[events,setEvents]=useState([]);const[dismissedEvents,setDismissedEvents]=useState({});
   const[friendsList,setFriendsList]=useState([]);
   function showProfile(username){if(!username||username==="Anon"||username==="SYSTEM")return;api("/profile/full",{target:username.toLowerCase(),username:account?.username||""}).then(r=>{if(r?.profile)setViewProfile(r.profile)}).catch(()=>{})}
@@ -479,7 +479,7 @@ function App(){
     {events.filter(e=>!dismissedEvents[e.id]).map(e=>{const ec=e.type==="announcement"?"#f59e0b":e.type==="sale"?"#4ade80":e.type==="maintenance"?"#eb4b4b":e.type==="warning"?"#f97316":e.type==="update"?"#8b5cf6":e.type==="rain"?"#ffd700":e.type==="brainrot"?"#ff6767":e.type==="takeover"?"#e2e8f0":e.type==="jumpscare"?"#eb4b4b":"#3b82f6";const ei=e.type==="announcement"?"campaign":e.type==="sale"?"local_offer":e.type==="maintenance"?"build":e.type==="warning"?"warning":e.type==="update"?"system_update":e.type==="rain"?"payments":e.type==="brainrot"?"psychology":e.type==="takeover"?"wallpaper":e.type==="jumpscare"?"flash_on":"celebration";let sty={};try{sty=JSON.parse(e.style||"{}")}catch{};return <div key={e.id}>{e.type==="takeover"&&sty.image&&<div style={{position:"fixed",inset:0,zIndex:99,backgroundImage:"url("+sty.image+")",backgroundSize:"cover",backgroundPosition:"center",opacity:0.15,pointerEvents:"none"}}/>}{e.type==="jumpscare"&&sty.image&&!dismissedEvents["js_"+e.id]&&<div onClick={()=>setDismissedEvents(d=>({...d,["js_"+e.id]:true}))} style={{position:"fixed",inset:0,zIndex:99998,background:"#000",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}><img src={sty.image} style={{maxWidth:"90vw",maxHeight:"90vh",objectFit:"contain"}}/><div style={{position:"absolute",bottom:40,color:"#666",fontSize:12}}>Click to dismiss</div></div>}{e.type==="rain"&&<div style={{position:"fixed",top:0,left:0,right:0,height:"100vh",pointerEvents:"none",zIndex:98,overflow:"hidden"}}>{[...Array(20)].map((_,i)=><div key={i} style={{position:"absolute",left:Math.random()*100+"%",top:-20,fontSize:Math.random()*14+12,animation:"moneyRain "+(2+Math.random()*3)+"s linear "+(Math.random()*2)+"s infinite",opacity:0.6}}>{["💲","💰","💵","🤑"][i%4]}</div>)}</div>}<div className={"slideIn"+(sty.effect?" effect"+sty.effect[0].toUpperCase()+sty.effect.slice(1):"")} style={{background:ec+"18",borderBottom:"1px solid "+ec+"33",padding:"6px 12px",display:"flex",alignItems:"center",gap:8}}><MI n={ei} s={16} c={ec}/><div style={{flex:1}}><div style={{color:ec,fontWeight:700,fontSize:"clamp(10px,2.5vw,12px)"}}>{e.title}{e.discount>0&&<span style={{background:"#4ade80",color:"#000",padding:"1px 6px",borderRadius:4,fontSize:9,fontWeight:800,marginLeft:6}}>{e.discount}% OFF</span>}{e.type==="brainrot"&&<span style={{marginLeft:6,fontSize:9}}>🧠💀</span>}</div>{e.description&&<div style={{color:"#aaa",fontSize:"clamp(8px,2vw,10px)"}}>{e.description}</div>}{sty.image&&e.type!=="jumpscare"&&e.type!=="takeover"&&<img src={sty.image} style={{maxWidth:120,maxHeight:60,borderRadius:4,marginTop:4,objectFit:"cover"}}/>}</div><button onClick={()=>setDismissedEvents(d=>({...d,[e.id]:true,["js_"+e.id]:true}))} style={{background:"transparent",border:"none",color:"#555",cursor:"pointer"}}><MI n="close" s={14}/></button></div></div>})}
 
     {/* NAV */}
-    <div style={S.nav}>{[["shop","Shop"],["inv",`Inv (${st.inv.length})`],["stats","Stats"],["loan","Loan"],["flip","Flip"],["pvp","PvP"],["live","Live"],["lb","Top"],["chat","Chat"],["dm",`DM${dmUnread>0?" ("+dmUnread+")":""}`],["me","Me"],["map","Map"],["horse","Horses"],["bj","BJ"],["btc","BTC"],["plinko","Plinko"],["roulette","Roulette"],["school","School"]].map(([k,l])=>(<button key={k} onClick={()=>{if(!opening||scrollDone||k==="shop"){setPage(k);if(k!=="opening")setOpening(false);if(k==="map")getOnline().then(r=>{if(r)setOnlineData(r)});if(k==="pvp")refreshLobbies();if(k==="bj"&&account){api("/bj/buycard",{username:account.username,token:account.token}).then(r=>{if(r?.hasCard)setBjHasCard(true)})}if(k==="btc"){/* useEffect handles initial load */}if(k==="school"){if(!schoolData){setSchoolLoading(true);api("/school/menu",{slug:"sollentuna-international-school"}).then(r=>{setSchoolData(r||{weeks:[]});setSchoolLoading(false)})}if(!weatherData){api("/weather/today",{lat:59.4288,lon:17.9498}).then(r=>{setWeatherData(r)})}}if(k==="dm"&&account){api("/dm/inbox",{username:account.username,token:account.token}).then(r=>{if(r?.ok){setDmInbox(r);setDmUnread(0);api("/dm/read",{username:account.username,token:account.token})}}).catch(()=>{setTimeout(()=>{api("/dm/inbox",{username:account.username,token:account.token}).then(r2=>{if(r2?.ok){setDmInbox(r2);setDmUnread(0)}})},2000)})}}}} style={{...S.tab,...(page===k||(page==="opening"&&k==="shop")?S.tabOn:{}),color:k==="dm"&&dmUnread>0?"#f59e0b":undefined}}>{l}</button>))}{account&&["admin","owner","mod"].includes(account.role)&&<button onClick={()=>{if(account.role==="owner")window.owner();else window.admin()}} style={{...S.tab,background:"#ff000022",color:"#ff4444",border:"1px solid #ff000044"}}>{account.role==="owner"?"Owner":"Admin"}</button>}<button onClick={()=>setConfirmReset(true)} style={{...S.tab,marginLeft:"auto",color:"#eb4b4b"}}>Reset</button></div>
+    <div style={S.nav}>{[["shop","Shop"],["inv",`Inv (${st.inv.length})`],["stats","Stats"],["loan","Loan"],["flip","Flip"],["pvp","PvP"],["live","Live"],["lb","Top"],["chat","Chat"],["dm",`DM${dmUnread>0?" ("+dmUnread+")":""}`],["me","Me"],["map","Map"],["horse","Horses"],["bj","BJ"],["btc","BTC"],["plinko","Plinko"],["roulette","Roulette"],["school","School"]].map(([k,l])=>(<button key={k} onClick={()=>{if(!opening||scrollDone||k==="shop"){setPage(k);if(k!=="opening")setOpening(false);if(k==="map")getOnline().then(r=>{if(r)setOnlineData(r)});if(k==="pvp")refreshLobbies();if(k==="bj"&&account){api("/bj/buycard",{username:account.username,token:account.token}).then(r=>{if(r?.hasCard)setBjHasCard(true)})}if(k==="btc"){/* useEffect handles initial load */}if(k==="school"){if(!schoolData){setSchoolLoading(true);api("/school/menu",{slug:"sollentuna-international-school"}).then(r=>{setSchoolData(r||{weeks:[]});setSchoolLoading(false)})}if(!weatherData){api("/weather/today",{lat:59.4288,lon:17.9498}).then(r=>{setWeatherData(r)})}if(!smhiWarnings){api("/weather/warnings",{}).then(r=>{setSmhiWarnings(r||{warnings:[]})})}if(!pollenData){api("/weather/pollen",{}).then(r=>{setPollenData(r||{today:[]})})}}if(k==="dm"&&account){api("/dm/inbox",{username:account.username,token:account.token}).then(r=>{if(r?.ok){setDmInbox(r);setDmUnread(0);api("/dm/read",{username:account.username,token:account.token})}}).catch(()=>{setTimeout(()=>{api("/dm/inbox",{username:account.username,token:account.token}).then(r2=>{if(r2?.ok){setDmInbox(r2);setDmUnread(0)}})},2000)})}}}} style={{...S.tab,...(page===k||(page==="opening"&&k==="shop")?S.tabOn:{}),color:k==="dm"&&dmUnread>0?"#f59e0b":undefined}}>{l}</button>))}{account&&["admin","owner","mod"].includes(account.role)&&<button onClick={()=>{if(account.role==="owner")window.owner();else window.admin()}} style={{...S.tab,background:"#ff000022",color:"#ff4444",border:"1px solid #ff000044"}}>{account.role==="owner"?"Owner":"Admin"}</button>}<button onClick={()=>setConfirmReset(true)} style={{...S.tab,marginLeft:"auto",color:"#eb4b4b"}}>Reset</button></div>
 
     {/* SHOP */}
     {page==="shop"&&<div style={S.body}><div style={S.grid}>{CASES.map(c=>{const cP=saleDiscount>0?Math.floor(c.price*(1-saleDiscount/100)):c.price;const ok=st.bal>=cP;return(<div key={c.id} style={{...S.card,borderColor:c.color+"44",opacity:ok?1:.35}}><div style={{...S.cardIcon,background:c.color+"12",borderColor:c.color+"28"}}><span style={{fontSize:"clamp(26px,6.5vw,40px)"}}>{c.icon}</span></div><div style={S.cardName}>{c.name}</div><div style={{...S.cardPrice,color:c.color}}>{saleDiscount>0&&<span style={{textDecoration:"line-through",color:"#666",fontSize:"clamp(9px,2.5vw,12px)",marginRight:4}}>{money(c.price)}</span>}{money(saleDiscount>0?Math.floor(c.price*(1-saleDiscount/100)):c.price)}</div><div style={{display:"flex",flexDirection:"column",gap:3,width:"100%"}}><div style={{display:"flex",gap:3}}><button disabled={!ok} onClick={()=>doOpen(c)} style={{...S.btn,background:ok?c.color:"#333",color:"#fff",flex:2,padding:"clamp(5px,1.2vw,8px) 0",fontSize:"clamp(9px,2.3vw,12px)"}}>Open</button><button disabled={st.bal<cP*10||c.id==="epstein"} onClick={()=>{if(c.id==="epstein"){setToast({msg:"No bulk opening for this case",color:"#eb4b4b"});return}doMultiOpen(c,10)}} style={{...S.btn,background:st.bal>=cP*10?c.color+"aa":"#222",color:st.bal>=cP*10?"#fff":"#555",flex:1,padding:"clamp(5px,1.2vw,8px) 0",fontSize:"clamp(8px,2vw,10px)"}}>x10</button></div><button onClick={()=>{setInspecting(c);setPage("inspect")}} style={{...S.btn,background:"#ffffff06",color:"#666",padding:"3px 0",fontSize:"clamp(8px,2vw,10px)"}}>Inspect</button></div></div>)})}</div></div>}
@@ -1002,73 +1002,159 @@ function App(){
     </div>}
 
     {/* SCHOOL */}
-    {page==="school"&&<div style={{...S.body,maxWidth:700,margin:"0 auto"}}>
-      <div style={{fontSize:"clamp(16px,4vw,22px)",fontWeight:800,marginBottom:12,display:"flex",alignItems:"center",gap:8}}><MI n="school" s={24}/> Turebergsskolan</div>
+    {page==="school"&&(()=>{
+      const wMap={"clearsky_day":"wb_sunny","clearsky_night":"nights_stay","fair_day":"wb_sunny","fair_night":"nights_stay","partlycloudy_day":"partly_cloudy_day","partlycloudy_night":"partly_cloudy_night","cloudy":"cloud","rain":"rainy","lightrain":"grain","heavyrain":"thunderstorm","sleet":"weather_mix","snow":"ac_unit","lightsnow":"ac_unit","heavysnow":"ac_unit","snowshowers_day":"ac_unit","snowshowers_night":"ac_unit","rainshowers_day":"rainy","rainshowers_night":"rainy","thunder":"thunderstorm","rainandthunder":"thunderstorm","fog":"foggy"};
+      const wIcon=(s)=>{if(!s)return"cloud";const k=s.toLowerCase().replace(/_polartwilight|_(day|night)$/,"");return wMap[k]||wMap[s.toLowerCase()]||"cloud"};
+      const wColor=(s)=>{if(!s)return"#94a3b8";const sl=s.toLowerCase();if(sl.includes("clear"))return"#fbbf24";if(sl.includes("fair"))return"#facc15";if(sl.includes("rain")||sl.includes("shower"))return"#3b82f6";if(sl.includes("snow")||sl.includes("sleet"))return"#bae6fd";if(sl.includes("thunder"))return"#a855f7";if(sl.includes("fog"))return"#64748b";if(sl.includes("cloudy"))return"#94a3b8";return"#94a3b8"};
+      const windDir=(deg)=>{if(deg===undefined||deg===null)return"–";const dirs=["N","NNE","NE","ENE","E","ESE","SE","SSE","S","SSW","SW","WSW","W","WNW","NW","NNW"];return dirs[Math.round(deg/22.5)%16]};
+      const fmtTime=(iso)=>{if(!iso)return"–";const d=new Date(iso);return d.toLocaleTimeString("sv-SE",{hour:"2-digit",minute:"2-digit",timeZone:"Europe/Stockholm"})};
+      const uvLabel=(u)=>{if(u===undefined||u===null)return"–";if(u<3)return"Low";if(u<6)return"Moderate";if(u<8)return"High";if(u<11)return"Very High";return"Extreme"};
+      const uvColor=(u)=>{if(u===undefined||u===null)return"#888";if(u<3)return"#4ade80";if(u<6)return"#fbbf24";if(u<8)return"#fb923c";if(u<11)return"#dc2626";return"#a855f7"};
+      const pollenLabel=(l)=>["None","Trace","Low","Moderate","High","Very High","Extreme"][l]||"?";
+      const pollenColor=(l)=>["#475569","#a3a3a3","#4ade80","#fbbf24","#fb923c","#dc2626","#a855f7"][l]||"#888";
+      const toggle=(k)=>setExpandedSection(p=>({...p,[k]:!p[k]}));
+      const c=weatherData?.current||{};
+      const w=weatherData||{};
+      return <div style={{...S.body,maxWidth:720,margin:"0 auto"}}>
+        <div style={{fontSize:"clamp(16px,4vw,22px)",fontWeight:800,marginBottom:12,display:"flex",alignItems:"center",gap:8}}><MI n="school" s={26} c="#3b82f6"/> Turebergsskolan</div>
 
-      {/* Weather card */}
-      {weatherData?.ok?(()=>{
-        // Map met.no symbol_codes to emoji approximations
-        const symEmoji=(s)=>{if(!s)return"☁️";const sl=s.toLowerCase();if(sl.includes("clear"))return"☀️";if(sl.includes("fair")||sl.includes("partlycloudy"))return"⛅";if(sl.includes("snow"))return"❄️";if(sl.includes("rain"))return"🌧️";if(sl.includes("sleet"))return"🌨️";if(sl.includes("thunder"))return"⛈️";if(sl.includes("fog"))return"🌫️";if(sl.includes("cloudy"))return"☁️";return"⛅"};
-        const c=weatherData.current||{};
-        return <div style={{background:"linear-gradient(135deg,#1e3a8a 0%,#0d1117 100%)",borderRadius:12,padding:"clamp(12px,3vw,18px)",marginBottom:14,border:"1px solid #1e2430"}}>
+        {/* SMHI WARNINGS */}
+        {smhiWarnings?.warnings?.length>0&&<div style={{marginBottom:14}}>
+          {smhiWarnings.warnings.map((wn,i)=>{
+            const lvlColor=wn.level==="RED"?"#dc2626":wn.level==="ORANGE"?"#fb923c":"#fbbf24";
+            return <div key={i} onClick={()=>toggle("warn"+i)} style={{background:lvlColor+"15",border:"1px solid "+lvlColor+"55",borderLeft:"4px solid "+lvlColor,borderRadius:8,padding:"10px 12px",marginBottom:6,cursor:"pointer",animation:"slideIn .3s"}}>
+              <div style={{display:"flex",alignItems:"center",gap:8}}>
+                <MI n="warning" s={20} c={lvlColor}/>
+                <div style={{flex:1}}>
+                  <div style={{color:lvlColor,fontWeight:800,fontSize:12}}>{wn.event}</div>
+                  <div style={{color:"#cbd5e1",fontSize:10}}>{wn.area} · {wn.level_label||wn.level}</div>
+                </div>
+                <MI n={expandedSection["warn"+i]?"expand_less":"expand_more"} s={20} c="#888"/>
+              </div>
+              {expandedSection["warn"+i]&&<div style={{marginTop:8,paddingTop:8,borderTop:"1px solid "+lvlColor+"33",color:"#cbd5e1",fontSize:11,lineHeight:1.5}}>
+                {wn.description}
+                {wn.startDate&&<div style={{color:"#94a3b8",fontSize:10,marginTop:6}}>From: {new Date(wn.startDate).toLocaleString("sv-SE")}</div>}
+                {wn.endDate&&<div style={{color:"#94a3b8",fontSize:10}}>Until: {new Date(wn.endDate).toLocaleString("sv-SE")}</div>}
+              </div>}
+            </div>;
+          })}
+        </div>}
+
+        {/* WEATHER MAIN CARD */}
+        {w.ok?<div onClick={()=>toggle("wmain")} style={{background:"linear-gradient(135deg,#1e3a8a 0%,#0d1117 100%)",borderRadius:12,padding:"clamp(14px,3vw,20px)",marginBottom:14,border:"1px solid #1e2430",cursor:"pointer",transition:"transform .15s",animation:"fadeUp .4s"}}>
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
-            <div style={{display:"flex",alignItems:"center",gap:12}}>
-              <div style={{fontSize:"clamp(40px,9vw,56px)",lineHeight:1}}>{symEmoji(c.symbol)}</div>
+            <div style={{display:"flex",alignItems:"center",gap:14}}>
+              <MI n={wIcon(c.symbol)} s={64} c={wColor(c.symbol)} f={{filter:"drop-shadow(0 4px 12px "+wColor(c.symbol)+"44)"}}/>
               <div>
-                <div style={{fontSize:"clamp(24px,6vw,36px)",fontWeight:800,color:"#fff"}}>{c.temp!==undefined?Math.round(c.temp)+"°C":"–"}</div>
-                <div style={{fontSize:11,color:"#cbd5e1",textTransform:"capitalize"}}>{(c.symbol||"").replace(/_/g," ")}</div>
+                <div style={{fontSize:"clamp(26px,7vw,42px)",fontWeight:800,color:"#fff",lineHeight:1}}>{c.temp!==undefined?Math.round(c.temp)+"°":"–"}</div>
+                <div style={{fontSize:11,color:"#cbd5e1",textTransform:"capitalize",marginTop:4}}>{(c.symbol||"").replace(/_/g," ").replace(/(day|night)$/,"").trim()}</div>
+                {c.rainStopsAt&&<div style={{color:"#60a5fa",fontSize:10,marginTop:2,display:"flex",alignItems:"center",gap:3}}><MI n="umbrella" s={11} c="#60a5fa"/> Rain stops at {fmtTime(c.rainStopsAt)}</div>}
+                {!c.rainStopsAt&&c.rainStartsAt&&<div style={{color:"#fbbf24",fontSize:10,marginTop:2,display:"flex",alignItems:"center",gap:3}}><MI n="water_drop" s={11} c="#fbbf24"/> Rain starts at {fmtTime(c.rainStartsAt)}</div>}
               </div>
             </div>
-            <div style={{display:"flex",gap:12,fontSize:11,color:"#cbd5e1"}}>
-              {c.wind!==undefined&&<div><div style={{color:"#888",fontSize:9}}>WIND</div><div>{c.wind.toFixed(1)} m/s</div></div>}
-              {c.humidity!==undefined&&<div><div style={{color:"#888",fontSize:9}}>HUMIDITY</div><div>{Math.round(c.humidity)}%</div></div>}
-              {c.precip>0&&<div><div style={{color:"#888",fontSize:9}}>RAIN</div><div>{c.precip}mm</div></div>}
+            <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:8,fontSize:11,color:"#cbd5e1"}}>
+              {c.wind!==undefined&&<div style={{display:"flex",alignItems:"center",gap:4}}><MI n="air" s={14} c="#888"/><div><div style={{color:"#888",fontSize:9}}>WIND</div><div>{c.wind.toFixed(1)} m/s {windDir(c.wind_dir)}</div></div></div>}
+              {c.humidity!==undefined&&<div style={{display:"flex",alignItems:"center",gap:4}}><MI n="water_drop" s={14} c="#60a5fa"/><div><div style={{color:"#888",fontSize:9}}>HUMIDITY</div><div>{Math.round(c.humidity)}%</div></div></div>}
+              {c.uv!==undefined&&<div style={{display:"flex",alignItems:"center",gap:4}}><MI n="wb_sunny" s={14} c={uvColor(c.uv)}/><div><div style={{color:"#888",fontSize:9}}>UV</div><div style={{color:uvColor(c.uv)}}>{c.uv.toFixed(1)} {uvLabel(c.uv)}</div></div></div>}
+              {c.pressure!==undefined&&<div style={{display:"flex",alignItems:"center",gap:4}}><MI n="speed" s={14} c="#888"/><div><div style={{color:"#888",fontSize:9}}>PRESSURE</div><div>{Math.round(c.pressure)} hPa</div></div></div>}
             </div>
           </div>
-          {weatherData.hourly?.length>0&&<div style={{marginTop:12,paddingTop:12,borderTop:"1px solid #1e293b"}}>
-            <div style={{fontSize:10,color:"#888",fontWeight:700,marginBottom:6}}>NEXT 12 HOURS</div>
-            <div style={{display:"flex",gap:6,overflowX:"auto",paddingBottom:2}}>
-              {weatherData.hourly.slice(0,12).map((h,i)=><div key={i} style={{flexShrink:0,textAlign:"center",background:"#0d1117",borderRadius:8,padding:"6px 8px",minWidth:50,border:"1px solid #1e2430"}}>
-                <div style={{fontSize:9,color:"#888"}}>{new Date(h.time).getHours().toString().padStart(2,"0")}:00</div>
-                <div style={{fontSize:18}}>{symEmoji(h.symbol)}</div>
-                <div style={{fontSize:10,fontWeight:700,color:"#fff"}}>{h.temp!==undefined?Math.round(h.temp)+"°":"–"}</div>
-              </div>)}
-            </div>
+          <div style={{marginTop:10,paddingTop:10,borderTop:"1px solid #1e293b",display:"flex",justifyContent:"center",alignItems:"center",gap:6,color:"#64748b",fontSize:10}}>
+            <MI n={expandedSection.wmain?"expand_less":"expand_more"} s={16}/>
+            <span>Tap for more details</span>
+          </div>
+          {expandedSection.wmain&&<div onClick={e=>e.stopPropagation()} style={{marginTop:10,paddingTop:10,borderTop:"1px solid #1e293b",display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(120px,1fr))",gap:8,fontSize:11,color:"#cbd5e1",animation:"fadeUp .25s"}}>
+            {c.wind_gust!==undefined&&<div style={{background:"#0d1117",borderRadius:6,padding:8}}><div style={{color:"#888",fontSize:9}}><MI n="air" s={10}/> WIND GUST</div><div style={{fontWeight:700,marginTop:2}}>{c.wind_gust.toFixed(1)} m/s</div></div>}
+            {c.wind_dir!==undefined&&<div style={{background:"#0d1117",borderRadius:6,padding:8}}><div style={{color:"#888",fontSize:9}}><MI n="explore" s={10}/> WIND FROM</div><div style={{display:"flex",alignItems:"center",gap:4,marginTop:2}}><MI n="navigation" s={16} c="#60a5fa" f={{transform:"rotate("+(c.wind_dir+180)+"deg)",transformOrigin:"center"}}/><span style={{fontWeight:700}}>{windDir(c.wind_dir)} ({Math.round(c.wind_dir)}°)</span></div></div>}
+            {c.dew_point!==undefined&&<div style={{background:"#0d1117",borderRadius:6,padding:8}}><div style={{color:"#888",fontSize:9}}><MI n="opacity" s={10}/> DEW POINT</div><div style={{fontWeight:700,marginTop:2}}>{c.dew_point.toFixed(1)}°C</div></div>}
+            {c.cloud!==undefined&&<div style={{background:"#0d1117",borderRadius:6,padding:8}}><div style={{color:"#888",fontSize:9}}><MI n="cloud" s={10}/> CLOUD COVER</div><div style={{fontWeight:700,marginTop:2}}>{Math.round(c.cloud)}%</div></div>}
+            {c.precip>0&&<div style={{background:"#0d1117",borderRadius:6,padding:8}}><div style={{color:"#888",fontSize:9}}><MI n="water_drop" s={10}/> PRECIP NOW</div><div style={{fontWeight:700,marginTop:2,color:"#60a5fa"}}>{c.precip}mm/h</div></div>}
+            {c.precip_prob>0&&<div style={{background:"#0d1117",borderRadius:6,padding:8}}><div style={{color:"#888",fontSize:9}}><MI n="percent" s={10}/> RAIN CHANCE</div><div style={{fontWeight:700,marginTop:2}}>{Math.round(c.precip_prob)}%</div></div>}
+            {w.sun?.sunrise&&<div style={{background:"#0d1117",borderRadius:6,padding:8}}><div style={{color:"#888",fontSize:9}}><MI n="wb_twilight" s={10}/> SUNRISE</div><div style={{fontWeight:700,marginTop:2,color:"#fbbf24"}}>{fmtTime(w.sun.sunrise)}</div></div>}
+            {w.sun?.sunset&&<div style={{background:"#0d1117",borderRadius:6,padding:8}}><div style={{color:"#888",fontSize:9}}><MI n="nights_stay" s={10}/> SUNSET</div><div style={{fontWeight:700,marginTop:2,color:"#fb923c"}}>{fmtTime(w.sun.sunset)}</div></div>}
           </div>}
-          {weatherData.daily?.length>0&&<div style={{marginTop:10,paddingTop:10,borderTop:"1px solid #1e293b"}}>
-            <div style={{fontSize:10,color:"#888",fontWeight:700,marginBottom:6}}>7-DAY FORECAST</div>
-            <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
-              {weatherData.daily.slice(0,7).map((d,i)=>{const dt=new Date(d.date);return <div key={i} style={{flex:"1 1 60px",textAlign:"center",background:"#0d1117",borderRadius:6,padding:"5px 4px",border:"1px solid #1e2430"}}>
-                <div style={{fontSize:9,color:"#888"}}>{i===0?"Today":dt.toLocaleDateString("sv-SE",{weekday:"short"})}</div>
-                <div style={{fontSize:16}}>{symEmoji(d.symbol)}</div>
-                <div style={{fontSize:10,fontWeight:700,color:"#fff"}}>{d.temp!==undefined?Math.round(d.temp)+"°":"–"}</div>
-              </div>})}
-            </div>
-          </div>}
-        </div>;
-      })():weatherData?<div style={{color:"#888",fontSize:11,padding:10,textAlign:"center",background:"#0d1117",borderRadius:8,marginBottom:14}}>Weather unavailable: {weatherData.error||"unknown"}</div>:<div style={{color:"#555",fontSize:11,padding:10,textAlign:"center",background:"#0d1117",borderRadius:8,marginBottom:14}}>Loading weather...</div>}
+        </div>:<div style={{color:"#555",fontSize:11,padding:14,textAlign:"center",background:"#0d1117",borderRadius:8,marginBottom:14}}>Loading weather...</div>}
 
-      {/* Lunch menu */}
-      <div style={{background:"#0d1117",border:"1px solid #1e2430",borderRadius:12,padding:"clamp(12px,3vw,18px)"}}>
-        <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
-          <div style={{fontSize:14,fontWeight:700,color:"#f59e0b"}}>🍽️ School Lunch</div>
-          <button onClick={()=>{setSchoolData(null);setSchoolLoading(true);api("/school/menu",{slug:"sollentuna-international-school"}).then(r=>{setSchoolData(r||{weeks:[]});setSchoolLoading(false)})}} style={{...S.btn,background:"#ffffff08",color:"#888",fontSize:9}}>Refresh</button>
-        </div>
-        {schoolLoading?<div style={{color:"#555",fontSize:11,textAlign:"center",padding:20}}>Loading menu...</div>:
-         schoolData?.weeks?.length>0?<div style={{display:"flex",flexDirection:"column",gap:8}}>
-          {schoolData.weeks.slice(0,10).map((wk,i)=><div key={i} style={{background:"#080a0e",borderRadius:8,padding:"10px 12px",border:"1px solid #1e2430"}}>
-            <div style={{fontSize:11,color:"#4ade80",fontWeight:700,marginBottom:4}}>{wk.title||"Untitled"}</div>
-            {wk.pubDate&&<div style={{fontSize:9,color:"#666",marginBottom:6}}>{wk.pubDate}</div>}
-            <div style={{fontSize:11,color:"#ccc",whiteSpace:"pre-line",lineHeight:1.5}}>{wk.description.replace(/<[^>]+>/g,"\n").replace(/\n+/g,"\n").trim()}</div>
-          </div>)}
-        </div>:<div style={{color:"#555",fontSize:11,textAlign:"center",padding:20}}>
-          {schoolData?.error||"No menu available."}
-          <div style={{marginTop:8,fontSize:9,color:"#666"}}>The school slug might be different. Check skolmaten.se for the correct URL.</div>
+        {/* HOURLY FORECAST */}
+        {w.hourly?.length>0&&<div style={{background:"#0d1117",border:"1px solid #1e2430",borderRadius:12,padding:"12px 14px",marginBottom:14}}>
+          <div onClick={()=>toggle("hr")} style={{display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer",marginBottom:8}}>
+            <div style={{display:"flex",alignItems:"center",gap:6,fontSize:12,fontWeight:700,color:"#cbd5e1"}}><MI n="schedule" s={16} c="#60a5fa"/> Next {expandedSection.hr?"24":"12"} Hours</div>
+            <MI n={expandedSection.hr?"expand_less":"expand_more"} s={18} c="#888"/>
+          </div>
+          <div style={{display:"flex",gap:6,overflowX:"auto",paddingBottom:4}}>
+            {w.hourly.slice(0,expandedSection.hr?24:12).map((h,i)=><div key={i} style={{flexShrink:0,textAlign:"center",background:"#080a0e",borderRadius:8,padding:"6px 10px",minWidth:64,border:"1px solid #1e2430"}}>
+              <div style={{fontSize:9,color:"#888"}}>{new Date(h.time).getHours().toString().padStart(2,"0")}:00</div>
+              <MI n={wIcon(h.symbol)} s={24} c={wColor(h.symbol)}/>
+              <div style={{fontSize:11,fontWeight:700,color:"#fff",marginTop:2}}>{h.temp!==undefined?Math.round(h.temp)+"°":"–"}</div>
+              {h.precip>0&&<div style={{fontSize:8,color:"#60a5fa",marginTop:1}}><MI n="water_drop" s={8} c="#60a5fa"/>{h.precip}</div>}
+              {h.precip_prob>0&&h.precip===0&&<div style={{fontSize:8,color:"#94a3b8",marginTop:1}}>{Math.round(h.precip_prob)}%</div>}
+            </div>)}
+          </div>
         </div>}
-      </div>
-    </div>}
 
-        {/* BLACKJACK */}
+        {/* 7-DAY FORECAST */}
+        {w.daily?.length>0&&<div style={{background:"#0d1117",border:"1px solid #1e2430",borderRadius:12,padding:"12px 14px",marginBottom:14}}>
+          <div style={{display:"flex",alignItems:"center",gap:6,fontSize:12,fontWeight:700,color:"#cbd5e1",marginBottom:8}}><MI n="calendar_today" s={16} c="#60a5fa"/> 7-Day Forecast</div>
+          <div style={{display:"flex",flexDirection:"column",gap:4}}>
+            {w.daily.slice(0,7).map((d,i)=>{const dt=new Date(d.date);return <div key={i} style={{display:"grid",gridTemplateColumns:"60px 32px 1fr 60px",gap:8,alignItems:"center",padding:"6px 8px",background:"#080a0e",borderRadius:6,fontSize:11}}>
+              <div style={{color:"#cbd5e1",fontWeight:700}}>{i===0?"Today":dt.toLocaleDateString("sv-SE",{weekday:"short"})}</div>
+              <MI n={wIcon(d.symbol)} s={20} c={wColor(d.symbol)}/>
+              <div style={{display:"flex",alignItems:"center",gap:4,color:"#888",fontSize:10}}>
+                {d.precip>0&&<><MI n="water_drop" s={10} c="#60a5fa"/><span>{d.precip}mm</span></>}
+                {d.wind!==undefined&&<><MI n="air" s={10}/><span>{d.wind.toFixed(1)}m/s</span></>}
+              </div>
+              <div style={{textAlign:"right",color:"#fff",fontWeight:700}}>
+                {d.temp_max!==undefined?Math.round(d.temp_max)+"°":"–"}<span style={{color:"#64748b",marginLeft:4}}>{d.temp_min!==undefined?Math.round(d.temp_min)+"°":"–"}</span>
+              </div>
+            </div>;})}
+          </div>
+        </div>}
+
+        {/* POLLEN */}
+        {pollenData?.today?.length>0&&<div onClick={()=>toggle("pol")} style={{background:"#0d1117",border:"1px solid #1e2430",borderRadius:12,padding:"12px 14px",marginBottom:14,cursor:"pointer"}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
+            <div style={{display:"flex",alignItems:"center",gap:6,fontSize:12,fontWeight:700,color:"#cbd5e1"}}><MI n="grass" s={16} c="#4ade80"/> Pollen · {pollenData.region}</div>
+            <MI n={expandedSection.pol?"expand_less":"expand_more"} s={18} c="#888"/>
+          </div>
+          <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
+            {pollenData.today.slice(0,expandedSection.pol?20:6).map((p,i)=><div key={i} style={{background:pollenColor(p.level)+"22",border:"1px solid "+pollenColor(p.level)+"55",borderRadius:6,padding:"4px 8px",fontSize:10,color:pollenColor(p.level),fontWeight:700,display:"flex",alignItems:"center",gap:4}}>
+              <span>{p.name}</span>
+              <span style={{background:pollenColor(p.level),color:"#000",borderRadius:3,padding:"0 4px",fontSize:9}}>{pollenLabel(p.level)}</span>
+            </div>)}
+          </div>
+          {expandedSection.pol&&pollenData.text&&<div style={{marginTop:8,paddingTop:8,borderTop:"1px solid #1e293b",fontSize:11,color:"#cbd5e1",lineHeight:1.4}}>{pollenData.text}</div>}
+        </div>}
+
+        {/* LUNCH MENU */}
+        <div style={{background:"#0d1117",border:"1px solid #1e2430",borderRadius:12,padding:"clamp(12px,3vw,18px)"}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
+            <div style={{display:"flex",alignItems:"center",gap:6,fontSize:13,fontWeight:700,color:"#f59e0b"}}><MI n="restaurant" s={18} c="#f59e0b"/> School Lunch</div>
+            <button onClick={()=>{setSchoolData(null);setSchoolLoading(true);api("/school/menu",{slug:"sollentuna-international-school"}).then(r=>{setSchoolData(r||{weeks:[]});setSchoolLoading(false)})}} style={{...S.btn,background:"#ffffff08",color:"#888",fontSize:9,display:"flex",alignItems:"center",gap:3}}><MI n="refresh" s={12}/> Refresh</button>
+          </div>
+          {schoolLoading?<div style={{color:"#555",fontSize:11,textAlign:"center",padding:20}}>Loading menu...</div>:
+           schoolData?.weeks?.length>0?<div style={{display:"flex",flexDirection:"column",gap:8}}>
+            {schoolData.weeks.slice(0,expandedSection.menu?20:5).map((wk,i)=>{const id="menu"+i;const expanded=expandedSection[id];const desc=wk.description.replace(/<[^>]+>/g,"\n").replace(/\n+/g,"\n").trim();return <div key={i} onClick={()=>toggle(id)} style={{background:"#080a0e",borderRadius:8,padding:"10px 12px",border:"1px solid #1e2430",cursor:"pointer"}}>
+              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+                <div>
+                  <div style={{fontSize:11,color:"#4ade80",fontWeight:700}}>{wk.title||"Untitled"}</div>
+                  {wk.pubDate&&<div style={{fontSize:9,color:"#666"}}>{wk.pubDate}</div>}
+                </div>
+                <MI n={expanded?"expand_less":"expand_more"} s={16} c="#888"/>
+              </div>
+              <div style={{fontSize:11,color:"#ccc",whiteSpace:"pre-line",lineHeight:1.5,marginTop:6,maxHeight:expanded?"none":60,overflow:"hidden",position:"relative"}}>
+                {desc}
+                {!expanded&&desc.length>100&&<div style={{position:"absolute",bottom:0,left:0,right:0,height:20,background:"linear-gradient(transparent,#080a0e)"}}/>}
+              </div>
+            </div>;})}
+            {schoolData.weeks.length>5&&<button onClick={()=>toggle("menu")} style={{...S.btn,background:"#ffffff08",color:"#888",fontSize:10,padding:"6px"}}>{expandedSection.menu?"Show fewer":"Show all "+schoolData.weeks.length+" weeks"}</button>}
+          </div>:<div style={{color:"#555",fontSize:11,textAlign:"center",padding:20}}>
+            {schoolData?.error||"No menu available."}
+          </div>}
+        </div>
+      </div>;
+    })()}
+
+                {/* BLACKJACK */}
     {page==="bj"&&<div style={{...S.body,maxWidth:650,margin:"0 auto"}}>
       <div style={{fontSize:"clamp(16px,4vw,22px)",fontWeight:800,marginBottom:8}}>♠ Blackjack</div>
       {bjTable?(()=>{
