@@ -174,7 +174,7 @@ function App(){
   const[dmInbox,setDmInbox]=useState(null);const[dmTo,setDmTo]=useState("");const[dmMsg,setDmMsg]=useState("");const[dmSearch,setDmSearch]=useState("");const[dmResults,setDmResults]=useState([]);const[dmUnread,setDmUnread]=useState(0);
   const[viewProfile,setViewProfile]=useState(null);const[editBio,setEditBio]=useState("");const[editPrivacy,setEditPrivacy]=useState("public");
   const[reportTarget,setReportTarget]=useState("");const[reportReason,setReportReason]=useState("");const[reportMsg,setReportMsg]=useState("");
-  const[toast,setToast]=useState(null);const[reportModal,setReportModal]=useState(null);const[pvpEliminated,setPvpEliminated]=useState(false);const[horseRace,setHorseRace]=useState(null);const[horseAnim,setHorseAnim]=useState(0);const[horseBet,setHorseBet]=useState("");const[horsePick,setHorsePick]=useState(0);const[horseHistory,setHorseHistory]=useState([]);const[multiResults,setMultiResults]=useState(null);const[bjTable,setBjTable]=useState(null);const[bjBet,setBjBet]=useState("10000");const[bjHasCard,setBjHasCard]=useState(false);const[btcPrice,setBtcPrice]=useState(0);const[btcHistory,setBtcHistory]=useState([]);const[btcPortfolio,setBtcPortfolio]=useState({active:[],sold:[]});const[btcInvestAmt,setBtcInvestAmt]=useState("");const[btcDays,setBtcDays]=useState(7);const[btcLastUpdate,setBtcLastUpdate]=useState(0);const[btcNextUpdate,setBtcNextUpdate]=useState(0);const[plinkoBet,setPlinkoBet]=useState("1000");const[plinkoRisk,setPlinkoRisk]=useState("medium");const[plinkoRows,setPlinkoRows]=useState(12);const[plinkoResult,setPlinkoResult]=useState(null);const[plinkoAnim,setPlinkoAnim]=useState(false);const[rouletteBets,setRouletteBets]=useState([]);const[rouletteResult,setRouletteResult]=useState(null);const[rouletteAnim,setRouletteAnim]=useState(false);const[rouletteAmt,setRouletteAmt]=useState("1000");const horseCanvasRef=useRef(null);const horseAnimRef=useRef(null);const syncLockRef=useRef(false);const plinkoCanvasRef=useRef(null);const rouletteCanvasRef=useRef(null);const[pvpWinModal,setPvpWinModal]=useState(null);const[warnModal,setWarnModal]=useState(null);const[banModal,setBanModal]=useState(null);const[banTimer,setBanTimer]=useState("");const[playAllowed,setPlayAllowed]=useState(isPlayTime());
+  const[toast,setToast]=useState(null);const[reportModal,setReportModal]=useState(null);const[pvpEliminated,setPvpEliminated]=useState(false);const[horseRace,setHorseRace]=useState(null);const[horseAnim,setHorseAnim]=useState(0);const[horseBet,setHorseBet]=useState("");const[horsePick,setHorsePick]=useState(0);const[horseHistory,setHorseHistory]=useState([]);const[multiResults,setMultiResults]=useState(null);const[bjTable,setBjTable]=useState(null);const[bjBet,setBjBet]=useState("10000");const[bjHasCard,setBjHasCard]=useState(false);const[btcPrice,setBtcPrice]=useState(0);const[btcHistory,setBtcHistory]=useState([]);const[btcPortfolio,setBtcPortfolio]=useState({active:[],sold:[]});const[btcInvestAmt,setBtcInvestAmt]=useState("");const[btcDays,setBtcDays]=useState(7);const[btcLastUpdate,setBtcLastUpdate]=useState(0);const[btcNextUpdate,setBtcNextUpdate]=useState(0);const[btcTick,setBtcTick]=useState(0);const[plinkoBet,setPlinkoBet]=useState("1000");const[plinkoRisk,setPlinkoRisk]=useState("medium");const[plinkoRows,setPlinkoRows]=useState(12);const[plinkoResult,setPlinkoResult]=useState(null);const[plinkoAnim,setPlinkoAnim]=useState(false);const[rouletteBets,setRouletteBets]=useState([]);const[rouletteResult,setRouletteResult]=useState(null);const[rouletteAnim,setRouletteAnim]=useState(false);const[rouletteAmt,setRouletteAmt]=useState("1000");const horseCanvasRef=useRef(null);const horseAnimRef=useRef(null);const syncLockRef=useRef(false);const plinkoCanvasRef=useRef(null);const rouletteCanvasRef=useRef(null);const[pvpWinModal,setPvpWinModal]=useState(null);const[warnModal,setWarnModal]=useState(null);const[banModal,setBanModal]=useState(null);const[banTimer,setBanTimer]=useState("");const[playAllowed,setPlayAllowed]=useState(isPlayTime());
   const[events,setEvents]=useState([]);const[dismissedEvents,setDismissedEvents]=useState({});
   const[friendsList,setFriendsList]=useState([]);
   function showProfile(username){if(!username||username==="Anon"||username==="SYSTEM")return;api("/profile/full",{target:username.toLowerCase(),username:account?.username||""}).then(r=>{if(r?.profile)setViewProfile(r.profile)}).catch(()=>{})}
@@ -410,25 +410,15 @@ function App(){
         }
       });
     };
-    const updateCountdown=()=>{
-      const now=Date.now();
-      const msPastMinute=now%60000;
-      setBtcNextUpdate(now+(60000-msPastMinute));
-    };
-    // Schedule first refresh at next minute boundary
     const scheduleNext=()=>{
       const now=Date.now();
       const msUntilMinute=60000-(now%60000);
-      timerId=setTimeout(()=>{
-        doRefresh();
-        updateCountdown();
-        scheduleNext();
-      },msUntilMinute);
+      timerId=setTimeout(()=>{doRefresh();scheduleNext()},msUntilMinute);
     };
-    updateCountdown();
+    setBtcNextUpdate(Date.now()+(60000-(Date.now()%60000)));
     scheduleNext();
-    // Update countdown display every second
-    nextTimer=setInterval(updateCountdown,1000);
+    // Tick every second to force re-render of countdown
+    nextTimer=setInterval(()=>setBtcTick(t=>t+1),1000);
     return()=>{if(timerId)clearTimeout(timerId);if(nextTimer)clearInterval(nextTimer)};
   },[page]);
   const activeSale=events.find(e=>e.type==="sale"&&e.discount>0);const saleDiscount=activeSale?activeSale.discount:0;
@@ -1075,7 +1065,7 @@ function App(){
           <div><div style={{color:"#888",fontSize:9}}>BTC PRICE</div><div style={{color:"#f59e0b",fontSize:"clamp(20px,5vw,28px)",fontWeight:800}}>${btcPrice.toLocaleString(undefined,{maximumFractionDigits:0})}</div></div>
           <div style={{display:"flex",gap:4}}>{[1,7,30,90].map(d=><button key={d} onClick={()=>setBtcDays(d)} style={{...S.btn,background:btcDays===d?"#f59e0b22":"#ffffff08",color:btcDays===d?"#f59e0b":"#666",padding:"3px 8px",fontSize:9}}>{d}D</button>)}</div>
         </div>
-        {prices.length>2&&!isNaN(minP)&&!isNaN(maxP)&&<svg width={chartW} height={chartH} style={{display:"block",marginBottom:12}}><defs><linearGradient id="btcG" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#f59e0b" stopOpacity=".2"/><stop offset="100%" stopColor="#f59e0b" stopOpacity="0"/></linearGradient></defs><polygon points={"0,"+chartH+" "+pts+" "+chartW+","+chartH} fill="url(#btcG)"/><polyline points={pts} fill="none" stroke="#f59e0b" strokeWidth="2"/>{prices.length>0&&<circle cx={chartW} cy={parseFloat(pts.split(" ").pop().split(",")[1])} r="3" fill="#f59e0b"/>}</svg>}
+        {prices.length>2&&!isNaN(minP)&&!isNaN(maxP)?<svg width={chartW} height={chartH} style={{display:"block",marginBottom:12}}><defs><linearGradient id="btcG" x1="0" y1="0" x2="0" y2="1"><stop offset="0%" stopColor="#f59e0b" stopOpacity=".2"/><stop offset="100%" stopColor="#f59e0b" stopOpacity="0"/></linearGradient></defs><polygon points={"0,"+chartH+" "+pts+" "+chartW+","+chartH} fill="url(#btcG)"/><polyline points={pts} fill="none" stroke="#f59e0b" strokeWidth="2"/>{prices.length>0&&<circle cx={chartW} cy={parseFloat(pts.split(" ").pop().split(",")[1])} r="3" fill="#f59e0b"/>}</svg>:<div style={{width:chartW,height:chartH,marginBottom:12,background:"#0d1117",border:"1px dashed #1e2430",borderRadius:8,display:"flex",alignItems:"center",justifyContent:"center",color:"#555",fontSize:11}}>Loading chart...</div>}
         <div style={{display:"flex",gap:6,marginBottom:12,flexWrap:"wrap",alignItems:"center"}}>
           <input value={btcInvestAmt} onChange={e=>setBtcInvestAmt(e.target.value.replace(/[^0-9]/g,""))} placeholder="$ Amount" style={{...S.btn,background:"#0d1117",border:"1px solid #333",padding:"8px 12px",width:120,textAlign:"center",color:"#e2e8f0"}}/>
           {[10000,50000,100000,500000].map(a=><button key={a} onClick={()=>setBtcInvestAmt(String(a))} style={{...S.btn,background:"#ffffff08",color:"#888",padding:"3px 8px",fontSize:9}}>{money(a)}</button>)}
