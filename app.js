@@ -878,39 +878,73 @@ function App(){
         <div style={{position:"relative",width:"min(320px,90vw)",height:"min(320px,90vw)"}}>
           <canvas ref={rouletteCanvasRef} style={{width:"100%",height:"100%",display:"block"}}/>
         </div>
-        {rouletteResult&&<div className="bounceIn" style={{padding:"6px 16px",borderRadius:8,background:rouletteResult.color==="red"?"#eb4b4b":rouletteResult.color==="black"?"#222":"#4ade80",color:"#fff",fontSize:18,fontWeight:800}}>
-          {rouletteResult.number} {rouletteResult.color.toUpperCase()} {rouletteResult.profit>=0?" · +":" · -"}{money(Math.abs(rouletteResult.profit))}
+        {rouletteResult&&<div className="bounceIn" style={{padding:"8px 20px",borderRadius:8,background:rouletteResult.profit>=0?"#16a34a":"#7f1d1d",color:"#fff",fontSize:18,fontWeight:800,display:"flex",alignItems:"center",gap:10}}>
+          <span style={{background:rouletteResult.color==="red"?"#dc2626":rouletteResult.color==="black"?"#000":"#16a34a",padding:"2px 10px",borderRadius:6,minWidth:30,textAlign:"center"}}>{rouletteResult.number}</span>
+          <span>{rouletteResult.profit>0?"WIN +":rouletteResult.profit===0?"PUSH ":"LOSE -"}{money(Math.abs(rouletteResult.profit))}</span>
         </div>}
       </div>
-      <div style={{display:"flex",gap:6,marginTop:12,alignItems:"center",justifyContent:"center"}}>
-        <span style={{color:"#888",fontSize:11}}>Bet:</span>
-        <input value={rouletteAmt} onChange={e=>setRouletteAmt(e.target.value.replace(/[^0-9]/g,""))} placeholder="100" style={{...S.input,width:100,textAlign:"center"}}/>
-        {[100,1000,10000,100000].map(q=><button key={q} onClick={()=>setRouletteAmt(String(q))} style={{...S.btn,background:"#0d1117",border:"1px solid #1e2430",padding:"4px 8px",fontSize:10,color:"#aaa"}}>{q>=1000?(q/1000)+"K":q}</button>)}
+
+      {/* Bet amount selector */}
+      <div style={{display:"flex",gap:6,marginTop:12,alignItems:"center",justifyContent:"center",flexWrap:"wrap"}}>
+        <span style={{color:"#888",fontSize:11}}>Chip:</span>
+        <input value={rouletteAmt} onChange={e=>setRouletteAmt(e.target.value.replace(/[^0-9]/g,""))} placeholder="100" style={{...S.input,width:90,textAlign:"center"}}/>
+        {[100,1000,10000,100000,1000000].map(q=><button key={q} onClick={()=>setRouletteAmt(String(q))} style={{...S.btn,background:rouletteAmt===String(q)?"#f59e0b22":"#0d1117",border:"1px solid "+(rouletteAmt===String(q)?"#f59e0b":"#1e2430"),padding:"4px 8px",fontSize:10,color:rouletteAmt===String(q)?"#f59e0b":"#aaa"}}>{q>=1000?(q/1000)+"K":q}</button>)}
       </div>
-      {/* Betting board */}
-      <div style={{marginTop:10,maxWidth:600,margin:"10px auto 0"}}>
-        {/* Numbers grid: 3 rows × 12 columns */}
-        <div style={{display:"flex",gap:2}}>
-          <button onClick={()=>{const amt=parseInt(rouletteAmt);if(!amt||amt<100){setToast({msg:"Min $100",color:"#eb4b4b"});return}setRouletteBets(b=>[...b,{type:"number",value:0,amount:amt}])}} style={{background:"#16a34a",color:"#fff",border:"none",padding:"8px 4px",borderRadius:3,fontSize:11,fontWeight:700,cursor:"pointer",width:30,writingMode:"vertical-rl",textOrientation:"mixed"}}>0</button>
-          <div style={{display:"grid",gridTemplateColumns:"repeat(12,1fr)",gap:2,flex:1}}>
-            {[3,6,9,12,15,18,21,24,27,30,33,36,2,5,8,11,14,17,20,23,26,29,32,35,1,4,7,10,13,16,19,22,25,28,31,34].map(n=><button key={n} onClick={()=>{const amt=parseInt(rouletteAmt);if(!amt||amt<100){setToast({msg:"Min $100",color:"#eb4b4b"});return}setRouletteBets(b=>[...b,{type:"number",value:n,amount:amt}])}} style={{background:[1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36].includes(n)?"#dc2626":"#1f2937",color:"#fff",border:"none",padding:"8px 2px",borderRadius:3,fontSize:11,fontWeight:700,cursor:"pointer"}}>{n}</button>)}
+
+      {/* Helper to add a bet (or stack on existing) */}
+      {(()=>{
+        const addBet=(type,value)=>{
+          if(rouletteAnim){setToast({msg:"Wait for spin",color:"#eb4b4b"});return}
+          const amt=parseInt(rouletteAmt);
+          if(!amt||amt<100){setToast({msg:"Min $100",color:"#eb4b4b"});return}
+          const total=rouletteBets.reduce((s,b)=>s+b.amount,0);
+          if(total+amt>st.bal){setToast({msg:"Not enough",color:"#eb4b4b"});return}
+          setRouletteBets(b=>{
+            const idx=b.findIndex(x=>x.type===type&&String(x.value)===String(value));
+            if(idx>=0){const nb=[...b];nb[idx]={...nb[idx],amount:nb[idx].amount+amt};return nb}
+            return[...b,{type,value,amount:amt}]
+          });
+        };
+        // Get total bet on a specific spot for the chip overlay
+        const betOn=(type,value)=>{const m=rouletteBets.find(b=>b.type===type&&String(b.value)===String(value));return m?m.amount:0};
+        const Chip=({amt})=>amt>0?<div style={{position:"absolute",top:2,right:2,background:"#fbbf24",color:"#000",fontSize:9,fontWeight:800,padding:"1px 4px",borderRadius:6,minWidth:18,textAlign:"center",lineHeight:1.2,border:"1px solid #92400e",pointerEvents:"none"}}>{amt>=1000?Math.floor(amt/1000)+"K":amt}</div>:null;
+
+        return <div style={{marginTop:10,maxWidth:600,margin:"10px auto 0"}}>
+          {/* Number grid + 0 */}
+          <div style={{display:"flex",gap:2}}>
+            <button onClick={()=>addBet("number",0)} style={{background:"#16a34a",color:"#fff",border:"none",padding:"8px 4px",borderRadius:3,fontSize:11,fontWeight:700,cursor:"pointer",width:30,position:"relative"}}>0<Chip amt={betOn("number",0)}/></button>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(12,1fr)",gap:2,flex:1}}>
+              {[3,6,9,12,15,18,21,24,27,30,33,36,2,5,8,11,14,17,20,23,26,29,32,35,1,4,7,10,13,16,19,22,25,28,31,34].map(n=><button key={n} onClick={()=>addBet("number",n)} style={{background:[1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36].includes(n)?"#dc2626":"#1f2937",color:"#fff",border:"none",padding:"8px 2px",borderRadius:3,fontSize:11,fontWeight:700,cursor:"pointer",position:"relative"}}>{n}<Chip amt={betOn("number",n)}/></button>)}
+            </div>
+          </div>
+          {/* Dozens row */}
+          <div style={{display:"grid",gridTemplateColumns:"30px repeat(3,1fr)",gap:2,marginTop:2}}>
+            <div></div>
+            {[["dozen1","1-12 (3x)"],["dozen2","13-24 (3x)"],["dozen3","25-36 (3x)"]].map(([t,l])=><button key={t} onClick={()=>addBet(t,t)} style={{background:"#374151",color:"#fff",border:"none",padding:"8px",borderRadius:3,fontSize:10,fontWeight:700,cursor:"pointer",position:"relative"}}>{l}<Chip amt={betOn(t,t)}/></button>)}
+          </div>
+          {/* Outside bets row */}
+          <div style={{display:"grid",gridTemplateColumns:"30px repeat(6,1fr)",gap:2,marginTop:2}}>
+            <div></div>
+            {[["low","1-18","#374151"],["even","EVEN","#374151"],["red","RED","#dc2626"],["black","BLACK","#1f2937"],["odd","ODD","#374151"],["high","19-36","#374151"]].map(([t,l,bg])=><button key={t} onClick={()=>addBet(t,t)} style={{background:bg,color:"#fff",border:"none",padding:"8px 4px",borderRadius:3,fontSize:10,fontWeight:700,cursor:"pointer",position:"relative"}}>{l} (2x)<Chip amt={betOn(t,t)}/></button>)}
           </div>
         </div>
-        {/* Dozens row */}
-        <div style={{display:"grid",gridTemplateColumns:"30px repeat(3,1fr)",gap:2,marginTop:2}}>
-          <div></div>
-          {[["dozen1","1-12 (3x)"],["dozen2","13-24 (3x)"],["dozen3","25-36 (3x)"]].map(([t,l])=><button key={t} onClick={()=>{const amt=parseInt(rouletteAmt);if(!amt||amt<100){setToast({msg:"Min $100",color:"#eb4b4b"});return}setRouletteBets(b=>[...b,{type:t,value:t,amount:amt}])}} style={{background:"#374151",color:"#fff",border:"none",padding:"8px",borderRadius:3,fontSize:10,fontWeight:700,cursor:"pointer"}}>{l}</button>)}
-        </div>
-        {/* Outside bets row */}
-        <div style={{display:"grid",gridTemplateColumns:"30px repeat(6,1fr)",gap:2,marginTop:2}}>
-          <div></div>
-          {[["low","1-18","#374151"],["even","EVEN","#374151"],["red","RED","#dc2626"],["black","BLACK","#1f2937"],["odd","ODD","#374151"],["high","19-36","#374151"]].map(([t,l,bg])=><button key={t} onClick={()=>{const amt=parseInt(rouletteAmt);if(!amt||amt<100){setToast({msg:"Min $100",color:"#eb4b4b"});return}setRouletteBets(b=>[...b,{type:t,value:t,amount:amt}])}} style={{background:bg,color:"#fff",border:"none",padding:"8px 4px",borderRadius:3,fontSize:10,fontWeight:700,cursor:"pointer"}}>{l} (2x)</button>)}
-        </div>
-      </div>
+      })()}
+
+      {/* Bet summary + actions */}
       {rouletteBets.length>0&&<div style={{marginTop:10,padding:10,background:"#0d1117",borderRadius:8,maxWidth:600,margin:"10px auto 0"}}>
-        <div style={{fontSize:11,color:"#888",marginBottom:6}}>Bets ({rouletteBets.length}) · Total: {money(rouletteBets.reduce((s,b)=>s+b.amount,0))}</div>
+        <div style={{fontSize:11,color:"#888",marginBottom:6,display:"flex",justifyContent:"space-between"}}>
+          <span>Active bets: {rouletteBets.length}</span>
+          <span style={{color:"#fbbf24",fontWeight:700}}>Total: {money(rouletteBets.reduce((s,b)=>s+b.amount,0))}</span>
+        </div>
         <div style={{display:"flex",flexWrap:"wrap",gap:4,marginBottom:8}}>
-          {rouletteBets.map((b,i)=><span key={i} style={{background:"#1e2430",padding:"3px 6px",borderRadius:4,fontSize:10,color:"#ccc"}}>{b.type==="number"?"#"+b.value:b.value.toUpperCase()} {money(b.amount)} <button onClick={()=>setRouletteBets(bs=>bs.filter((_,j)=>j!==i))} style={{background:"transparent",border:"none",color:"#eb4b4b",cursor:"pointer",padding:0,marginLeft:4,fontSize:12,verticalAlign:"middle"}}>×</button></span>)}
+          {rouletteBets.map((b,i)=>{
+            const label=b.type==="number"?"#"+b.value:b.type.replace("dozen","D").toUpperCase();
+            const c=b.type==="red"||(b.type==="number"&&[1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36].includes(b.value))?"#dc2626":b.type==="black"?"#000":b.type==="number"&&b.value===0?"#16a34a":"#374151";
+            return <span key={i} style={{background:c,padding:"3px 8px",borderRadius:4,fontSize:10,color:"#fff",fontWeight:700,display:"inline-flex",alignItems:"center",gap:4}}>
+              {label} · {money(b.amount)}
+              <button onClick={()=>setRouletteBets(bs=>bs.filter((_,j)=>j!==i))} disabled={rouletteAnim} style={{background:"rgba(0,0,0,0.4)",border:"none",color:"#fff",cursor:rouletteAnim?"not-allowed":"pointer",padding:"0 4px",marginLeft:2,borderRadius:3,fontSize:11,lineHeight:1}}>×</button>
+            </span>
+          })}
         </div>
         <div style={{display:"flex",gap:6,justifyContent:"center"}}>
           <button disabled={rouletteAnim} onClick={async()=>{
@@ -920,66 +954,36 @@ function App(){
             setRouletteAnim(true);
             setRouletteResult(null);
             const r=await api("/roulette/spin",{username:account?.username,token:account?.token,bets:rouletteBets});
-            if(!r?.ok){setSt(p=>({...p,bal:p.bal+total}));setRouletteAnim(false);setToast({msg:r?.error||"Failed",color:"#eb4b4b"});return}
+            if(!r?.ok){setSt(p=>({...p,bal:p.bal+total}));setRouletteAnim(false);setToast({msg:r?.error||"Spin failed",color:"#eb4b4b"});return}
             // Animate spin
             const cv=rouletteCanvasRef.current;
             if(!cv){setRouletteAnim(false);return}
             const W=cv.offsetWidth;
             cv.width=W*2;cv.height=W*2;
             const g=cv.getContext("2d");g.scale(2,2);
-            // European roulette wheel order
             const nums=[0,32,15,19,4,21,2,25,17,34,6,27,13,36,11,30,8,23,10,5,24,16,33,1,20,14,31,9,22,18,29,7,28,12,35,3,26];
             const red=new Set([1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36]);
             const segAng=(Math.PI*2)/nums.length;
-            // Static draw uses: a0 = -PI/2 + i*segAng - segAng/2  (so num[0] centered at top when rot=0)
-            // Spin draw will use: a0 = -PI/2 + i*segAng - segAng/2 + rot
-            // At rot=0 it matches static (no jump). To land on targetIdx at top, we need rot such that
-            // (-PI/2 + targetIdx*segAng - segAng/2 + rot) + segAng/2 == -PI/2 (mod 2PI)
-            // i.e. rot == -targetIdx*segAng (mod 2PI)
             const targetIdx=nums.indexOf(r.number);
             const landRot=-targetIdx*segAng;
-            // Add 6 full counter-clockwise spins for visual effect
             const totalRot=-(Math.PI*2*6)+landRot;
             const t0=performance.now();
             const dur=4500;
             const drawWheel=(rot)=>{
               g.clearRect(0,0,W,W);
               const cx=W/2,cy=W/2,rad=W/2-12;
-              // Outer ring
-              g.fillStyle="#3f1a05";
-              g.beginPath();g.arc(cx,cy,W/2-2,0,Math.PI*2);g.fill();
-              // Segments (using same coords as static draw + rot offset)
+              g.fillStyle="#3f1a05";g.beginPath();g.arc(cx,cy,W/2-2,0,Math.PI*2);g.fill();
               nums.forEach((n,i)=>{
                 const a0=-Math.PI/2+i*segAng-segAng/2+rot,a1=a0+segAng;
                 g.beginPath();g.moveTo(cx,cy);g.arc(cx,cy,rad,a0,a1);g.closePath();
-                g.fillStyle=n===0?"#16a34a":red.has(n)?"#dc2626":"#111";
-                g.fill();
+                g.fillStyle=n===0?"#16a34a":red.has(n)?"#dc2626":"#111";g.fill();
                 g.strokeStyle="#000";g.lineWidth=0.5;g.stroke();
-                // Number label
-                g.save();
-                g.translate(cx,cy);
-                g.rotate(a0+segAng/2);
-                g.fillStyle="#fff";
-                g.font="bold "+Math.max(10,W*0.04)+"px sans-serif";
-                g.textAlign="center";
-                g.textBaseline="middle";
-                g.fillText(String(n),rad*0.82,0);
-                g.restore();
+                g.save();g.translate(cx,cy);g.rotate(a0+segAng/2);g.fillStyle="#fff";g.font="bold "+Math.max(10,W*0.04)+"px sans-serif";g.textAlign="center";g.textBaseline="middle";g.fillText(String(n),rad*0.82,0);g.restore();
               });
-              // Center hub
-              g.fillStyle="#2d1505";
-              g.beginPath();g.arc(cx,cy,rad*0.25,0,Math.PI*2);g.fill();
-              g.fillStyle="#f59e0b";
-              g.beginPath();g.arc(cx,cy,rad*0.1,0,Math.PI*2);g.fill();
-              // FIXED pointer at top (NOT rotating with wheel)
-              g.fillStyle="#fbbf24";
-              g.strokeStyle="#000";g.lineWidth=2;
-              g.beginPath();
-              g.moveTo(cx,4);
-              g.lineTo(cx-10,22);
-              g.lineTo(cx+10,22);
-              g.closePath();
-              g.fill();g.stroke();
+              g.fillStyle="#2d1505";g.beginPath();g.arc(cx,cy,rad*0.25,0,Math.PI*2);g.fill();
+              g.fillStyle="#f59e0b";g.beginPath();g.arc(cx,cy,rad*0.1,0,Math.PI*2);g.fill();
+              g.fillStyle="#fbbf24";g.strokeStyle="#000";g.lineWidth=2;
+              g.beginPath();g.moveTo(cx,4);g.lineTo(cx-10,22);g.lineTo(cx+10,22);g.closePath();g.fill();g.stroke();
             };
             const loop=()=>{
               const t=Math.min(1,(performance.now()-t0)/dur);
@@ -989,6 +993,7 @@ function App(){
               if(t<1){requestAnimationFrame(loop)}
               else{
                 setTimeout(()=>{
+                  // Server-determined payout is authoritative
                   setSt(p=>{const ns={...p,bal:p.bal+r.payout};save(ns,drops);return ns});
                   setRouletteResult({number:r.number,color:r.color,payout:r.payout,profit:r.profit});
                   setRouletteBets([]);
@@ -1000,7 +1005,7 @@ function App(){
             };
             loop();
           }} style={{...S.btn,background:rouletteAnim?"#333":"#4ade80",color:"#000",fontWeight:700,padding:"8px 24px"}}>{rouletteAnim?"Spinning...":"SPIN"}</button>
-          <button onClick={()=>setRouletteBets([])} style={{...S.btn,background:"#eb4b4b22",color:"#eb4b4b"}}>Clear</button>
+          <button disabled={rouletteAnim} onClick={()=>setRouletteBets([])} style={{...S.btn,background:"#eb4b4b22",color:"#eb4b4b"}}>Clear All</button>
         </div>
       </div>}
     </div>}
