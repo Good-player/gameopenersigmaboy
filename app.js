@@ -174,7 +174,7 @@ function App(){
   const[dmInbox,setDmInbox]=useState(null);const[dmTo,setDmTo]=useState("");const[dmMsg,setDmMsg]=useState("");const[dmSearch,setDmSearch]=useState("");const[dmResults,setDmResults]=useState([]);const[dmUnread,setDmUnread]=useState(0);
   const[viewProfile,setViewProfile]=useState(null);const[editBio,setEditBio]=useState("");const[editPrivacy,setEditPrivacy]=useState("public");
   const[reportTarget,setReportTarget]=useState("");const[reportReason,setReportReason]=useState("");const[reportMsg,setReportMsg]=useState("");
-  const[toast,setToast]=useState(null);const[reportModal,setReportModal]=useState(null);const[pvpEliminated,setPvpEliminated]=useState(false);const[horseRace,setHorseRace]=useState(null);const[horseAnim,setHorseAnim]=useState(0);const[horseBet,setHorseBet]=useState("");const[horsePick,setHorsePick]=useState(0);const[horseHistory,setHorseHistory]=useState([]);const[multiResults,setMultiResults]=useState(null);const[bjTable,setBjTable]=useState(null);const[bjBet,setBjBet]=useState("10000");const[bjHasCard,setBjHasCard]=useState(false);const[btcPrice,setBtcPrice]=useState(0);const[btcHistory,setBtcHistory]=useState([]);const[btcPortfolio,setBtcPortfolio]=useState({active:[],sold:[]});const[btcInvestAmt,setBtcInvestAmt]=useState("");const[btcDays,setBtcDays]=useState(7);const[plinkoBet,setPlinkoBet]=useState("1000");const[plinkoRisk,setPlinkoRisk]=useState("medium");const[plinkoRows,setPlinkoRows]=useState(12);const[plinkoResult,setPlinkoResult]=useState(null);const[plinkoAnim,setPlinkoAnim]=useState(false);const[rouletteBets,setRouletteBets]=useState([]);const[rouletteResult,setRouletteResult]=useState(null);const[rouletteAnim,setRouletteAnim]=useState(false);const[rouletteAmt,setRouletteAmt]=useState("1000");const horseCanvasRef=useRef(null);const horseAnimRef=useRef(null);const syncLockRef=useRef(false);const plinkoCanvasRef=useRef(null);const rouletteCanvasRef=useRef(null);const[pvpWinModal,setPvpWinModal]=useState(null);const[warnModal,setWarnModal]=useState(null);const[banModal,setBanModal]=useState(null);const[banTimer,setBanTimer]=useState("");const[playAllowed,setPlayAllowed]=useState(isPlayTime());
+  const[toast,setToast]=useState(null);const[reportModal,setReportModal]=useState(null);const[pvpEliminated,setPvpEliminated]=useState(false);const[horseRace,setHorseRace]=useState(null);const[horseAnim,setHorseAnim]=useState(0);const[horseBet,setHorseBet]=useState("");const[horsePick,setHorsePick]=useState(0);const[horseHistory,setHorseHistory]=useState([]);const[multiResults,setMultiResults]=useState(null);const[bjTable,setBjTable]=useState(null);const[bjBet,setBjBet]=useState("10000");const[bjHasCard,setBjHasCard]=useState(false);const[btcPrice,setBtcPrice]=useState(0);const[btcHistory,setBtcHistory]=useState([]);const[btcPortfolio,setBtcPortfolio]=useState({active:[],sold:[]});const[btcInvestAmt,setBtcInvestAmt]=useState("");const[btcDays,setBtcDays]=useState(7);const[btcLastUpdate,setBtcLastUpdate]=useState(0);const[btcNextUpdate,setBtcNextUpdate]=useState(0);const[plinkoBet,setPlinkoBet]=useState("1000");const[plinkoRisk,setPlinkoRisk]=useState("medium");const[plinkoRows,setPlinkoRows]=useState(12);const[plinkoResult,setPlinkoResult]=useState(null);const[plinkoAnim,setPlinkoAnim]=useState(false);const[rouletteBets,setRouletteBets]=useState([]);const[rouletteResult,setRouletteResult]=useState(null);const[rouletteAnim,setRouletteAnim]=useState(false);const[rouletteAmt,setRouletteAmt]=useState("1000");const horseCanvasRef=useRef(null);const horseAnimRef=useRef(null);const syncLockRef=useRef(false);const plinkoCanvasRef=useRef(null);const rouletteCanvasRef=useRef(null);const[pvpWinModal,setPvpWinModal]=useState(null);const[warnModal,setWarnModal]=useState(null);const[banModal,setBanModal]=useState(null);const[banTimer,setBanTimer]=useState("");const[playAllowed,setPlayAllowed]=useState(isPlayTime());
   const[events,setEvents]=useState([]);const[dismissedEvents,setDismissedEvents]=useState({});
   const[friendsList,setFriendsList]=useState([]);
   function showProfile(username){if(!username||username==="Anon"||username==="SYSTEM")return;api("/profile/full",{target:username.toLowerCase(),username:account?.username||""}).then(r=>{if(r?.profile)setViewProfile(r.profile)}).catch(()=>{})}
@@ -360,7 +360,98 @@ function App(){
 
   useEffect(()=>{if(page!=="bj")return;const iv=setInterval(()=>{api("/bj/state",{tableId:"main",username:account?.username||""}).then(r=>{if(r?.table)setBjTable(r.table)})},1000);api("/bj/state",{tableId:"main",username:account?.username||""}).then(r=>{if(r?.table)setBjTable(r.table)});return()=>clearInterval(iv)},[page,account]);
 
-  useEffect(()=>{if(page!=="btc")return;if(btcPrice===0||btcHistory.length===0){apiL("/btc/price",{}).then(r=>{if(r?.price)setBtcPrice(r.price)});apiL("/btc/history",{days:btcDays}).then(r=>{if(r?.prices)setBtcHistory(r.prices)});if(account)api("/btc/portfolio",{username:account.username,token:account.token}).then(r=>{if(r?.ok){setBtcPortfolio({active:r.active||[],sold:r.sold||[]});if(r.currentPrice)setBtcPrice(r.currentPrice)}})}else{apiL("/btc/history",{days:btcDays}).then(r=>{if(r?.prices)setBtcHistory(r.prices)})}},[page,btcDays]);
+  useEffect(()=>{
+    if(page!=="roulette")return;
+    const cv=rouletteCanvasRef.current;if(!cv)return;
+    const W=cv.offsetWidth;if(!W)return;
+    cv.width=W*2;cv.height=W*2;
+    const g=cv.getContext("2d");g.scale(2,2);
+    const nums=[0,32,15,19,4,21,2,25,17,34,6,27,13,36,11,30,8,23,10,5,24,16,33,1,20,14,31,9,22,18,29,7,28,12,35,3,26];
+    const red=new Set([1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36]);
+    const segAng=(Math.PI*2)/nums.length;
+    const cx=W/2,cy=W/2,rad=W/2-12;
+    g.fillStyle="#3f1a05";g.beginPath();g.arc(cx,cy,W/2-2,0,Math.PI*2);g.fill();
+    nums.forEach((n,i)=>{
+      const a0=-Math.PI/2+i*segAng-segAng/2,a1=a0+segAng;
+      g.beginPath();g.moveTo(cx,cy);g.arc(cx,cy,rad,a0,a1);g.closePath();
+      g.fillStyle=n===0?"#16a34a":red.has(n)?"#dc2626":"#111";g.fill();
+      g.strokeStyle="#000";g.lineWidth=0.5;g.stroke();
+      g.save();g.translate(cx,cy);g.rotate(a0+segAng/2);g.fillStyle="#fff";g.font="bold "+Math.max(10,W*0.04)+"px sans-serif";g.textAlign="center";g.textBaseline="middle";g.fillText(String(n),rad*0.82,0);g.restore();
+    });
+    g.fillStyle="#2d1505";g.beginPath();g.arc(cx,cy,rad*0.25,0,Math.PI*2);g.fill();
+    g.fillStyle="#f59e0b";g.beginPath();g.arc(cx,cy,rad*0.1,0,Math.PI*2);g.fill();
+    g.fillStyle="#fbbf24";g.strokeStyle="#000";g.lineWidth=2;
+    g.beginPath();g.moveTo(cx,4);g.lineTo(cx-10,22);g.lineTo(cx+10,22);g.closePath();g.fill();g.stroke();
+  },[page]);
+
+  useEffect(()=>{if(page!=="btc")return;
+    // Load cached values from localStorage on tab enter (no API call needed)
+    try{const cached=localStorage.getItem("co-btc-cache");if(cached){const c=JSON.parse(cached);if(c.price)setBtcPrice(c.price);if(c.history)setBtcHistory(c.history);if(c.ts)setBtcLastUpdate(c.ts)}}catch{}
+    // Always reload portfolio (per-user)
+    if(account)api("/btc/portfolio",{username:account.username,token:account.token}).then(r=>{if(r?.ok){setBtcPortfolio({active:r.active||[],sold:r.sold||[]})}});
+    // Reload history on days change (server's D1 cache handles efficient re-use)
+    apiL("/btc/history",{days:btcDays}).then(r=>{if(r?.prices&&r.prices.length>0){setBtcHistory(r.prices);try{const prev=JSON.parse(localStorage.getItem("co-btc-cache")||"{}");localStorage.setItem("co-btc-cache",JSON.stringify({...prev,history:r.prices}))}catch{}}});
+    // If price is 0 (first ever load), fetch once
+    if(btcPrice===0){apiL("/btc/price",{}).then(r=>{if(r?.price){setBtcPrice(r.price);setBtcLastUpdate(Date.now());try{localStorage.setItem("co-btc-cache",JSON.stringify({price:r.price,ts:Date.now(),history:btcHistory}))}catch{}}})}
+  },[page,btcDays]);
+  // Global-clock-aligned 1-minute refresh while BTC tab is open
+  useEffect(()=>{
+    if(page!=="roulette")return;
+    const cv=rouletteCanvasRef.current;if(!cv)return;
+    const W=cv.offsetWidth;if(!W)return;
+    cv.width=W*2;cv.height=W*2;
+    const g=cv.getContext("2d");g.scale(2,2);
+    const nums=[0,32,15,19,4,21,2,25,17,34,6,27,13,36,11,30,8,23,10,5,24,16,33,1,20,14,31,9,22,18,29,7,28,12,35,3,26];
+    const red=new Set([1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36]);
+    const segAng=(Math.PI*2)/nums.length;
+    const cx=W/2,cy=W/2,rad=W/2-12;
+    g.fillStyle="#3f1a05";g.beginPath();g.arc(cx,cy,W/2-2,0,Math.PI*2);g.fill();
+    nums.forEach((n,i)=>{
+      const a0=-Math.PI/2+i*segAng-segAng/2,a1=a0+segAng;
+      g.beginPath();g.moveTo(cx,cy);g.arc(cx,cy,rad,a0,a1);g.closePath();
+      g.fillStyle=n===0?"#16a34a":red.has(n)?"#dc2626":"#111";g.fill();
+      g.strokeStyle="#000";g.lineWidth=0.5;g.stroke();
+      g.save();g.translate(cx,cy);g.rotate(a0+segAng/2);g.fillStyle="#fff";g.font="bold "+Math.max(10,W*0.04)+"px sans-serif";g.textAlign="center";g.textBaseline="middle";g.fillText(String(n),rad*0.82,0);g.restore();
+    });
+    g.fillStyle="#2d1505";g.beginPath();g.arc(cx,cy,rad*0.25,0,Math.PI*2);g.fill();
+    g.fillStyle="#f59e0b";g.beginPath();g.arc(cx,cy,rad*0.1,0,Math.PI*2);g.fill();
+    g.fillStyle="#fbbf24";g.strokeStyle="#000";g.lineWidth=2;
+    g.beginPath();g.moveTo(cx,4);g.lineTo(cx-10,22);g.lineTo(cx+10,22);g.closePath();g.fill();g.stroke();
+  },[page]);
+
+  useEffect(()=>{if(page!=="btc")return;
+    let timerId=null,nextTimer=null;
+    const doRefresh=()=>{
+      apiL("/btc/price",{}).then(r=>{
+        if(r?.price){
+          setBtcPrice(r.price);
+          const now=Date.now();
+          setBtcLastUpdate(now);
+          try{const prev=JSON.parse(localStorage.getItem("co-btc-cache")||"{}");localStorage.setItem("co-btc-cache",JSON.stringify({...prev,price:r.price,ts:now}))}catch{}
+        }
+      });
+    };
+    const updateCountdown=()=>{
+      const now=Date.now();
+      const msPastMinute=now%60000;
+      setBtcNextUpdate(now+(60000-msPastMinute));
+    };
+    // Schedule first refresh at next minute boundary
+    const scheduleNext=()=>{
+      const now=Date.now();
+      const msUntilMinute=60000-(now%60000);
+      timerId=setTimeout(()=>{
+        doRefresh();
+        updateCountdown();
+        scheduleNext();
+      },msUntilMinute);
+    };
+    updateCountdown();
+    scheduleNext();
+    // Update countdown display every second
+    nextTimer=setInterval(updateCountdown,1000);
+    return()=>{if(timerId)clearTimeout(timerId);if(nextTimer)clearInterval(nextTimer)};
+  },[page]);
   const activeSale=events.find(e=>e.type==="sale"&&e.discount>0);const saleDiscount=activeSale?activeSale.discount:0;
   const activeEffect=events.find(e=>!dismissedEvents[e.id]&&e.style&&(()=>{try{const s=JSON.parse(e.style);return s.effect}catch{return false}})());const bodyEffect=activeEffect?(()=>{try{const s=JSON.parse(activeEffect.style);return s.effect}catch{return""}})():"";
   const RENT_AMT=st.bal>=1000000000?Math.floor(st.bal*0.02):st.bal>=1000000?Math.floor(st.bal*0.01):BASE_RENT;
@@ -802,26 +893,129 @@ function App(){
     </div>}
 
     {/* ROULETTE */}
-    {page==="roulette"&&<div style={{...S.body,maxWidth:650,margin:"0 auto"}}>
+    {page==="roulette"&&<div style={{...S.body,maxWidth:700,margin:"0 auto"}}>
       <div style={{fontSize:"clamp(16px,4vw,22px)",fontWeight:800,marginBottom:8}}>🎰 Roulette</div>
-      <canvas ref={rouletteCanvasRef} style={{width:"100%",maxWidth:350,background:"#0d1117",border:"1px solid #1e2430",borderRadius:"50%",display:"block",margin:"0 auto",aspectRatio:"1"}}/>
-      {rouletteResult&&<div className="bounceIn" style={{textAlign:"center",marginTop:8,fontSize:24,fontWeight:800,color:rouletteResult.color==="red"?"#eb4b4b":rouletteResult.color==="black"?"#ccc":"#4ade80"}}>{rouletteResult.number} ({rouletteResult.color}) {rouletteResult.profit>=0?"+":""}{money(rouletteResult.profit)}</div>}
-      <div style={{display:"flex",gap:4,flexWrap:"wrap",justifyContent:"center",marginTop:12,alignItems:"center"}}>
-        <input value={rouletteAmt} onChange={e=>setRouletteAmt(e.target.value.replace(/[^0-9]/g,""))} placeholder="Bet" style={{...S.input,width:100,textAlign:"center"}}/>
-        <span style={{color:"#888",fontSize:10}}>per bet</span>
+      <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:8}}>
+        <div style={{position:"relative",width:"min(320px,90vw)",height:"min(320px,90vw)"}}>
+          <canvas ref={rouletteCanvasRef} style={{width:"100%",height:"100%",display:"block"}}/>
+        </div>
+        {rouletteResult&&<div className="bounceIn" style={{padding:"6px 16px",borderRadius:8,background:rouletteResult.color==="red"?"#eb4b4b":rouletteResult.color==="black"?"#222":"#4ade80",color:"#fff",fontSize:18,fontWeight:800}}>
+          {rouletteResult.number} {rouletteResult.color.toUpperCase()} {rouletteResult.profit>=0?" · +":" · -"}{money(Math.abs(rouletteResult.profit))}
+        </div>}
       </div>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:4,marginTop:8}}>
-        {[["red","RED (2x)","#eb4b4b"],["black","BLACK (2x)","#222"],["even","EVEN (2x)","#444"],["odd","ODD (2x)","#444"],["low","1-18 (2x)","#444"],["high","19-36 (2x)","#444"],["dozen1","1-12 (3x)","#555"],["dozen2","13-24 (3x)","#555"],["dozen3","25-36 (3x)","#555"]].map(([type,label,bg])=><button key={type} onClick={()=>{const amt=parseInt(rouletteAmt);if(!amt||amt<100){setToast({msg:"Min $100",color:"#eb4b4b"});return}setRouletteBets(b=>[...b,{type,value:type,amount:amt}])}} style={{background:bg,color:"#fff",border:"none",padding:"6px",fontSize:9,fontWeight:700,borderRadius:4,cursor:"pointer"}}>{label}</button>)}
+      <div style={{display:"flex",gap:6,marginTop:12,alignItems:"center",justifyContent:"center"}}>
+        <span style={{color:"#888",fontSize:11}}>Bet:</span>
+        <input value={rouletteAmt} onChange={e=>setRouletteAmt(e.target.value.replace(/[^0-9]/g,""))} placeholder="100" style={{...S.input,width:100,textAlign:"center"}}/>
+        {[100,1000,10000,100000].map(q=><button key={q} onClick={()=>setRouletteAmt(String(q))} style={{...S.btn,background:"#0d1117",border:"1px solid #1e2430",padding:"4px 8px",fontSize:10,color:"#aaa"}}>{q>=1000?(q/1000)+"K":q}</button>)}
       </div>
-      <div style={{display:"grid",gridTemplateColumns:"repeat(12,1fr)",gap:1,marginTop:4}}>
-        {[...Array(37).keys()].map(n=><button key={n} onClick={()=>{const amt=parseInt(rouletteAmt);if(!amt||amt<100){setToast({msg:"Min $100",color:"#eb4b4b"});return}setRouletteBets(b=>[...b,{type:"number",value:n,amount:amt}])}} style={{background:n===0?"#4ade80":[1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36].includes(n)?"#eb4b4b":"#222",color:"#fff",border:"none",padding:"4px 0",borderRadius:2,fontSize:10,fontWeight:700,cursor:"pointer"}}>{n}</button>)}
+      {/* Betting board */}
+      <div style={{marginTop:10,maxWidth:600,margin:"10px auto 0"}}>
+        {/* Numbers grid: 3 rows × 12 columns */}
+        <div style={{display:"flex",gap:2}}>
+          <button onClick={()=>{const amt=parseInt(rouletteAmt);if(!amt||amt<100){setToast({msg:"Min $100",color:"#eb4b4b"});return}setRouletteBets(b=>[...b,{type:"number",value:0,amount:amt}])}} style={{background:"#16a34a",color:"#fff",border:"none",padding:"8px 4px",borderRadius:3,fontSize:11,fontWeight:700,cursor:"pointer",width:30,writingMode:"vertical-rl",textOrientation:"mixed"}}>0</button>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(12,1fr)",gap:2,flex:1}}>
+            {[3,6,9,12,15,18,21,24,27,30,33,36,2,5,8,11,14,17,20,23,26,29,32,35,1,4,7,10,13,16,19,22,25,28,31,34].map(n=><button key={n} onClick={()=>{const amt=parseInt(rouletteAmt);if(!amt||amt<100){setToast({msg:"Min $100",color:"#eb4b4b"});return}setRouletteBets(b=>[...b,{type:"number",value:n,amount:amt}])}} style={{background:[1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36].includes(n)?"#dc2626":"#1f2937",color:"#fff",border:"none",padding:"8px 2px",borderRadius:3,fontSize:11,fontWeight:700,cursor:"pointer"}}>{n}</button>)}
+          </div>
+        </div>
+        {/* Dozens row */}
+        <div style={{display:"grid",gridTemplateColumns:"30px repeat(3,1fr)",gap:2,marginTop:2}}>
+          <div></div>
+          {[["dozen1","1-12 (3x)"],["dozen2","13-24 (3x)"],["dozen3","25-36 (3x)"]].map(([t,l])=><button key={t} onClick={()=>{const amt=parseInt(rouletteAmt);if(!amt||amt<100){setToast({msg:"Min $100",color:"#eb4b4b"});return}setRouletteBets(b=>[...b,{type:t,value:t,amount:amt}])}} style={{background:"#374151",color:"#fff",border:"none",padding:"8px",borderRadius:3,fontSize:10,fontWeight:700,cursor:"pointer"}}>{l}</button>)}
+        </div>
+        {/* Outside bets row */}
+        <div style={{display:"grid",gridTemplateColumns:"30px repeat(6,1fr)",gap:2,marginTop:2}}>
+          <div></div>
+          {[["low","1-18","#374151"],["even","EVEN","#374151"],["red","RED","#dc2626"],["black","BLACK","#1f2937"],["odd","ODD","#374151"],["high","19-36","#374151"]].map(([t,l,bg])=><button key={t} onClick={()=>{const amt=parseInt(rouletteAmt);if(!amt||amt<100){setToast({msg:"Min $100",color:"#eb4b4b"});return}setRouletteBets(b=>[...b,{type:t,value:t,amount:amt}])}} style={{background:bg,color:"#fff",border:"none",padding:"8px 4px",borderRadius:3,fontSize:10,fontWeight:700,cursor:"pointer"}}>{l} (2x)</button>)}
+        </div>
       </div>
-      {rouletteBets.length>0&&<div style={{marginTop:8,padding:8,background:"#0d1117",borderRadius:8}}>
-        <div style={{fontSize:10,color:"#888",marginBottom:4}}>Bets ({rouletteBets.length}) - Total: {money(rouletteBets.reduce((s,b)=>s+b.amount,0))}</div>
+      {rouletteBets.length>0&&<div style={{marginTop:10,padding:10,background:"#0d1117",borderRadius:8,maxWidth:600,margin:"10px auto 0"}}>
+        <div style={{fontSize:11,color:"#888",marginBottom:6}}>Bets ({rouletteBets.length}) · Total: {money(rouletteBets.reduce((s,b)=>s+b.amount,0))}</div>
+        <div style={{display:"flex",flexWrap:"wrap",gap:4,marginBottom:8}}>
+          {rouletteBets.map((b,i)=><span key={i} style={{background:"#1e2430",padding:"3px 6px",borderRadius:4,fontSize:10,color:"#ccc"}}>{b.type==="number"?"#"+b.value:b.value.toUpperCase()} {money(b.amount)} <button onClick={()=>setRouletteBets(bs=>bs.filter((_,j)=>j!==i))} style={{background:"transparent",border:"none",color:"#eb4b4b",cursor:"pointer",padding:0,marginLeft:4,fontSize:12,verticalAlign:"middle"}}>×</button></span>)}
+        </div>
         <div style={{display:"flex",gap:6,justifyContent:"center"}}>
-          <button disabled={rouletteAnim} onClick={async()=>{const total=rouletteBets.reduce((s,b)=>s+b.amount,0);if(total>st.bal){setToast({msg:"Not enough",color:"#eb4b4b"});return}setSt(p=>({...p,bal:p.bal-total}));setRouletteAnim(true);setRouletteResult(null);const r=await api("/roulette/spin",{username:account?.username,token:account?.token,bets:rouletteBets});if(!r?.ok){setSt(p=>({...p,bal:p.bal+total}));setRouletteAnim(false);setToast({msg:r?.error||"Failed",color:"#eb4b4b"});return}
-            const cv=rouletteCanvasRef.current;if(cv){const W=cv.offsetWidth;cv.width=W*2;cv.height=W*2;const g=cv.getContext("2d");g.scale(2,2);const nums=[0,32,15,19,4,21,2,25,17,34,6,27,13,36,11,30,8,23,10,5,24,16,33,1,20,14,31,9,22,18,29,7,28,12,35,3,26];const red=new Set([1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36]);const targetIdx=nums.indexOf(r.number);const totalRot=5*Math.PI*2+(targetIdx/nums.length)*Math.PI*2;const t0=performance.now();const dur=4000;const loop=()=>{const t=Math.min(1,(performance.now()-t0)/dur);const eased=1-Math.pow(1-t,3);const rot=-totalRot*eased;g.clearRect(0,0,W,W);const cx=W/2,cy=W/2,rad=W/2-4;nums.forEach((n,i)=>{const a0=rot+i*(Math.PI*2/37);const a1=a0+(Math.PI*2/37);g.beginPath();g.moveTo(cx,cy);g.arc(cx,cy,rad,a0,a1);g.closePath();g.fillStyle=n===0?"#4ade80":red.has(n)?"#eb4b4b":"#222";g.fill();g.save();g.translate(cx,cy);g.rotate(a0+Math.PI/37);g.fillStyle="#fff";g.font="bold "+(W*0.025)+"px sans-serif";g.textAlign="center";g.fillText(n,rad*0.85,4);g.restore()});g.fillStyle="#f59e0b";g.beginPath();g.moveTo(cx,8);g.lineTo(cx-10,25);g.lineTo(cx+10,25);g.closePath();g.fill();if(t<1)requestAnimationFrame(loop);else{setTimeout(()=>{setSt(p=>{const ns={...p,bal:p.bal+r.payout};save(ns,drops);return ns});setRouletteResult({number:r.number,color:r.color,payout:r.payout,profit:r.profit});setRouletteBets([]);setRouletteAnim(false);if(r.profit>0){document.body.classList.add("shakeHard");setTimeout(()=>document.body.classList.remove("shakeHard"),400);sndReveal(true)}else sndReveal(false)},400)}};loop()}
-          }} style={{...S.btn,background:rouletteAnim?"#333":"#4ade80",color:"#000",fontWeight:700}}>Spin!</button>
+          <button disabled={rouletteAnim} onClick={async()=>{
+            const total=rouletteBets.reduce((s,b)=>s+b.amount,0);
+            if(total>st.bal){setToast({msg:"Not enough",color:"#eb4b4b"});return}
+            setSt(p=>({...p,bal:p.bal-total}));
+            setRouletteAnim(true);
+            setRouletteResult(null);
+            const r=await api("/roulette/spin",{username:account?.username,token:account?.token,bets:rouletteBets});
+            if(!r?.ok){setSt(p=>({...p,bal:p.bal+total}));setRouletteAnim(false);setToast({msg:r?.error||"Failed",color:"#eb4b4b"});return}
+            // Animate spin
+            const cv=rouletteCanvasRef.current;
+            if(!cv){setRouletteAnim(false);return}
+            const W=cv.offsetWidth;
+            cv.width=W*2;cv.height=W*2;
+            const g=cv.getContext("2d");g.scale(2,2);
+            // European roulette wheel order
+            const nums=[0,32,15,19,4,21,2,25,17,34,6,27,13,36,11,30,8,23,10,5,24,16,33,1,20,14,31,9,22,18,29,7,28,12,35,3,26];
+            const red=new Set([1,3,5,7,9,12,14,16,18,19,21,23,25,27,30,32,34,36]);
+            const segAng=(Math.PI*2)/nums.length;
+            // Target rotation: pointer is at TOP (12 o'clock = -PI/2). To put nums[targetIdx] at top, rotate wheel by -targetIdx*segAng - PI/2 + offset
+            const targetIdx=nums.indexOf(r.number);
+            const baseRotForTop=-Math.PI/2-targetIdx*segAng-segAng/2;
+            const totalRot=-(Math.PI*2*6)+baseRotForTop; // 6 full spins counter-clockwise + land
+            const t0=performance.now();
+            const dur=4500;
+            const drawWheel=(rot)=>{
+              g.clearRect(0,0,W,W);
+              const cx=W/2,cy=W/2,rad=W/2-12;
+              // Outer ring
+              g.fillStyle="#3f1a05";
+              g.beginPath();g.arc(cx,cy,W/2-2,0,Math.PI*2);g.fill();
+              // Segments
+              nums.forEach((n,i)=>{
+                const a0=rot+i*segAng,a1=a0+segAng;
+                g.beginPath();g.moveTo(cx,cy);g.arc(cx,cy,rad,a0,a1);g.closePath();
+                g.fillStyle=n===0?"#16a34a":red.has(n)?"#dc2626":"#111";
+                g.fill();
+                g.strokeStyle="#000";g.lineWidth=0.5;g.stroke();
+                // Number label
+                g.save();
+                g.translate(cx,cy);
+                g.rotate(a0+segAng/2);
+                g.fillStyle="#fff";
+                g.font="bold "+Math.max(10,W*0.04)+"px sans-serif";
+                g.textAlign="center";
+                g.textBaseline="middle";
+                g.fillText(String(n),rad*0.82,0);
+                g.restore();
+              });
+              // Center hub
+              g.fillStyle="#2d1505";
+              g.beginPath();g.arc(cx,cy,rad*0.25,0,Math.PI*2);g.fill();
+              g.fillStyle="#f59e0b";
+              g.beginPath();g.arc(cx,cy,rad*0.1,0,Math.PI*2);g.fill();
+              // FIXED pointer at top (NOT rotating with wheel)
+              g.fillStyle="#fbbf24";
+              g.strokeStyle="#000";g.lineWidth=2;
+              g.beginPath();
+              g.moveTo(cx,4);
+              g.lineTo(cx-10,22);
+              g.lineTo(cx+10,22);
+              g.closePath();
+              g.fill();g.stroke();
+            };
+            const loop=()=>{
+              const t=Math.min(1,(performance.now()-t0)/dur);
+              const eased=1-Math.pow(1-t,3.5);
+              const rot=totalRot*eased;
+              drawWheel(rot);
+              if(t<1){requestAnimationFrame(loop)}
+              else{
+                setTimeout(()=>{
+                  setSt(p=>{const ns={...p,bal:p.bal+r.payout};save(ns,drops);return ns});
+                  setRouletteResult({number:r.number,color:r.color,payout:r.payout,profit:r.profit});
+                  setRouletteBets([]);
+                  setRouletteAnim(false);
+                  if(r.profit>0){document.body.classList.add("shakeHard");setTimeout(()=>document.body.classList.remove("shakeHard"),400);sndReveal(true)}
+                  else sndReveal(false);
+                },500);
+              }
+            };
+            loop();
+          }} style={{...S.btn,background:rouletteAnim?"#333":"#4ade80",color:"#000",fontWeight:700,padding:"8px 24px"}}>{rouletteAnim?"Spinning...":"SPIN"}</button>
           <button onClick={()=>setRouletteBets([])} style={{...S.btn,background:"#eb4b4b22",color:"#eb4b4b"}}>Clear</button>
         </div>
       </div>}
@@ -876,7 +1070,13 @@ function App(){
 
     {/* BITCOIN */}
     {page==="btc"&&<div style={{...S.body,maxWidth:650,margin:"0 auto"}}>
-      <div style={{fontSize:"clamp(16px,4vw,22px)",fontWeight:800,marginBottom:8}}>₿ Bitcoin Investment</div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8,flexWrap:"wrap",gap:6}}>
+        <div style={{fontSize:"clamp(16px,4vw,22px)",fontWeight:800}}>₿ Bitcoin Investment</div>
+        {btcLastUpdate>0&&<div style={{fontSize:10,color:"#888",textAlign:"right"}}>
+          <div>Updated {(()=>{const s=Math.floor((Date.now()-btcLastUpdate)/1000);return s<60?s+"s ago":Math.floor(s/60)+"m ago"})()}</div>
+          {btcNextUpdate>0&&<div style={{color:"#4ade80"}}>Next: {Math.max(0,Math.ceil((btcNextUpdate-Date.now())/1000))}s</div>}
+        </div>}
+      </div>
       {(()=>{
       const chartW=Math.min(600,typeof window!=="undefined"?window.innerWidth-40:560),chartH=180;
       const prices=btcHistory||[];const minP=prices.length?Math.min(...prices.map(p=>p.v)):0,maxP=prices.length?Math.max(...prices.map(p=>p.v)):1,rangeP=maxP-minP||1;
