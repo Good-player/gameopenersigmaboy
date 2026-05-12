@@ -152,53 +152,6 @@ function App(){
   const[lang,setLang]=useState(typeof window!=='undefined'&&window.I18N?window.I18N.getLang():'en');
   const t=(k,vars)=>typeof window!=='undefined'&&window.I18N?window.I18N.t(k,vars):k;
   useEffect(()=>{const h=(e)=>setLang(e.detail.lang);window.addEventListener('langchange',h);return()=>window.removeEventListener('langchange',h)},[]);
-  useEffect(()=>{if(!account)return;api("/daily/status",{username:account.username}).then(r=>{if(r?.canClaim)setDailyModal(r);else setDailyStatus(r)})},[account?.username]);
-  useEffect(()=>{
-    if(page!=="wheel")return;
-    const cv=wheelCanvasRef.current;
-    if(!cv)return;
-    const W=cv.offsetWidth;
-    if(!W)return;
-    cv.width=W*2;cv.height=W*2;
-    const g=cv.getContext("2d");g.scale(2,2);
-    // Default static segments matching backend
-    const segs=[
-      {label:"$1K"},{label:"$5K"},{label:"$10K"},{label:"$25K"},
-      {label:"$50K"},{label:"$100K"},{label:"$500K"},{label:"$2M"}
-    ];
-    const n=segs.length;
-    const segAng=(Math.PI*2)/n;
-    const colors=["#dc2626","#fb923c","#fbbf24","#84cc16","#22d3ee","#3b82f6","#a855f7","#ec4899"];
-    const cx=W/2,cy=W/2,rad=W/2-8;
-    g.fillStyle="#1a1a2e";g.beginPath();g.arc(cx,cy,W/2-2,0,Math.PI*2);g.fill();
-    segs.forEach((s,i)=>{
-      const a0=-Math.PI/2+i*segAng-segAng/2;
-      const a1=a0+segAng;
-      g.beginPath();
-      g.moveTo(cx,cy);
-      g.arc(cx,cy,rad,a0,a1);
-      g.closePath();
-      g.fillStyle=colors[i%colors.length];
-      g.fill();
-      g.strokeStyle="#0d1117";g.lineWidth=2;g.stroke();
-      g.save();
-      g.translate(cx,cy);
-      g.rotate(a0+segAng/2);
-      g.fillStyle="#fff";
-      g.font="bold "+Math.max(11,W*0.05)+"px sans-serif";
-      g.textAlign="right";
-      g.textBaseline="middle";
-      g.strokeStyle="#000";g.lineWidth=3;
-      g.strokeText(s.label,rad*0.92,0);
-      g.fillText(s.label,rad*0.92,0);
-      g.restore();
-    });
-    g.fillStyle="#2d2d3f";g.beginPath();g.arc(cx,cy,rad*0.18,0,Math.PI*2);g.fill();
-    g.fillStyle="#ffd700";g.beginPath();g.arc(cx,cy,rad*0.08,0,Math.PI*2);g.fill();
-  },[page,wheelResult]);
-
-
-
 
   const[appLoading,setAppLoading]=useState(true);const[offline,setOffline]=useState(false);const offlineRef=useRef(false);useEffect(()=>{window.__setOnline=(v)=>{if(!v&&!offlineRef.current){offlineRef.current=true;setOffline(true)}if(v&&offlineRef.current){offlineRef.current=false;setOffline(false)}};return()=>{window.__setOnline=null}},[]);const[loadProgress,setLoadProgress]=useState(0);const[loadMsg,setLoadMsg]=useState("Initializing...");const[slot,setSlot]=useState(0);const[slotMeta,setSlotMeta]=useState([null,null,null]);const[showSlots,setShowSlots]=useState(true);
   const[st,setSt]=useState(INIT);const[page,setPage]=useState("shop");const[selCase,setSelCase]=useState(null);const[wonItem,setWonItem]=useState(null);const[wonFloat,setWonFloat]=useState(0);const[wonQuote,setWonQuote]=useState("");const[scrollItems,setScrollItems]=useState([]);const[scrollDone,setScrollDone]=useState(false);const[opening,setOpening]=useState(false);const[resetMsg,setResetMsg]=useState("");const[loanAmt,setLoanAmt]=useState("");const[rentPaid,setRentPaid]=useState(0);const[inspecting,setInspecting]=useState(null);const[confirmReset,setConfirmReset]=useState(false);const[drops,setDrops]=useState([]);
@@ -223,6 +176,42 @@ function App(){
 
   // Poll lobby while in one
   useEffect(()=>{if(!curLobby?.id)return;const id=setInterval(()=>refreshLobby(curLobby.id),3000);lobbyPollRef.current=id;return()=>clearInterval(id)},[curLobby?.id]);
+  // Daily login bonus check on account login
+  useEffect(()=>{if(!account)return;api("/daily/status",{username:account.username}).then(r=>{if(r?.canClaim)setDailyModal(r);else setDailyStatus(r)})},[account?.username]);
+  // Wheel of Fortune - draw static wheel on page enter
+  useEffect(()=>{
+    if(page!=="wheel")return;
+    const cv=wheelCanvasRef.current;
+    if(!cv)return;
+    const W=cv.offsetWidth;
+    if(!W)return;
+    cv.width=W*2;cv.height=W*2;
+    const g=cv.getContext("2d");g.scale(2,2);
+    const segs=[
+      {label:"$1K"},{label:"$5K"},{label:"$10K"},{label:"$25K"},
+      {label:"$50K"},{label:"$100K"},{label:"$500K"},{label:"$2M"}
+    ];
+    const n=segs.length;
+    const segAng=(Math.PI*2)/n;
+    const colors=["#dc2626","#fb923c","#fbbf24","#84cc16","#22d3ee","#3b82f6","#a855f7","#ec4899"];
+    const cx=W/2,cy=W/2,rad=W/2-8;
+    g.fillStyle="#1a1a2e";g.beginPath();g.arc(cx,cy,W/2-2,0,Math.PI*2);g.fill();
+    segs.forEach((s,i)=>{
+      const a0=-Math.PI/2+i*segAng-segAng/2;
+      const a1=a0+segAng;
+      g.beginPath();g.moveTo(cx,cy);g.arc(cx,cy,rad,a0,a1);g.closePath();
+      g.fillStyle=colors[i%colors.length];g.fill();
+      g.strokeStyle="#0d1117";g.lineWidth=2;g.stroke();
+      g.save();g.translate(cx,cy);g.rotate(a0+segAng/2);
+      g.fillStyle="#fff";g.font="bold "+Math.max(11,W*0.05)+"px sans-serif";
+      g.textAlign="right";g.textBaseline="middle";
+      g.strokeStyle="#000";g.lineWidth=3;
+      g.strokeText(s.label,rad*0.92,0);g.fillText(s.label,rad*0.92,0);
+      g.restore();
+    });
+    g.fillStyle="#2d2d3f";g.beginPath();g.arc(cx,cy,rad*0.18,0,Math.PI*2);g.fill();
+    g.fillStyle="#ffd700";g.beginPath();g.arc(cx,cy,rad*0.08,0,Math.PI*2);g.fill();
+  },[page,wheelResult]);
   // Lobby timer
   useEffect(()=>{if(!curLobby?.started_at||curLobby?.status!=="playing")return;const id=setInterval(()=>{const elapsed=Date.now()-curLobby.started_at;const left=Math.max(0,(curLobby.duration||300)*1000-elapsed);setLobbyTimer(left);if(left<=0){clearInterval(id);api("/lobby/end",{lobbyId:curLobby.id,username:account?.username}).then(r=>{if(r?.results){setCurLobby(prev=>({...prev,status:"finished",_results:r.results}));setPvpWinModal({winner:r.winner,results:r.results})}})}},500);return()=>clearInterval(id)},[curLobby?.started_at,curLobby?.status]);
 
