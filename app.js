@@ -459,7 +459,7 @@ function App(){
     {resetMsg&&<div style={S.overlay}><div style={S.modal}><div style={{fontSize:"clamp(36px,10vw,56px)"}}><MI n="dangerous" s={44} c="#eb4b4b"/></div><div style={{fontSize:"clamp(16px,4vw,22px)",fontWeight:700,color:"#eb4b4b"}}>{resetMsg}</div></div></div>}
 
     {/* HEADER */}
-    <div style={S.hdr}><div style={{display:"flex",alignItems:"center",gap:"clamp(6px,1.5vw,10px)"}}><button onClick={()=>setShowSlots(true)} style={{...S.btn,background:"#ffffff08",color:"#888",padding:"clamp(4px,1vw,6px) clamp(6px,1.5vw,10px)",fontSize:"clamp(9px,2.2vw,11px)"}}>Slot {slot+1}</button><div style={S.title}>CASES</div></div><div style={S.hdrRight}><button onClick={()=>setShowAuth(true)} style={{...S.btn,background:account?"#4ade8022":"#ffffff08",color:account?"#4ade80":"#888",padding:"6px 12px",fontSize:"clamp(9px,2.2vw,12px)",border:account?"1px solid #4ade8033":"1px solid #333",fontWeight:700}}>{account?"✓ "+account.username:"Login"}</button>{account&&<><button onClick={cloudSave} style={{...S.btn,background:"#3b82f6",color:"#fff",padding:"6px 14px",fontSize:"clamp(10px,2.5vw,13px)",fontWeight:700}}><><MI n="cloud_upload" s={14}/> Save</></button><button onClick={cloudLoad} style={{...S.btn,background:"#8b5cf622",color:"#8b5cf6",padding:"6px 10px",fontSize:"clamp(9px,2.2vw,11px)"}}><><MI n="cloud_download" s={14}/> Load</></button></>}{saveStatus&&<span style={{color:saveStatus==="Saved!"?"#4ade80":"#fbbf24",fontSize:"clamp(9px,2.2vw,11px)",fontWeight:700,animation:"fadeUp .3s"}}>{saveStatus}</span>}<div style={S.chip}><span style={S.chipLbl}>BAL</span><span style={{color:st.bal<100?"#eb4b4b":"#4ade80",fontWeight:700,fontSize:"clamp(14px,3.5vw,20px)"}}>{money(st.bal)}</span></div>{st.loan>0&&<div style={{...S.chip,borderColor:"#eb4b4b33"}}><span style={S.chipLbl}>DEBT</span><span style={{color:"#eb4b4b",fontWeight:700,fontSize:"clamp(12px,3vw,18px)"}}>{money(st.loan)}</span></div>}<div style={S.rentChip}>Rent: {money(RENT_AMT)} in {rentIn} opens</div></div></div>
+    <div style={S.hdr}><div style={{display:"flex",alignItems:"center",gap:"clamp(6px,1.5vw,10px)"}}><button onClick={()=>setShowSlots(true)} style={{...S.btn,background:"#ffffff08",color:"#888",padding:"clamp(4px,1vw,6px) clamp(6px,1.5vw,10px)",fontSize:"clamp(9px,2.2vw,11px)"}}>Slot {slot+1}</button><div style={S.title}>CASES</div></div><div style={S.hdrRight}><button onClick={()=>{const cur=lang;const next=cur==="en"?"sv":"en";if(window.I18N)window.I18N.setLang(next);setToast({msg:next==="sv"?"Språk: Svenska":"Language: English",color:"#4ade80"})}} title={t("lang_label")} style={{...S.btn,background:"#ffffff08",color:"#cbd5e1",padding:"6px 10px",fontSize:"clamp(9px,2.2vw,11px)",fontWeight:700,display:"inline-flex",alignItems:"center",gap:4}}><MI n="language" s={14}/>{lang.toUpperCase()}</button><button onClick={()=>setPage("faq")} title="FAQ" style={{...S.btn,background:"#ffffff08",color:"#cbd5e1",padding:"6px 8px",fontSize:"clamp(9px,2.2vw,11px)"}}><MI n="help_outline" s={14}/></button><button onClick={()=>setShowAuth(true)} style={{...S.btn,background:account?"#4ade8022":"#ffffff08",color:account?"#4ade80":"#888",padding:"6px 12px",fontSize:"clamp(9px,2.2vw,12px)",border:account?"1px solid #4ade8033":"1px solid #333",fontWeight:700}}>{account?"✓ "+account.username:t("login")}</button>{account&&<><button onClick={cloudSave} style={{...S.btn,background:"#3b82f6",color:"#fff",padding:"6px 14px",fontSize:"clamp(10px,2.5vw,13px)",fontWeight:700}}><><MI n="cloud_upload" s={14}/> Save</></button><button onClick={cloudLoad} style={{...S.btn,background:"#8b5cf622",color:"#8b5cf6",padding:"6px 10px",fontSize:"clamp(9px,2.2vw,11px)"}}><><MI n="cloud_download" s={14}/> Load</></button></>}{saveStatus&&<span style={{color:saveStatus==="Saved!"?"#4ade80":"#fbbf24",fontSize:"clamp(9px,2.2vw,11px)",fontWeight:700,animation:"fadeUp .3s"}}>{saveStatus}</span>}<div style={S.chip}><span style={S.chipLbl}>BAL</span><span style={{color:st.bal<100?"#eb4b4b":"#4ade80",fontWeight:700,fontSize:"clamp(14px,3.5vw,20px)"}}>{money(st.bal)}</span></div>{st.loan>0&&<div style={{...S.chip,borderColor:"#eb4b4b33"}}><span style={S.chipLbl}>DEBT</span><span style={{color:"#eb4b4b",fontWeight:700,fontSize:"clamp(12px,3vw,18px)"}}>{money(st.loan)}</span></div>}<div style={S.rentChip}>Rent: {money(RENT_AMT)} in {rentIn} opens</div></div></div>
     {!account&&<div style={{background:"#f59e0b11",borderBottom:"1px solid #f59e0b22",padding:"4px 12px",textAlign:"center",fontSize:"clamp(8px,2vw,10px)",color:"#f59e0b"}}>Login to save progress to cloud. Your data is local only!</div>}
     {events.filter(e=>!dismissedEvents[e.id]).map(e=>{const ec=e.type==="announcement"?"#f59e0b":e.type==="sale"?"#4ade80":e.type==="maintenance"?"#eb4b4b":e.type==="warning"?"#f97316":e.type==="update"?"#8b5cf6":e.type==="rain"?"#ffd700":e.type==="brainrot"?"#ff6767":e.type==="takeover"?"#e2e8f0":e.type==="jumpscare"?"#eb4b4b":"#3b82f6";const ei=e.type==="announcement"?"campaign":e.type==="sale"?"local_offer":e.type==="maintenance"?"build":e.type==="warning"?"warning":e.type==="update"?"system_update":e.type==="rain"?"payments":e.type==="brainrot"?"psychology":e.type==="takeover"?"wallpaper":e.type==="jumpscare"?"flash_on":"celebration";let sty={};try{sty=JSON.parse(e.style||"{}")}catch{};return <div key={e.id}>{e.type==="takeover"&&sty.image&&<div style={{position:"fixed",inset:0,zIndex:99,backgroundImage:"url("+sty.image+")",backgroundSize:"cover",backgroundPosition:"center",opacity:0.15,pointerEvents:"none"}}/>}{e.type==="jumpscare"&&sty.image&&!dismissedEvents["js_"+e.id]&&<div onClick={()=>setDismissedEvents(d=>({...d,["js_"+e.id]:true}))} style={{position:"fixed",inset:0,zIndex:99998,background:"#000",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}><img src={sty.image} style={{maxWidth:"90vw",maxHeight:"90vh",objectFit:"contain"}}/><div style={{position:"absolute",bottom:40,color:"#666",fontSize:12}}>Click to dismiss</div></div>}{e.type==="rain"&&<div style={{position:"fixed",top:0,left:0,right:0,height:"100vh",pointerEvents:"none",zIndex:98,overflow:"hidden"}}>{[...Array(20)].map((_,i)=><div key={i} style={{position:"absolute",left:Math.random()*100+"%",top:-20,fontSize:Math.random()*14+12,animation:"moneyRain "+(2+Math.random()*3)+"s linear "+(Math.random()*2)+"s infinite",opacity:0.6}}>{["💲","💰","💵","🤑"][i%4]}</div>)}</div>}<div className={"slideIn"+(sty.effect?" effect"+sty.effect[0].toUpperCase()+sty.effect.slice(1):"")} style={{background:ec+"18",borderBottom:"1px solid "+ec+"33",padding:"6px 12px",display:"flex",alignItems:"center",gap:8}}><MI n={ei} s={16} c={ec}/><div style={{flex:1}}><div style={{color:ec,fontWeight:700,fontSize:"clamp(10px,2.5vw,12px)"}}>{e.title}{e.discount>0&&<span style={{background:"#4ade80",color:"#000",padding:"1px 6px",borderRadius:4,fontSize:9,fontWeight:800,marginLeft:6}}>{e.discount}% OFF</span>}{e.type==="brainrot"&&<span style={{marginLeft:6,fontSize:9}}>🧠💀</span>}</div>{e.description&&<div style={{color:"#aaa",fontSize:"clamp(8px,2vw,10px)"}}>{e.description}</div>}{sty.image&&e.type!=="jumpscare"&&e.type!=="takeover"&&<img src={sty.image} style={{maxWidth:120,maxHeight:60,borderRadius:4,marginTop:4,objectFit:"cover"}}/>}</div><button onClick={()=>setDismissedEvents(d=>({...d,[e.id]:true,["js_"+e.id]:true}))} style={{background:"transparent",border:"none",color:"#555",cursor:"pointer"}}><MI n="close" s={14}/></button></div></div>})}
 
@@ -986,10 +986,52 @@ function App(){
       </div>}
     </div>}
 
+    {/* FAQ */}
+    {page==="faq"&&<div style={{...S.body,maxWidth:720,margin:"0 auto"}}>
+      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
+        <button onClick={()=>setPage("shop")} style={{...S.btn,background:"#ffffff08",color:"#888",padding:"4px 10px",fontSize:11,display:"inline-flex",alignItems:"center",gap:3}}><MI n="arrow_back" s={14}/>{t("back")}</button>
+      </div>
+      <div style={{fontSize:"clamp(20px,5vw,28px)",fontWeight:800,marginBottom:4,display:"flex",alignItems:"center",gap:8,animation:"fadeUp .4s"}}><MI n="help_outline" s={28} c="#3b82f6"/> {t("faq_title")}</div>
+      <div style={{color:"#94a3b8",fontSize:12,marginBottom:16,animation:"fadeUp .5s"}}>{t("faq_subtitle")}</div>
+      {[
+        ["what_is","star"],["login","login"],["save","save"],["slots","layers"],
+        ["rent","home"],["loan","attach_money"],["bj","casino"],["btc","currency_bitcoin"],
+        ["weather","cloud"],["chat","chat"],["legal","gavel"],["data","shield"],
+        ["delete","delete"],["contact","mail"]
+      ].map(([key,icon],i)=>{
+        const itemKey="faq_"+key;
+        const expanded=expandedSection[itemKey];
+        return <div key={key} style={{background:expanded?"#0a1929":"#0d1117",border:expanded?"1px solid #3b82f644":"1px solid #1e2430",borderRadius:10,marginBottom:6,overflow:"hidden",transition:"all .2s",animation:"fadeUp .4s",animationDelay:(i*0.04)+"s",animationFillMode:"backwards"}}>
+          <div onClick={()=>setExpandedSection(p=>({...p,[itemKey]:!p[itemKey]}))} style={{padding:"12px 14px",display:"flex",alignItems:"center",gap:10,cursor:"pointer"}}>
+            <MI n={icon} s={20} c={expanded?"#3b82f6":"#60a5fa"}/>
+            <div style={{flex:1,color:expanded?"#fff":"#cbd5e1",fontWeight:700,fontSize:13}}>{t("faq_q_"+key)}</div>
+            <MI n={expanded?"expand_less":"expand_more"} s={20} c="#666"/>
+          </div>
+          {expanded&&<div style={{padding:"0 14px 14px 44px",color:"#cbd5e1",fontSize:12,lineHeight:1.6,animation:"fadeUp .25s"}}>
+            {t("faq_a_"+key)}
+          </div>}
+        </div>;
+      })}
+      <div style={{marginTop:16,padding:12,background:"#0d1117",border:"1px solid #1e2430",borderRadius:8,fontSize:11,color:"#64748b",textAlign:"center",animation:"fadeUp .8s"}}>
+        CASES · Open source · D1 + Cloudflare Workers
+      </div>
+    </div>}
+
     {/* WEATHER */}
     {page==="school"&&(()=>{
-      const wMap={"clearsky_day":"wb_sunny","clearsky_night":"nights_stay","fair_day":"wb_sunny","fair_night":"nights_stay","partlycloudy_day":"partly_cloudy_day","partlycloudy_night":"partly_cloudy_night","cloudy":"cloud","rain":"rainy","lightrain":"grain","heavyrain":"thunderstorm","sleet":"weather_mix","snow":"ac_unit","lightsnow":"ac_unit","heavysnow":"ac_unit","snowshowers_day":"ac_unit","snowshowers_night":"ac_unit","rainshowers_day":"rainy","rainshowers_night":"rainy","thunder":"thunderstorm","rainandthunder":"thunderstorm","fog":"foggy"};
-      const wIcon=(s)=>{if(!s)return"cloud";const k=s.toLowerCase().replace(/_polartwilight|_(day|night)$/,"");return wMap[k]||wMap[s.toLowerCase()]||"cloud"};
+      const wIcon=(s)=>{
+        if(!s)return"cloud";
+        const sl=s.toLowerCase();
+        if(sl.includes("thunder"))return"thunderstorm";
+        if(sl.includes("snow")||sl.includes("sleet"))return"ac_unit";
+        if(sl.includes("rain")||sl.includes("shower"))return"rainy";
+        if(sl.includes("fog"))return"foggy";
+        if(sl.includes("clear")&&sl.includes("night"))return"nights_stay";
+        if(sl.includes("clear")||sl.includes("fair"))return"wb_sunny";
+        if(sl.includes("partlycloudy"))return sl.includes("night")?"partly_cloudy_night":"partly_cloudy_day";
+        if(sl.includes("cloudy")||sl.includes("cloud"))return"cloud";
+        return"cloud";
+      };
       const wColor=(s)=>{if(!s)return"#94a3b8";const sl=s.toLowerCase();if(sl.includes("clear"))return"#fbbf24";if(sl.includes("fair"))return"#facc15";if(sl.includes("rain")||sl.includes("shower"))return"#3b82f6";if(sl.includes("snow")||sl.includes("sleet"))return"#bae6fd";if(sl.includes("thunder"))return"#a855f7";if(sl.includes("fog"))return"#64748b";if(sl.includes("cloudy"))return"#94a3b8";return"#94a3b8"};
       const windDirKey=(deg)=>{if(deg===undefined||deg===null)return null;const keys=["wind_n","wind_nne","wind_ne","wind_ene","wind_e","wind_ese","wind_se","wind_sse","wind_s","wind_ssw","wind_sw","wind_wsw","wind_w","wind_wnw","wind_nw","wind_nnw"];return keys[Math.round(deg/22.5)%16]};
       const windDir=(deg)=>{const k=windDirKey(deg);return k?t(k):"–"};
@@ -1012,12 +1054,7 @@ function App(){
       const dayName=(date,short)=>{const d=new Date(date);const wd=d.getDay();const keys=["day_sun","day_mon","day_tue","day_wed","day_thu","day_fri","day_sat"];return short?t(keys[wd]):d.toLocaleDateString(lang==="sv"?"sv-SE":"en-US",{weekday:"long"})};
       const visibilityLabel=(v)=>{if(v===undefined||v===null)return"–";if(v<10)return"Excellent";if(v<30)return"Good";if(v<70)return"Moderate";return"Poor"};
       return <div style={{...S.body,maxWidth:720,margin:"0 auto"}}>
-        <div style={{fontSize:"clamp(16px,4vw,22px)",fontWeight:800,marginBottom:12,display:"flex",alignItems:"center",gap:8,justifyContent:"space-between"}}>
-          <div style={{display:"flex",alignItems:"center",gap:8}}><MI n="cloud" s={26} c="#60a5fa"/> {t("weather_title")} · {t("weather_location")}</div>
-          <div style={{display:"flex",gap:4}}>
-            {["en","sv"].map(L=><button key={L} onClick={()=>{if(window.I18N)window.I18N.setLang(L)}} style={{...S.btn,background:lang===L?"#3b82f6":"#ffffff08",color:lang===L?"#fff":"#888",padding:"3px 8px",fontSize:10,fontWeight:700}}>{L.toUpperCase()}</button>)}
-          </div>
-        </div>
+        <div style={{fontSize:"clamp(16px,4vw,22px)",fontWeight:800,marginBottom:12,display:"flex",alignItems:"center",gap:8}}><MI n="cloud" s={26} c="#60a5fa"/> {t("weather_title")} · {t("weather_location")}</div>
 
         {/* SMHI WARNINGS */}
         {smhiWarnings?.warnings?.length>0&&<div style={{marginBottom:14}}>
@@ -1100,38 +1137,73 @@ function App(){
           </div>}
         </div>}
 
-        {/* HOURLY FORECAST */}
-        {w.hourly?.length>0&&<div style={{background:"#0d1117",border:"1px solid #1e2430",borderRadius:12,padding:"12px 14px",marginBottom:14}}>
-          <div onClick={()=>toggle("hr")} style={{display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer",marginBottom:8}}>
-            <div style={{display:"flex",alignItems:"center",gap:6,fontSize:12,fontWeight:700,color:"#cbd5e1"}}><MI n="schedule" s={16} c="#60a5fa"/> {t("weather_next_hours",{n:expandedSection.hr?24:12})}</div>
-            <MI n={expandedSection.hr?"expand_less":"expand_more"} s={18} c="#888"/>
+        {/* HOURLY FORECAST - compact cards with big icons + temp */}
+        {w.hourly?.length>0&&<div style={{background:"#0d1117",border:"1px solid #1e2430",borderRadius:12,padding:"14px",marginBottom:14,animation:"fadeUp .5s"}}>
+          <div onClick={()=>toggle("hr")} style={{display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer",marginBottom:10}}>
+            <div style={{display:"flex",alignItems:"center",gap:6,fontSize:13,fontWeight:700,color:"#cbd5e1"}}><MI n="schedule" s={18} c="#60a5fa"/> {t("weather_next_hours",{n:expandedSection.hr?24:12})}</div>
+            <MI n={expandedSection.hr?"expand_less":"expand_more"} s={20} c="#888"/>
           </div>
-          <div style={{display:"flex",gap:6,overflowX:"auto",paddingBottom:4}}>
-            {w.hourly.slice(0,expandedSection.hr?24:12).map((h,i)=><div key={i} style={{flexShrink:0,textAlign:"center",background:"#080a0e",borderRadius:8,padding:"6px 10px",minWidth:64,border:"1px solid #1e2430"}}>
-              <div style={{fontSize:9,color:"#888"}}>{new Date(h.time).getHours().toString().padStart(2,"0")}:00</div>
-              <MI n={wIcon(h.symbol)} s={24} c={wColor(h.symbol)}/>
-              <div style={{fontSize:11,fontWeight:700,color:"#fff",marginTop:2}}>{h.temp!==undefined?Math.round(h.temp)+"°":"–"}</div>
-              {h.precip>0&&<div style={{fontSize:8,color:"#60a5fa",marginTop:1}}><MI n="water_drop" s={8} c="#60a5fa"/>{h.precip}</div>}
-              {h.precip_prob>0&&h.precip===0&&<div style={{fontSize:8,color:"#94a3b8",marginTop:1}}>{Math.round(h.precip_prob)}%</div>}
-            </div>)}
+          <div style={{display:"flex",gap:8,overflowX:"auto",paddingBottom:6,scrollSnapType:"x mandatory"}}>
+            {w.hourly.slice(0,expandedSection.hr?24:12).map((h,i)=>{
+              const isFirst=i===0;
+              const hr=new Date(h.time).getHours().toString().padStart(2,"0");
+              return <div key={i} style={{flexShrink:0,textAlign:"center",background:isFirst?"linear-gradient(180deg,#1e3a8a44,#0d1117)":"#080a0e",borderRadius:10,padding:"10px 12px",minWidth:72,border:isFirst?"1px solid #3b82f655":"1px solid #1e2430",scrollSnapAlign:"start",animation:"fadeUp .4s",animationDelay:(i*0.03)+"s",animationFillMode:"backwards"}}>
+                <div style={{fontSize:10,color:isFirst?"#3b82f6":"#888",fontWeight:700}}>{isFirst?(lang==="sv"?"NU":"NOW"):hr+":00"}</div>
+                <div style={{margin:"4px 0",height:32,display:"flex",alignItems:"center",justifyContent:"center"}}>
+                  <MI n={wIcon(h.symbol)} s={30} c={wColor(h.symbol)} f={{filter:"drop-shadow(0 0 6px "+wColor(h.symbol)+"44)"}}/>
+                </div>
+                <div style={{fontSize:15,fontWeight:800,color:"#fff",lineHeight:1.1}}>{h.temp!==undefined?Math.round(h.temp)+"°":"–"}</div>
+                <div style={{minHeight:14,marginTop:4}}>
+                  {h.precip>0?<div style={{fontSize:9,color:"#60a5fa",display:"flex",alignItems:"center",justifyContent:"center",gap:2}}><MI n="water_drop" s={10} c="#60a5fa"/>{h.precip.toFixed(1)}mm</div>:
+                   h.precip_prob>5?<div style={{fontSize:9,color:"#94a3b8"}}>{Math.round(h.precip_prob)}%</div>:null}
+                </div>
+              </div>;
+            })}
           </div>
         </div>}
 
-        {/* 7-DAY FORECAST */}
-        {w.daily?.length>0&&<div style={{background:"#0d1117",border:"1px solid #1e2430",borderRadius:12,padding:"12px 14px",marginBottom:14}}>
-          <div style={{display:"flex",alignItems:"center",gap:6,fontSize:12,fontWeight:700,color:"#cbd5e1",marginBottom:8}}><MI n="calendar_today" s={16} c="#60a5fa"/> {t("weather_forecast_7day")}</div>
+        {/* 7-DAY FORECAST - clickable rows that expand to per-hour cards */}
+        {w.daily?.length>0&&<div style={{background:"#0d1117",border:"1px solid #1e2430",borderRadius:12,padding:"14px",marginBottom:14,animation:"fadeUp .55s"}}>
+          <div style={{display:"flex",alignItems:"center",gap:6,fontSize:13,fontWeight:700,color:"#cbd5e1",marginBottom:10}}><MI n="calendar_today" s={18} c="#60a5fa"/> {t("weather_forecast_7day")}</div>
           <div style={{display:"flex",flexDirection:"column",gap:4}}>
-            {w.daily.slice(0,7).map((d,i)=>{return <div key={i} style={{display:"grid",gridTemplateColumns:"70px 32px 1fr 80px",gap:8,alignItems:"center",padding:"6px 8px",background:"#080a0e",borderRadius:6,fontSize:11}}>
-              <div style={{color:"#cbd5e1",fontWeight:700}}>{i===0?t("weather_today"):dayName(d.date,true)}</div>
-              <MI n={wIcon(d.symbol)} s={20} c={wColor(d.symbol)}/>
-              <div style={{display:"flex",alignItems:"center",gap:6,color:"#888",fontSize:10,flexWrap:"wrap"}}>
-                {d.precip>0&&<span style={{display:"inline-flex",alignItems:"center",gap:2}}><MI n="water_drop" s={10} c="#60a5fa"/>{d.precip.toFixed(1)}mm</span>}
-                {d.wind!==undefined&&<span style={{display:"inline-flex",alignItems:"center",gap:2}}><MI n="air" s={10}/>{d.wind.toFixed(1)}m/s</span>}
-              </div>
-              <div style={{textAlign:"right",color:"#fff",fontWeight:700}}>
-                {d.temp_max!==undefined?Math.round(d.temp_max)+"°":"–"}<span style={{color:"#64748b",marginLeft:4}}>{d.temp_min!==undefined?Math.round(d.temp_min)+"°":"–"}</span>
-              </div>
-            </div>;})}
+            {w.daily.slice(0,7).map((d,i)=>{
+              const dayKey="day"+i;
+              const expanded=expandedSection[dayKey];
+              // Get hourly entries for this date
+              const dayHourly=(w.hourly||[]).filter(h=>h.time.startsWith(d.date));
+              return <div key={i} style={{background:expanded?"#0a1929":"#080a0e",borderRadius:8,border:expanded?"1px solid #3b82f644":"1px solid #1e2430",overflow:"hidden",transition:"all .2s"}}>
+                <div onClick={()=>toggle(dayKey)} style={{display:"grid",gridTemplateColumns:"80px 36px 1fr 90px 16px",gap:8,alignItems:"center",padding:"10px 10px",fontSize:12,cursor:"pointer"}}>
+                  <div style={{color:expanded?"#3b82f6":"#cbd5e1",fontWeight:700}}>{i===0?t("weather_today"):dayName(d.date,true)}</div>
+                  <MI n={wIcon(d.symbol)} s={26} c={wColor(d.symbol)} f={{filter:"drop-shadow(0 0 4px "+wColor(d.symbol)+"33)"}}/>
+                  <div style={{display:"flex",alignItems:"center",gap:8,color:"#94a3b8",fontSize:10,flexWrap:"wrap"}}>
+                    {d.precip>0&&<span style={{display:"inline-flex",alignItems:"center",gap:2}}><MI n="water_drop" s={11} c="#60a5fa"/>{d.precip.toFixed(1)}mm</span>}
+                    {d.wind!==undefined&&<span style={{display:"inline-flex",alignItems:"center",gap:2}}><MI n="air" s={11}/>{d.wind.toFixed(1)}m/s</span>}
+                  </div>
+                  <div style={{textAlign:"right",color:"#fff",fontWeight:700,fontSize:13}}>
+                    {d.temp_max!==undefined?Math.round(d.temp_max)+"°":"–"}<span style={{color:"#64748b",marginLeft:6,fontSize:11}}>{d.temp_min!==undefined?Math.round(d.temp_min)+"°":"–"}</span>
+                  </div>
+                  <MI n={expanded?"expand_less":"expand_more"} s={16} c="#666"/>
+                </div>
+                {expanded&&<div style={{padding:"0 10px 12px",animation:"fadeUp .25s"}}>
+                  {dayHourly.length>0?<div style={{display:"flex",gap:6,overflowX:"auto",paddingBottom:4,scrollSnapType:"x mandatory"}}>
+                    {dayHourly.map((h,hi)=>{
+                      const hr=new Date(h.time).getHours().toString().padStart(2,"0");
+                      return <div key={hi} style={{flexShrink:0,textAlign:"center",background:"#0d1117",borderRadius:8,padding:"8px 10px",minWidth:62,border:"1px solid #1e2430",scrollSnapAlign:"start",animation:"fadeUp .35s",animationDelay:(hi*0.025)+"s",animationFillMode:"backwards"}}>
+                        <div style={{fontSize:9,color:"#888",fontWeight:700}}>{hr}:00</div>
+                        <div style={{margin:"3px 0"}}>
+                          <MI n={wIcon(h.symbol)} s={22} c={wColor(h.symbol)}/>
+                        </div>
+                        <div style={{fontSize:12,fontWeight:800,color:"#fff"}}>{h.temp!==undefined?Math.round(h.temp)+"°":"–"}</div>
+                        <div style={{minHeight:12,marginTop:2}}>
+                          {h.precip>0?<div style={{fontSize:8,color:"#60a5fa"}}>{h.precip.toFixed(1)}mm</div>:
+                           h.precip_prob>5?<div style={{fontSize:8,color:"#94a3b8"}}>{Math.round(h.precip_prob)}%</div>:null}
+                        </div>
+                      </div>;
+                    })}
+                  </div>:<div style={{color:"#666",fontSize:10,textAlign:"center",padding:8}}>{lang==="sv"?"Inga timdata för denna dag":"No hourly data for this day"}</div>}
+                </div>}
+              </div>;
+            })}
           </div>
         </div>}
 
