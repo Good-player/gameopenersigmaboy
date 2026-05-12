@@ -10,24 +10,6 @@ const USER_ID=getUserId();
 
 // Server API
 const isMobile=/Android|iPhone|iPad|iPod|webOS/i.test(navigator.userAgent)||window.innerWidth<600;
-function isPlayTime(){
-  const now=new Date();
-  const swe=new Date(now.toLocaleString("en-US",{timeZone:"Europe/Stockholm"}));
-  const day=swe.getDay(),hr=swe.getHours();
-  if(day===0||day===6)return true; // Sat/Sun no limit
-  if(day===5)return hr>=8&&hr<14; // Friday 8-14
-  return hr>=8&&hr<15; // Mon-Thu 8-15
-}
-function getNextPlayTime(){
-  const now=new Date();
-  const swe=new Date(now.toLocaleString("en-US",{timeZone:"Europe/Stockholm"}));
-  const day=swe.getDay(),hr=swe.getHours();
-  if(day===0||day===6)return null;
-  if(hr<8)return"Today at 08:00";
-  if(day===5&&hr>=14)return"Saturday (no limit)";
-  if(hr>=15)return day===4?"Saturday (no limit)":"Tomorrow at 08:00";
-  return null;
-}
 const API_BASE="https://samptonweb.dpdns.org/api/caseopen";
 const API_LIGHT="https://samptonweb.wat-the-heck-lol12.workers.dev/api/caseopen";
 async function api(path,body){let resp;try{resp=await fetch(API_BASE+path,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({uid:USER_ID,uname:getUserName(),...body})})}catch(e){if(window.__setOnline)window.__setOnline(false);return null}if(window.__setOnline)window.__setOnline(true);try{return await resp.json()}catch{return null}}
@@ -166,6 +148,11 @@ function MI({n,s,c,f}){return <span className="material-icons-round" style={{fon
 function Starburst({color,children,spin}){const pts=18,outer=50,inner=42;let d="";for(let i=0;i<pts*2;i++){const a=(Math.PI*i)/pts-Math.PI/2,r=i%2===0?outer:inner;d+=(i===0?"M":"L")+(50+r*Math.cos(a))+","+(50+r*Math.sin(a))}d+="Z";return(<div style={{position:"relative",width:"clamp(120px,35vw,200px)",height:"clamp(120px,35vw,200px)"}}><svg viewBox="0 0 100 100" style={{position:"absolute",inset:0,width:"100%",height:"100%",filter:`drop-shadow(0 0 ${spin?24:12}px ${color}${spin?"88":"44"})`,animation:spin?"spin 8s linear infinite":"none"}}><path d={d} fill={color+"22"} stroke={color} strokeWidth="0.5"/></svg><div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center"}}>{children}</div></div>)}
 
 function App(){
+  // i18n hook - re-render on language change
+  const[lang,setLang]=useState(typeof window!=='undefined'&&window.I18N?window.I18N.getLang():'en');
+  const t=(k,vars)=>typeof window!=='undefined'&&window.I18N?window.I18N.t(k,vars):k;
+  useEffect(()=>{const h=(e)=>setLang(e.detail.lang);window.addEventListener('langchange',h);return()=>window.removeEventListener('langchange',h)},[]);
+
   const[appLoading,setAppLoading]=useState(true);const[offline,setOffline]=useState(false);const offlineRef=useRef(false);useEffect(()=>{window.__setOnline=(v)=>{if(!v&&!offlineRef.current){offlineRef.current=true;setOffline(true)}if(v&&offlineRef.current){offlineRef.current=false;setOffline(false)}};return()=>{window.__setOnline=null}},[]);const[loadProgress,setLoadProgress]=useState(0);const[loadMsg,setLoadMsg]=useState("Initializing...");const[slot,setSlot]=useState(0);const[slotMeta,setSlotMeta]=useState([null,null,null]);const[showSlots,setShowSlots]=useState(true);
   const[st,setSt]=useState(INIT);const[page,setPage]=useState("shop");const[selCase,setSelCase]=useState(null);const[wonItem,setWonItem]=useState(null);const[wonFloat,setWonFloat]=useState(0);const[wonQuote,setWonQuote]=useState("");const[scrollItems,setScrollItems]=useState([]);const[scrollDone,setScrollDone]=useState(false);const[opening,setOpening]=useState(false);const[resetMsg,setResetMsg]=useState("");const[loanAmt,setLoanAmt]=useState("");const[rentPaid,setRentPaid]=useState(0);const[inspecting,setInspecting]=useState(null);const[confirmReset,setConfirmReset]=useState(false);const[drops,setDrops]=useState([]);
   const[invSort,setInvSort]=useState("newest");const[invFilter,setInvFilter]=useState("all");const[invView,setInvView]=useState("grid");const[selItem,setSelItem]=useState(null);const[sellAmt,setSellAmt]=useState("");const[sellConfirm,setSellConfirm]=useState(null);const[lastWonId,setLastWonId]=useState(null);
@@ -174,7 +161,7 @@ function App(){
   const[dmInbox,setDmInbox]=useState(null);const[dmTo,setDmTo]=useState("");const[dmMsg,setDmMsg]=useState("");const[dmSearch,setDmSearch]=useState("");const[dmResults,setDmResults]=useState([]);const[dmUnread,setDmUnread]=useState(0);
   const[viewProfile,setViewProfile]=useState(null);const[editBio,setEditBio]=useState("");const[editPrivacy,setEditPrivacy]=useState("public");
   const[reportTarget,setReportTarget]=useState("");const[reportReason,setReportReason]=useState("");const[reportMsg,setReportMsg]=useState("");
-  const[toast,setToast]=useState(null);const[reportModal,setReportModal]=useState(null);const[pvpEliminated,setPvpEliminated]=useState(false);const[horseRace,setHorseRace]=useState(null);const[horseAnim,setHorseAnim]=useState(0);const[horseBet,setHorseBet]=useState("");const[horsePick,setHorsePick]=useState(0);const[horseHistory,setHorseHistory]=useState([]);const[multiResults,setMultiResults]=useState(null);const[bjTable,setBjTable]=useState(null);const[bjBet,setBjBet]=useState("10000");const[bjHasCard,setBjHasCard]=useState(false);const[btcPrice,setBtcPrice]=useState(0);const[btcHistory,setBtcHistory]=useState([]);const[btcPortfolio,setBtcPortfolio]=useState({active:[],sold:[]});const[btcInvestAmt,setBtcInvestAmt]=useState("");const[btcDays,setBtcDays]=useState(7);const[btcLastUpdate,setBtcLastUpdate]=useState(0);const[btcNextUpdate,setBtcNextUpdate]=useState(0);const[btcTick,setBtcTick]=useState(0);const[btcChange24h,setBtcChange24h]=useState(0);const[plinkoBet,setPlinkoBet]=useState("1000");const[plinkoRisk,setPlinkoRisk]=useState("medium");const[plinkoRows,setPlinkoRows]=useState(12);const[plinkoResult,setPlinkoResult]=useState(null);const[plinkoAnim,setPlinkoAnim]=useState(false);const[rouletteBets,setRouletteBets]=useState([]);const[rouletteResult,setRouletteResult]=useState(null);const[rouletteAnim,setRouletteAnim]=useState(false);const[rouletteAmt,setRouletteAmt]=useState("1000");const[schoolData,setSchoolData]=useState(null);const[weatherData,setWeatherData]=useState(null);const[schoolLoading,setSchoolLoading]=useState(false);const[smhiWarnings,setSmhiWarnings]=useState(null);const[pollenData,setPollenData]=useState(null);const[expandedSection,setExpandedSection]=useState({});const horseCanvasRef=useRef(null);const horseAnimRef=useRef(null);const syncLockRef=useRef(false);const plinkoCanvasRef=useRef(null);const rouletteCanvasRef=useRef(null);const[pvpWinModal,setPvpWinModal]=useState(null);const[warnModal,setWarnModal]=useState(null);const[banModal,setBanModal]=useState(null);const[banTimer,setBanTimer]=useState("");const[playAllowed,setPlayAllowed]=useState(isPlayTime());const[giftModal,setGiftModal]=useState(null);const[giftAmt,setGiftAmt]=useState("");
+  const[toast,setToast]=useState(null);const[reportModal,setReportModal]=useState(null);const[pvpEliminated,setPvpEliminated]=useState(false);const[horseRace,setHorseRace]=useState(null);const[horseAnim,setHorseAnim]=useState(0);const[horseBet,setHorseBet]=useState("");const[horsePick,setHorsePick]=useState(0);const[horseHistory,setHorseHistory]=useState([]);const[multiResults,setMultiResults]=useState(null);const[bjTable,setBjTable]=useState(null);const[bjBet,setBjBet]=useState("10000");const[bjHasCard,setBjHasCard]=useState(false);const[btcPrice,setBtcPrice]=useState(0);const[btcHistory,setBtcHistory]=useState([]);const[btcPortfolio,setBtcPortfolio]=useState({active:[],sold:[]});const[btcInvestAmt,setBtcInvestAmt]=useState("");const[btcDays,setBtcDays]=useState(7);const[btcLastUpdate,setBtcLastUpdate]=useState(0);const[btcNextUpdate,setBtcNextUpdate]=useState(0);const[btcTick,setBtcTick]=useState(0);const[btcChange24h,setBtcChange24h]=useState(0);const[plinkoBet,setPlinkoBet]=useState("1000");const[plinkoRisk,setPlinkoRisk]=useState("medium");const[plinkoRows,setPlinkoRows]=useState(12);const[plinkoResult,setPlinkoResult]=useState(null);const[plinkoAnim,setPlinkoAnim]=useState(false);const[rouletteBets,setRouletteBets]=useState([]);const[rouletteResult,setRouletteResult]=useState(null);const[rouletteAnim,setRouletteAnim]=useState(false);const[rouletteAmt,setRouletteAmt]=useState("1000");const[weatherData,setWeatherData]=useState(null);const[smhiWarnings,setSmhiWarnings]=useState(null);const[pollenData,setPollenData]=useState(null);const[airData,setAirData]=useState(null);const[expandedSection,setExpandedSection]=useState({});const horseCanvasRef=useRef(null);const horseAnimRef=useRef(null);const syncLockRef=useRef(false);const plinkoCanvasRef=useRef(null);const rouletteCanvasRef=useRef(null);const[pvpWinModal,setPvpWinModal]=useState(null);const[warnModal,setWarnModal]=useState(null);const[banModal,setBanModal]=useState(null);const[banTimer,setBanTimer]=useState("");const[giftModal,setGiftModal]=useState(null);const[giftAmt,setGiftAmt]=useState("");
   const[events,setEvents]=useState([]);const[dismissedEvents,setDismissedEvents]=useState({});
   const[friendsList,setFriendsList]=useState([]);
   function showProfile(username){if(!username||username==="Anon"||username==="SYSTEM")return;api("/profile/full",{target:username.toLowerCase(),username:account?.username||""}).then(r=>{if(r?.profile)setViewProfile(r.profile)}).catch(()=>{})}
@@ -430,8 +417,6 @@ function App(){
   const filteredInv=getFilteredSorted(st.inv,st.starred||{});
 
   // COOKIE CONSENT
-  useEffect(()=>{const iv=setInterval(()=>setPlayAllowed(isPlayTime()),30000);return()=>clearInterval(iv)},[]);
-  if(!playAllowed&&!["owner","admin"].includes(account?.role))return(<div style={{...S.root,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",gap:16}}><style>{CSS}</style><MI n="schedule" s={48} c="#f59e0b"/><div style={{color:"#f59e0b",fontSize:"clamp(18px,5vw,24px)",fontWeight:800}}>Outside Play Hours</div><div style={{color:"#888",fontSize:12,textAlign:"center",maxWidth:300}}>{(()=>{const now=new Date();const swe=new Date(now.toLocaleString("en-US",{timeZone:"Europe/Stockholm"}));const day=swe.getDay();const schedule=day===5?"Friday: 08:00 - 14:00":"Mon-Thu: 08:00 - 15:00";return <div><div style={{marginBottom:8}}>{schedule}</div><div>Sat-Sun: No limit</div><div style={{color:"#f59e0b",marginTop:12,fontWeight:600}}>Next: {getNextPlayTime()||"Now!"}</div><div style={{color:"#555",marginTop:8,fontSize:10}}>Stockholm time: {swe.toLocaleTimeString("sv-SE",{hour:"2-digit",minute:"2-digit"})}</div></div>})()}</div></div>);
   if(!consent)return(<div style={S.root}><style>{CSS}</style><div style={{flex:1,display:"flex",flexDirection:"column",alignItems:"center",justifyContent:"center",padding:"clamp(20px,5vw,40px)",gap:16,textAlign:"center"}}><div style={{fontSize:"clamp(40px,12vw,64px)"}}><MI n="cookie" s={48}/></div><div style={{fontSize:"clamp(18px,5vw,26px)",fontWeight:800}}>Cookie Notice</div><div style={{color:"#888",fontSize:"clamp(10px,2.5vw,13px)",maxWidth:400}}>This game uses localStorage to save your progress and cookies to sync your account. Your data stays in your browser and on our server only.</div><button onClick={()=>{giveConsent();setConsent(true)}} style={{...S.btn,background:"#4ade80",color:"#000",padding:"12px 32px",fontSize:"clamp(12px,3vw,16px)"}}>Accept & Play</button><div style={{color:"#555",fontSize:"clamp(8px,2vw,10px)"}}>Required to save game data</div></div></div>);
 
   // SAVE SLOT SCREEN
@@ -479,7 +464,7 @@ function App(){
     {events.filter(e=>!dismissedEvents[e.id]).map(e=>{const ec=e.type==="announcement"?"#f59e0b":e.type==="sale"?"#4ade80":e.type==="maintenance"?"#eb4b4b":e.type==="warning"?"#f97316":e.type==="update"?"#8b5cf6":e.type==="rain"?"#ffd700":e.type==="brainrot"?"#ff6767":e.type==="takeover"?"#e2e8f0":e.type==="jumpscare"?"#eb4b4b":"#3b82f6";const ei=e.type==="announcement"?"campaign":e.type==="sale"?"local_offer":e.type==="maintenance"?"build":e.type==="warning"?"warning":e.type==="update"?"system_update":e.type==="rain"?"payments":e.type==="brainrot"?"psychology":e.type==="takeover"?"wallpaper":e.type==="jumpscare"?"flash_on":"celebration";let sty={};try{sty=JSON.parse(e.style||"{}")}catch{};return <div key={e.id}>{e.type==="takeover"&&sty.image&&<div style={{position:"fixed",inset:0,zIndex:99,backgroundImage:"url("+sty.image+")",backgroundSize:"cover",backgroundPosition:"center",opacity:0.15,pointerEvents:"none"}}/>}{e.type==="jumpscare"&&sty.image&&!dismissedEvents["js_"+e.id]&&<div onClick={()=>setDismissedEvents(d=>({...d,["js_"+e.id]:true}))} style={{position:"fixed",inset:0,zIndex:99998,background:"#000",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}><img src={sty.image} style={{maxWidth:"90vw",maxHeight:"90vh",objectFit:"contain"}}/><div style={{position:"absolute",bottom:40,color:"#666",fontSize:12}}>Click to dismiss</div></div>}{e.type==="rain"&&<div style={{position:"fixed",top:0,left:0,right:0,height:"100vh",pointerEvents:"none",zIndex:98,overflow:"hidden"}}>{[...Array(20)].map((_,i)=><div key={i} style={{position:"absolute",left:Math.random()*100+"%",top:-20,fontSize:Math.random()*14+12,animation:"moneyRain "+(2+Math.random()*3)+"s linear "+(Math.random()*2)+"s infinite",opacity:0.6}}>{["💲","💰","💵","🤑"][i%4]}</div>)}</div>}<div className={"slideIn"+(sty.effect?" effect"+sty.effect[0].toUpperCase()+sty.effect.slice(1):"")} style={{background:ec+"18",borderBottom:"1px solid "+ec+"33",padding:"6px 12px",display:"flex",alignItems:"center",gap:8}}><MI n={ei} s={16} c={ec}/><div style={{flex:1}}><div style={{color:ec,fontWeight:700,fontSize:"clamp(10px,2.5vw,12px)"}}>{e.title}{e.discount>0&&<span style={{background:"#4ade80",color:"#000",padding:"1px 6px",borderRadius:4,fontSize:9,fontWeight:800,marginLeft:6}}>{e.discount}% OFF</span>}{e.type==="brainrot"&&<span style={{marginLeft:6,fontSize:9}}>🧠💀</span>}</div>{e.description&&<div style={{color:"#aaa",fontSize:"clamp(8px,2vw,10px)"}}>{e.description}</div>}{sty.image&&e.type!=="jumpscare"&&e.type!=="takeover"&&<img src={sty.image} style={{maxWidth:120,maxHeight:60,borderRadius:4,marginTop:4,objectFit:"cover"}}/>}</div><button onClick={()=>setDismissedEvents(d=>({...d,[e.id]:true,["js_"+e.id]:true}))} style={{background:"transparent",border:"none",color:"#555",cursor:"pointer"}}><MI n="close" s={14}/></button></div></div>})}
 
     {/* NAV */}
-    <div style={S.nav}>{[["shop","Shop"],["inv",`Inv (${st.inv.length})`],["stats","Stats"],["loan","Loan"],["flip","Flip"],["pvp","PvP"],["live","Live"],["lb","Top"],["chat","Chat"],["dm",`DM${dmUnread>0?" ("+dmUnread+")":""}`],["me","Me"],["map","Map"],["horse","Horses"],["bj","BJ"],["btc","BTC"],["plinko","Plinko"],["roulette","Roulette"],["school","School"]].map(([k,l])=>(<button key={k} onClick={()=>{if(!opening||scrollDone||k==="shop"){setPage(k);if(k!=="opening")setOpening(false);if(k==="map")getOnline().then(r=>{if(r)setOnlineData(r)});if(k==="pvp")refreshLobbies();if(k==="bj"&&account){api("/bj/buycard",{username:account.username,token:account.token}).then(r=>{if(r?.hasCard)setBjHasCard(true)})}if(k==="btc"){/* useEffect handles initial load */}if(k==="school"){if(!schoolData){setSchoolLoading(true);api("/school/menu",{slug:"sollentuna-international-school"}).then(r=>{setSchoolData(r||{weeks:[]});setSchoolLoading(false)})}if(!weatherData){api("/weather/today",{lat:59.4288,lon:17.9498}).then(r=>{setWeatherData(r)})}if(!smhiWarnings){api("/weather/warnings",{}).then(r=>{setSmhiWarnings(r||{warnings:[]})})}if(!pollenData){api("/weather/pollen",{}).then(r=>{setPollenData(r||{today:[]})})}}if(k==="dm"&&account){api("/dm/inbox",{username:account.username,token:account.token}).then(r=>{if(r?.ok){setDmInbox(r);setDmUnread(0);api("/dm/read",{username:account.username,token:account.token})}}).catch(()=>{setTimeout(()=>{api("/dm/inbox",{username:account.username,token:account.token}).then(r2=>{if(r2?.ok){setDmInbox(r2);setDmUnread(0)}})},2000)})}}}} style={{...S.tab,...(page===k||(page==="opening"&&k==="shop")?S.tabOn:{}),color:k==="dm"&&dmUnread>0?"#f59e0b":undefined}}>{l}</button>))}{account&&["admin","owner","mod"].includes(account.role)&&<button onClick={()=>{if(account.role==="owner")window.owner();else window.admin()}} style={{...S.tab,background:"#ff000022",color:"#ff4444",border:"1px solid #ff000044"}}>{account.role==="owner"?"Owner":"Admin"}</button>}<button onClick={()=>setConfirmReset(true)} style={{...S.tab,marginLeft:"auto",color:"#eb4b4b"}}>Reset</button></div>
+    <div style={S.nav}>{[["shop",t("tab_shop")],["inv",`${t("tab_inv")} (${st.inv.length})`],["stats",t("tab_stats")],["loan",t("tab_loan")],["flip",t("tab_flip")],["pvp",t("tab_pvp")],["live",t("tab_live")],["lb",t("tab_lb")],["chat",t("tab_chat")],["dm",`${t("tab_dm")}${dmUnread>0?" ("+dmUnread+")":""}`],["me",t("tab_me")],["map",t("tab_map")],["horse",t("tab_horse")],["bj",t("tab_bj")],["btc",t("tab_btc")],["plinko",t("tab_plinko")],["roulette",t("tab_roulette")],["school",t("tab_weather")]].map(([k,l])=>(<button key={k} onClick={()=>{if(!opening||scrollDone||k==="shop"){setPage(k);if(k!=="opening")setOpening(false);if(k==="map")getOnline().then(r=>{if(r)setOnlineData(r)});if(k==="pvp")refreshLobbies();if(k==="bj"&&account){api("/bj/buycard",{username:account.username,token:account.token}).then(r=>{if(r?.hasCard)setBjHasCard(true)})}if(k==="btc"){/* useEffect handles initial load */}if(k==="school"){if(!weatherData){api("/weather/today",{lat:59.4288,lon:17.9498}).then(r=>{setWeatherData(r)})}if(!smhiWarnings){api("/weather/warnings",{}).then(r=>{setSmhiWarnings(r||{warnings:[]})})}if(!pollenData){api("/weather/pollen",{}).then(r=>{setPollenData(r||{today:[]})})}if(!airData){api("/weather/air",{lat:59.4288,lon:17.9498}).then(r=>{setAirData(r)})}}if(k==="dm"&&account){api("/dm/inbox",{username:account.username,token:account.token}).then(r=>{if(r?.ok){setDmInbox(r);setDmUnread(0);api("/dm/read",{username:account.username,token:account.token})}}).catch(()=>{setTimeout(()=>{api("/dm/inbox",{username:account.username,token:account.token}).then(r2=>{if(r2?.ok){setDmInbox(r2);setDmUnread(0)}})},2000)})}}}} style={{...S.tab,...(page===k||(page==="opening"&&k==="shop")?S.tabOn:{}),color:k==="dm"&&dmUnread>0?"#f59e0b":undefined}}>{l}</button>))}{account&&["admin","owner","mod"].includes(account.role)&&<button onClick={()=>{if(account.role==="owner")window.owner();else window.admin()}} style={{...S.tab,background:"#ff000022",color:"#ff4444",border:"1px solid #ff000044"}}>{account.role==="owner"?"Owner":"Admin"}</button>}<button onClick={()=>setConfirmReset(true)} style={{...S.tab,marginLeft:"auto",color:"#eb4b4b"}}>Reset</button></div>
 
     {/* SHOP */}
     {page==="shop"&&<div style={S.body}><div style={S.grid}>{CASES.map(c=>{const cP=saleDiscount>0?Math.floor(c.price*(1-saleDiscount/100)):c.price;const ok=st.bal>=cP;return(<div key={c.id} style={{...S.card,borderColor:c.color+"44",opacity:ok?1:.35}}><div style={{...S.cardIcon,background:c.color+"12",borderColor:c.color+"28"}}><span style={{fontSize:"clamp(26px,6.5vw,40px)"}}>{c.icon}</span></div><div style={S.cardName}>{c.name}</div><div style={{...S.cardPrice,color:c.color}}>{saleDiscount>0&&<span style={{textDecoration:"line-through",color:"#666",fontSize:"clamp(9px,2.5vw,12px)",marginRight:4}}>{money(c.price)}</span>}{money(saleDiscount>0?Math.floor(c.price*(1-saleDiscount/100)):c.price)}</div><div style={{display:"flex",flexDirection:"column",gap:3,width:"100%"}}><div style={{display:"flex",gap:3}}><button disabled={!ok} onClick={()=>doOpen(c)} style={{...S.btn,background:ok?c.color:"#333",color:"#fff",flex:2,padding:"clamp(5px,1.2vw,8px) 0",fontSize:"clamp(9px,2.3vw,12px)"}}>Open</button><button disabled={st.bal<cP*10||c.id==="epstein"} onClick={()=>{if(c.id==="epstein"){setToast({msg:"No bulk opening for this case",color:"#eb4b4b"});return}doMultiOpen(c,10)}} style={{...S.btn,background:st.bal>=cP*10?c.color+"aa":"#222",color:st.bal>=cP*10?"#fff":"#555",flex:1,padding:"clamp(5px,1.2vw,8px) 0",fontSize:"clamp(8px,2vw,10px)"}}>x10</button></div><button onClick={()=>{setInspecting(c);setPage("inspect")}} style={{...S.btn,background:"#ffffff06",color:"#666",padding:"3px 0",fontSize:"clamp(8px,2vw,10px)"}}>Inspect</button></div></div>)})}</div></div>}
@@ -1001,22 +986,38 @@ function App(){
       </div>}
     </div>}
 
-    {/* SCHOOL */}
+    {/* WEATHER */}
     {page==="school"&&(()=>{
       const wMap={"clearsky_day":"wb_sunny","clearsky_night":"nights_stay","fair_day":"wb_sunny","fair_night":"nights_stay","partlycloudy_day":"partly_cloudy_day","partlycloudy_night":"partly_cloudy_night","cloudy":"cloud","rain":"rainy","lightrain":"grain","heavyrain":"thunderstorm","sleet":"weather_mix","snow":"ac_unit","lightsnow":"ac_unit","heavysnow":"ac_unit","snowshowers_day":"ac_unit","snowshowers_night":"ac_unit","rainshowers_day":"rainy","rainshowers_night":"rainy","thunder":"thunderstorm","rainandthunder":"thunderstorm","fog":"foggy"};
       const wIcon=(s)=>{if(!s)return"cloud";const k=s.toLowerCase().replace(/_polartwilight|_(day|night)$/,"");return wMap[k]||wMap[s.toLowerCase()]||"cloud"};
       const wColor=(s)=>{if(!s)return"#94a3b8";const sl=s.toLowerCase();if(sl.includes("clear"))return"#fbbf24";if(sl.includes("fair"))return"#facc15";if(sl.includes("rain")||sl.includes("shower"))return"#3b82f6";if(sl.includes("snow")||sl.includes("sleet"))return"#bae6fd";if(sl.includes("thunder"))return"#a855f7";if(sl.includes("fog"))return"#64748b";if(sl.includes("cloudy"))return"#94a3b8";return"#94a3b8"};
-      const windDir=(deg)=>{if(deg===undefined||deg===null)return"–";const dirs=["N","NNE","NE","ENE","E","ESE","SE","SSE","S","SSW","SW","WSW","W","WNW","NW","NNW"];return dirs[Math.round(deg/22.5)%16]};
-      const fmtTime=(iso)=>{if(!iso)return"–";const d=new Date(iso);return d.toLocaleTimeString("sv-SE",{hour:"2-digit",minute:"2-digit",timeZone:"Europe/Stockholm"})};
-      const uvLabel=(u)=>{if(u===undefined||u===null)return"–";if(u<3)return"Low";if(u<6)return"Moderate";if(u<8)return"High";if(u<11)return"Very High";return"Extreme"};
+      const windDirKey=(deg)=>{if(deg===undefined||deg===null)return null;const keys=["wind_n","wind_nne","wind_ne","wind_ene","wind_e","wind_ese","wind_se","wind_sse","wind_s","wind_ssw","wind_sw","wind_wsw","wind_w","wind_wnw","wind_nw","wind_nnw"];return keys[Math.round(deg/22.5)%16]};
+      const windDir=(deg)=>{const k=windDirKey(deg);return k?t(k):"–"};
+      const fmtTime=(iso)=>{if(!iso)return"–";const d=new Date(iso);return d.toLocaleTimeString(lang==="sv"?"sv-SE":"en-GB",{hour:"2-digit",minute:"2-digit",timeZone:"Europe/Stockholm"})};
+      const uvLabel=(u)=>{if(u===undefined||u===null)return"–";if(u<3)return t("uv_low");if(u<6)return t("uv_moderate");if(u<8)return t("uv_high");if(u<11)return t("uv_very_high");return t("uv_extreme")};
       const uvColor=(u)=>{if(u===undefined||u===null)return"#888";if(u<3)return"#4ade80";if(u<6)return"#fbbf24";if(u<8)return"#fb923c";if(u<11)return"#dc2626";return"#a855f7"};
-      const pollenLabel=(l)=>["None","Trace","Low","Moderate","High","Very High","Extreme"][l]||"?";
+      const pollenLabel=(l)=>[t("pollen_none"),t("pollen_trace"),t("pollen_low"),t("pollen_moderate"),t("pollen_high"),t("pollen_very_high"),t("pollen_extreme")][l]||"?";
       const pollenColor=(l)=>["#475569","#a3a3a3","#4ade80","#fbbf24","#fb923c","#dc2626","#a855f7"][l]||"#888";
       const toggle=(k)=>setExpandedSection(p=>({...p,[k]:!p[k]}));
       const c=weatherData?.current||{};
       const w=weatherData||{};
+      // Compute daylight duration
+      let daylight="–";
+      if(w.sun?.sunrise&&w.sun?.sunset){
+        const dur=(new Date(w.sun.sunset)-new Date(w.sun.sunrise))/60000;
+        const h=Math.floor(dur/60),m=Math.round(dur%60);
+        daylight=h+"h "+m+"m";
+      }
+      // Format day name in current language
+      const dayName=(date,short)=>{const d=new Date(date);const wd=d.getDay();const keys=["day_sun","day_mon","day_tue","day_wed","day_thu","day_fri","day_sat"];return short?t(keys[wd]):d.toLocaleDateString(lang==="sv"?"sv-SE":"en-US",{weekday:"long"})};
+      const visibilityLabel=(v)=>{if(v===undefined||v===null)return"–";if(v<10)return"Excellent";if(v<30)return"Good";if(v<70)return"Moderate";return"Poor"};
       return <div style={{...S.body,maxWidth:720,margin:"0 auto"}}>
-        <div style={{fontSize:"clamp(16px,4vw,22px)",fontWeight:800,marginBottom:12,display:"flex",alignItems:"center",gap:8}}><MI n="school" s={26} c="#3b82f6"/> Turebergsskolan</div>
+        <div style={{fontSize:"clamp(16px,4vw,22px)",fontWeight:800,marginBottom:12,display:"flex",alignItems:"center",gap:8,justifyContent:"space-between"}}>
+          <div style={{display:"flex",alignItems:"center",gap:8}}><MI n="cloud" s={26} c="#60a5fa"/> {t("weather_title")} · {t("weather_location")}</div>
+          <div style={{display:"flex",gap:4}}>
+            {["en","sv"].map(L=><button key={L} onClick={()=>{if(window.I18N)window.I18N.setLang(L)}} style={{...S.btn,background:lang===L?"#3b82f6":"#ffffff08",color:lang===L?"#fff":"#888",padding:"3px 8px",fontSize:10,fontWeight:700}}>{L.toUpperCase()}</button>)}
+          </div>
+        </div>
 
         {/* SMHI WARNINGS */}
         {smhiWarnings?.warnings?.length>0&&<div style={{marginBottom:14}}>
@@ -1033,52 +1034,76 @@ function App(){
               </div>
               {expandedSection["warn"+i]&&<div style={{marginTop:8,paddingTop:8,borderTop:"1px solid "+lvlColor+"33",color:"#cbd5e1",fontSize:11,lineHeight:1.5}}>
                 {wn.description}
-                {wn.startDate&&<div style={{color:"#94a3b8",fontSize:10,marginTop:6}}>From: {new Date(wn.startDate).toLocaleString("sv-SE")}</div>}
-                {wn.endDate&&<div style={{color:"#94a3b8",fontSize:10}}>Until: {new Date(wn.endDate).toLocaleString("sv-SE")}</div>}
+                {wn.startDate&&<div style={{color:"#94a3b8",fontSize:10,marginTop:6}}>{lang==="sv"?"Från":"From"}: {new Date(wn.startDate).toLocaleString(lang==="sv"?"sv-SE":"en-GB")}</div>}
+                {wn.endDate&&<div style={{color:"#94a3b8",fontSize:10}}>{lang==="sv"?"Till":"Until"}: {new Date(wn.endDate).toLocaleString(lang==="sv"?"sv-SE":"en-GB")}</div>}
               </div>}
             </div>;
           })}
         </div>}
 
-        {/* WEATHER MAIN CARD */}
-        {w.ok?<div onClick={()=>toggle("wmain")} style={{background:"linear-gradient(135deg,#1e3a8a 0%,#0d1117 100%)",borderRadius:12,padding:"clamp(14px,3vw,20px)",marginBottom:14,border:"1px solid #1e2430",cursor:"pointer",transition:"transform .15s",animation:"fadeUp .4s"}}>
+        {/* MAIN WEATHER */}
+        {w.ok?<div onClick={()=>toggle("wmain")} style={{background:"linear-gradient(135deg,#1e3a8a 0%,#0d1117 100%)",borderRadius:12,padding:"clamp(14px,3vw,20px)",marginBottom:14,border:"1px solid #1e2430",cursor:"pointer",animation:"fadeUp .4s"}}>
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",gap:12,flexWrap:"wrap"}}>
             <div style={{display:"flex",alignItems:"center",gap:14}}>
               <MI n={wIcon(c.symbol)} s={64} c={wColor(c.symbol)} f={{filter:"drop-shadow(0 4px 12px "+wColor(c.symbol)+"44)"}}/>
               <div>
                 <div style={{fontSize:"clamp(26px,7vw,42px)",fontWeight:800,color:"#fff",lineHeight:1}}>{c.temp!==undefined?Math.round(c.temp)+"°":"–"}</div>
                 <div style={{fontSize:11,color:"#cbd5e1",textTransform:"capitalize",marginTop:4}}>{(c.symbol||"").replace(/_/g," ").replace(/(day|night)$/,"").trim()}</div>
-                {c.rainStopsAt&&<div style={{color:"#60a5fa",fontSize:10,marginTop:2,display:"flex",alignItems:"center",gap:3}}><MI n="umbrella" s={11} c="#60a5fa"/> Rain stops at {fmtTime(c.rainStopsAt)}</div>}
-                {!c.rainStopsAt&&c.rainStartsAt&&<div style={{color:"#fbbf24",fontSize:10,marginTop:2,display:"flex",alignItems:"center",gap:3}}><MI n="water_drop" s={11} c="#fbbf24"/> Rain starts at {fmtTime(c.rainStartsAt)}</div>}
+                {c.rainStopsAt&&<div style={{color:"#60a5fa",fontSize:10,marginTop:2,display:"flex",alignItems:"center",gap:3}}><MI n="umbrella" s={11} c="#60a5fa"/> {t("weather_rain_stops")} {fmtTime(c.rainStopsAt)}</div>}
+                {!c.rainStopsAt&&c.rainStartsAt&&<div style={{color:"#fbbf24",fontSize:10,marginTop:2,display:"flex",alignItems:"center",gap:3}}><MI n="water_drop" s={11} c="#fbbf24"/> {t("weather_rain_starts")} {fmtTime(c.rainStartsAt)}</div>}
               </div>
             </div>
             <div style={{display:"grid",gridTemplateColumns:"repeat(2,1fr)",gap:8,fontSize:11,color:"#cbd5e1"}}>
-              {c.wind!==undefined&&<div style={{display:"flex",alignItems:"center",gap:4}}><MI n="air" s={14} c="#888"/><div><div style={{color:"#888",fontSize:9}}>WIND</div><div>{c.wind.toFixed(1)} m/s {windDir(c.wind_dir)}</div></div></div>}
-              {c.humidity!==undefined&&<div style={{display:"flex",alignItems:"center",gap:4}}><MI n="water_drop" s={14} c="#60a5fa"/><div><div style={{color:"#888",fontSize:9}}>HUMIDITY</div><div>{Math.round(c.humidity)}%</div></div></div>}
-              {c.uv!==undefined&&<div style={{display:"flex",alignItems:"center",gap:4}}><MI n="wb_sunny" s={14} c={uvColor(c.uv)}/><div><div style={{color:"#888",fontSize:9}}>UV</div><div style={{color:uvColor(c.uv)}}>{c.uv.toFixed(1)} {uvLabel(c.uv)}</div></div></div>}
-              {c.pressure!==undefined&&<div style={{display:"flex",alignItems:"center",gap:4}}><MI n="speed" s={14} c="#888"/><div><div style={{color:"#888",fontSize:9}}>PRESSURE</div><div>{Math.round(c.pressure)} hPa</div></div></div>}
+              {c.wind!==undefined&&<div style={{display:"flex",alignItems:"center",gap:4}}><MI n="air" s={14} c="#888"/><div><div style={{color:"#888",fontSize:9}}>{t("weather_wind").toUpperCase()}</div><div>{c.wind.toFixed(1)} m/s {windDir(c.wind_dir)}</div></div></div>}
+              {c.humidity!==undefined&&<div style={{display:"flex",alignItems:"center",gap:4}}><MI n="water_drop" s={14} c="#60a5fa"/><div><div style={{color:"#888",fontSize:9}}>{t("weather_humidity").toUpperCase()}</div><div>{Math.round(c.humidity)}%</div></div></div>}
+              {c.uv!==undefined&&<div style={{display:"flex",alignItems:"center",gap:4}}><MI n="wb_sunny" s={14} c={uvColor(c.uv)}/><div><div style={{color:"#888",fontSize:9}}>{t("weather_uv").toUpperCase()}</div><div style={{color:uvColor(c.uv)}}>{c.uv.toFixed(1)} {uvLabel(c.uv)}</div></div></div>}
+              {c.pressure!==undefined&&<div style={{display:"flex",alignItems:"center",gap:4}}><MI n="speed" s={14} c="#888"/><div><div style={{color:"#888",fontSize:9}}>{t("weather_pressure").toUpperCase()}</div><div>{Math.round(c.pressure)} hPa</div></div></div>}
             </div>
           </div>
           <div style={{marginTop:10,paddingTop:10,borderTop:"1px solid #1e293b",display:"flex",justifyContent:"center",alignItems:"center",gap:6,color:"#64748b",fontSize:10}}>
             <MI n={expandedSection.wmain?"expand_less":"expand_more"} s={16}/>
-            <span>Tap for more details</span>
+            <span>{t("weather_more_details")}</span>
           </div>
-          {expandedSection.wmain&&<div onClick={e=>e.stopPropagation()} style={{marginTop:10,paddingTop:10,borderTop:"1px solid #1e293b",display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(120px,1fr))",gap:8,fontSize:11,color:"#cbd5e1",animation:"fadeUp .25s"}}>
-            {c.wind_gust!==undefined&&<div style={{background:"#0d1117",borderRadius:6,padding:8}}><div style={{color:"#888",fontSize:9}}><MI n="air" s={10}/> WIND GUST</div><div style={{fontWeight:700,marginTop:2}}>{c.wind_gust.toFixed(1)} m/s</div></div>}
-            {c.wind_dir!==undefined&&<div style={{background:"#0d1117",borderRadius:6,padding:8}}><div style={{color:"#888",fontSize:9}}><MI n="explore" s={10}/> WIND FROM</div><div style={{display:"flex",alignItems:"center",gap:4,marginTop:2}}><MI n="navigation" s={16} c="#60a5fa" f={{transform:"rotate("+(c.wind_dir+180)+"deg)",transformOrigin:"center"}}/><span style={{fontWeight:700}}>{windDir(c.wind_dir)} ({Math.round(c.wind_dir)}°)</span></div></div>}
-            {c.dew_point!==undefined&&<div style={{background:"#0d1117",borderRadius:6,padding:8}}><div style={{color:"#888",fontSize:9}}><MI n="opacity" s={10}/> DEW POINT</div><div style={{fontWeight:700,marginTop:2}}>{c.dew_point.toFixed(1)}°C</div></div>}
-            {c.cloud!==undefined&&<div style={{background:"#0d1117",borderRadius:6,padding:8}}><div style={{color:"#888",fontSize:9}}><MI n="cloud" s={10}/> CLOUD COVER</div><div style={{fontWeight:700,marginTop:2}}>{Math.round(c.cloud)}%</div></div>}
-            {c.precip>0&&<div style={{background:"#0d1117",borderRadius:6,padding:8}}><div style={{color:"#888",fontSize:9}}><MI n="water_drop" s={10}/> PRECIP NOW</div><div style={{fontWeight:700,marginTop:2,color:"#60a5fa"}}>{c.precip}mm/h</div></div>}
-            {c.precip_prob>0&&<div style={{background:"#0d1117",borderRadius:6,padding:8}}><div style={{color:"#888",fontSize:9}}><MI n="percent" s={10}/> RAIN CHANCE</div><div style={{fontWeight:700,marginTop:2}}>{Math.round(c.precip_prob)}%</div></div>}
-            {w.sun?.sunrise&&<div style={{background:"#0d1117",borderRadius:6,padding:8}}><div style={{color:"#888",fontSize:9}}><MI n="wb_twilight" s={10}/> SUNRISE</div><div style={{fontWeight:700,marginTop:2,color:"#fbbf24"}}>{fmtTime(w.sun.sunrise)}</div></div>}
-            {w.sun?.sunset&&<div style={{background:"#0d1117",borderRadius:6,padding:8}}><div style={{color:"#888",fontSize:9}}><MI n="nights_stay" s={10}/> SUNSET</div><div style={{fontWeight:700,marginTop:2,color:"#fb923c"}}>{fmtTime(w.sun.sunset)}</div></div>}
+          {expandedSection.wmain&&<div onClick={e=>e.stopPropagation()} style={{marginTop:10,paddingTop:10,borderTop:"1px solid #1e293b",display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(130px,1fr))",gap:8,fontSize:11,color:"#cbd5e1",animation:"fadeUp .25s"}}>
+            {c.wind_gust!==undefined&&<div style={{background:"#0d1117",borderRadius:6,padding:8}}><div style={{color:"#888",fontSize:9,display:"flex",alignItems:"center",gap:3}}><MI n="air" s={10}/>{t("weather_wind_gust").toUpperCase()}</div><div style={{fontWeight:700,marginTop:2}}>{c.wind_gust.toFixed(1)} m/s</div></div>}
+            {c.wind_dir!==undefined&&<div style={{background:"#0d1117",borderRadius:6,padding:8}}><div style={{color:"#888",fontSize:9,display:"flex",alignItems:"center",gap:3}}><MI n="explore" s={10}/>{t("weather_wind_from").toUpperCase()}</div><div style={{display:"flex",alignItems:"center",gap:4,marginTop:2}}><MI n="navigation" s={16} c="#60a5fa" f={{transform:"rotate("+(c.wind_dir+180)+"deg)",transformOrigin:"center"}}/><span style={{fontWeight:700}}>{windDir(c.wind_dir)} ({Math.round(c.wind_dir)}°)</span></div></div>}
+            {c.dew_point!==undefined&&<div style={{background:"#0d1117",borderRadius:6,padding:8}}><div style={{color:"#888",fontSize:9,display:"flex",alignItems:"center",gap:3}}><MI n="opacity" s={10}/>{t("weather_dew_point").toUpperCase()}</div><div style={{fontWeight:700,marginTop:2}}>{c.dew_point.toFixed(1)}°C</div></div>}
+            {c.cloud!==undefined&&<div style={{background:"#0d1117",borderRadius:6,padding:8}}><div style={{color:"#888",fontSize:9,display:"flex",alignItems:"center",gap:3}}><MI n="cloud" s={10}/>{t("weather_cloud_cover").toUpperCase()}</div><div style={{fontWeight:700,marginTop:2}}>{Math.round(c.cloud)}%</div>{c.cloud_low!==undefined&&<div style={{color:"#94a3b8",fontSize:9,marginTop:2}}>L:{Math.round(c.cloud_low)}% M:{Math.round(c.cloud_mid||0)}% H:{Math.round(c.cloud_high||0)}%</div>}</div>}
+            {c.visibility!==undefined&&<div style={{background:"#0d1117",borderRadius:6,padding:8}}><div style={{color:"#888",fontSize:9,display:"flex",alignItems:"center",gap:3}}><MI n="visibility" s={10}/>{t("weather_visibility").toUpperCase()}</div><div style={{fontWeight:700,marginTop:2}}>{c.visibility<5?"Excellent":c.visibility<20?"Good":c.visibility<50?"Moderate":"Poor"}</div></div>}
+            {c.precip>0&&<div style={{background:"#0d1117",borderRadius:6,padding:8}}><div style={{color:"#888",fontSize:9,display:"flex",alignItems:"center",gap:3}}><MI n="water_drop" s={10}/>{t("weather_precip_now").toUpperCase()}</div><div style={{fontWeight:700,marginTop:2,color:"#60a5fa"}}>{c.precip}mm/h</div></div>}
+            {c.precip_prob>0&&<div style={{background:"#0d1117",borderRadius:6,padding:8}}><div style={{color:"#888",fontSize:9,display:"flex",alignItems:"center",gap:3}}><MI n="percent" s={10}/>{t("weather_rain_chance").toUpperCase()}</div><div style={{fontWeight:700,marginTop:2}}>{Math.round(c.precip_prob)}%</div></div>}
+            {w.sun?.sunrise&&<div style={{background:"#0d1117",borderRadius:6,padding:8}}><div style={{color:"#888",fontSize:9,display:"flex",alignItems:"center",gap:3}}><MI n="wb_twilight" s={10}/>{t("weather_sunrise").toUpperCase()}</div><div style={{fontWeight:700,marginTop:2,color:"#fbbf24"}}>{fmtTime(w.sun.sunrise)}</div></div>}
+            {w.sun?.sunset&&<div style={{background:"#0d1117",borderRadius:6,padding:8}}><div style={{color:"#888",fontSize:9,display:"flex",alignItems:"center",gap:3}}><MI n="nights_stay" s={10}/>{t("weather_sunset").toUpperCase()}</div><div style={{fontWeight:700,marginTop:2,color:"#fb923c"}}>{fmtTime(w.sun.sunset)}</div></div>}
+            {w.sun?.sunrise&&w.sun?.sunset&&<div style={{background:"#0d1117",borderRadius:6,padding:8}}><div style={{color:"#888",fontSize:9,display:"flex",alignItems:"center",gap:3}}><MI n="schedule" s={10}/>{t("weather_daylight").toUpperCase()}</div><div style={{fontWeight:700,marginTop:2}}>{daylight}</div></div>}
           </div>}
-        </div>:<div style={{color:"#555",fontSize:11,padding:14,textAlign:"center",background:"#0d1117",borderRadius:8,marginBottom:14}}>Loading weather...</div>}
+        </div>:<div style={{color:"#555",fontSize:11,padding:14,textAlign:"center",background:"#0d1117",borderRadius:8,marginBottom:14}}>{t("loading")}</div>}
+
+        {/* AIR QUALITY */}
+        {airData?.ok&&airData.aqi!==undefined&&airData.aqi!==null&&<div onClick={()=>toggle("air")} style={{background:airData.aqi_color+"15",border:"1px solid "+airData.aqi_color+"55",borderRadius:12,padding:"12px 14px",marginBottom:14,cursor:"pointer"}}>
+          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
+            <div style={{display:"flex",alignItems:"center",gap:8}}>
+              <MI n="masks" s={22} c={airData.aqi_color}/>
+              <div>
+                <div style={{fontSize:12,fontWeight:700,color:"#cbd5e1"}}>{t("weather_air_quality")}</div>
+                <div style={{fontSize:18,fontWeight:800,color:airData.aqi_color,marginTop:2}}>{Math.round(airData.aqi)} · {airData.aqi_label}</div>
+              </div>
+            </div>
+            <MI n={expandedSection.air?"expand_less":"expand_more"} s={20} c="#888"/>
+          </div>
+          {expandedSection.air&&<div onClick={e=>e.stopPropagation()} style={{marginTop:10,paddingTop:10,borderTop:"1px solid "+airData.aqi_color+"33",display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(100px,1fr))",gap:6,fontSize:10,color:"#cbd5e1"}}>
+            {airData.pm25!==undefined&&<div style={{background:"#0d1117",borderRadius:6,padding:6}}><div style={{color:"#888",fontSize:9}}>PM2.5</div><div style={{fontWeight:700}}>{airData.pm25.toFixed(1)} μg/m³</div></div>}
+            {airData.pm10!==undefined&&<div style={{background:"#0d1117",borderRadius:6,padding:6}}><div style={{color:"#888",fontSize:9}}>PM10</div><div style={{fontWeight:700}}>{airData.pm10.toFixed(1)} μg/m³</div></div>}
+            {airData.no2!==undefined&&<div style={{background:"#0d1117",borderRadius:6,padding:6}}><div style={{color:"#888",fontSize:9}}>NO₂</div><div style={{fontWeight:700}}>{airData.no2.toFixed(1)} μg/m³</div></div>}
+            {airData.o3!==undefined&&<div style={{background:"#0d1117",borderRadius:6,padding:6}}><div style={{color:"#888",fontSize:9}}>O₃</div><div style={{fontWeight:700}}>{airData.o3.toFixed(1)} μg/m³</div></div>}
+            {airData.so2!==undefined&&<div style={{background:"#0d1117",borderRadius:6,padding:6}}><div style={{color:"#888",fontSize:9}}>SO₂</div><div style={{fontWeight:700}}>{airData.so2.toFixed(1)} μg/m³</div></div>}
+            {airData.co!==undefined&&<div style={{background:"#0d1117",borderRadius:6,padding:6}}><div style={{color:"#888",fontSize:9}}>CO</div><div style={{fontWeight:700}}>{airData.co.toFixed(0)} μg/m³</div></div>}
+          </div>}
+        </div>}
 
         {/* HOURLY FORECAST */}
         {w.hourly?.length>0&&<div style={{background:"#0d1117",border:"1px solid #1e2430",borderRadius:12,padding:"12px 14px",marginBottom:14}}>
           <div onClick={()=>toggle("hr")} style={{display:"flex",alignItems:"center",justifyContent:"space-between",cursor:"pointer",marginBottom:8}}>
-            <div style={{display:"flex",alignItems:"center",gap:6,fontSize:12,fontWeight:700,color:"#cbd5e1"}}><MI n="schedule" s={16} c="#60a5fa"/> Next {expandedSection.hr?"24":"12"} Hours</div>
+            <div style={{display:"flex",alignItems:"center",gap:6,fontSize:12,fontWeight:700,color:"#cbd5e1"}}><MI n="schedule" s={16} c="#60a5fa"/> {t("weather_next_hours",{n:expandedSection.hr?24:12})}</div>
             <MI n={expandedSection.hr?"expand_less":"expand_more"} s={18} c="#888"/>
           </div>
           <div style={{display:"flex",gap:6,overflowX:"auto",paddingBottom:4}}>
@@ -1094,14 +1119,14 @@ function App(){
 
         {/* 7-DAY FORECAST */}
         {w.daily?.length>0&&<div style={{background:"#0d1117",border:"1px solid #1e2430",borderRadius:12,padding:"12px 14px",marginBottom:14}}>
-          <div style={{display:"flex",alignItems:"center",gap:6,fontSize:12,fontWeight:700,color:"#cbd5e1",marginBottom:8}}><MI n="calendar_today" s={16} c="#60a5fa"/> 7-Day Forecast</div>
+          <div style={{display:"flex",alignItems:"center",gap:6,fontSize:12,fontWeight:700,color:"#cbd5e1",marginBottom:8}}><MI n="calendar_today" s={16} c="#60a5fa"/> {t("weather_forecast_7day")}</div>
           <div style={{display:"flex",flexDirection:"column",gap:4}}>
-            {w.daily.slice(0,7).map((d,i)=>{const dt=new Date(d.date);return <div key={i} style={{display:"grid",gridTemplateColumns:"60px 32px 1fr 60px",gap:8,alignItems:"center",padding:"6px 8px",background:"#080a0e",borderRadius:6,fontSize:11}}>
-              <div style={{color:"#cbd5e1",fontWeight:700}}>{i===0?"Today":dt.toLocaleDateString("sv-SE",{weekday:"short"})}</div>
+            {w.daily.slice(0,7).map((d,i)=>{return <div key={i} style={{display:"grid",gridTemplateColumns:"70px 32px 1fr 80px",gap:8,alignItems:"center",padding:"6px 8px",background:"#080a0e",borderRadius:6,fontSize:11}}>
+              <div style={{color:"#cbd5e1",fontWeight:700}}>{i===0?t("weather_today"):dayName(d.date,true)}</div>
               <MI n={wIcon(d.symbol)} s={20} c={wColor(d.symbol)}/>
-              <div style={{display:"flex",alignItems:"center",gap:4,color:"#888",fontSize:10}}>
-                {d.precip>0&&<><MI n="water_drop" s={10} c="#60a5fa"/><span>{d.precip}mm</span></>}
-                {d.wind!==undefined&&<><MI n="air" s={10}/><span>{d.wind.toFixed(1)}m/s</span></>}
+              <div style={{display:"flex",alignItems:"center",gap:6,color:"#888",fontSize:10,flexWrap:"wrap"}}>
+                {d.precip>0&&<span style={{display:"inline-flex",alignItems:"center",gap:2}}><MI n="water_drop" s={10} c="#60a5fa"/>{d.precip.toFixed(1)}mm</span>}
+                {d.wind!==undefined&&<span style={{display:"inline-flex",alignItems:"center",gap:2}}><MI n="air" s={10}/>{d.wind.toFixed(1)}m/s</span>}
               </div>
               <div style={{textAlign:"right",color:"#fff",fontWeight:700}}>
                 {d.temp_max!==undefined?Math.round(d.temp_max)+"°":"–"}<span style={{color:"#64748b",marginLeft:4}}>{d.temp_min!==undefined?Math.round(d.temp_min)+"°":"–"}</span>
@@ -1113,7 +1138,7 @@ function App(){
         {/* POLLEN */}
         {pollenData?.today?.length>0&&<div onClick={()=>toggle("pol")} style={{background:"#0d1117",border:"1px solid #1e2430",borderRadius:12,padding:"12px 14px",marginBottom:14,cursor:"pointer"}}>
           <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:8}}>
-            <div style={{display:"flex",alignItems:"center",gap:6,fontSize:12,fontWeight:700,color:"#cbd5e1"}}><MI n="grass" s={16} c="#4ade80"/> Pollen · {pollenData.region}</div>
+            <div style={{display:"flex",alignItems:"center",gap:6,fontSize:12,fontWeight:700,color:"#cbd5e1"}}><MI n="grass" s={16} c="#4ade80"/> {t("weather_pollen_title")} · {pollenData.region}</div>
             <MI n={expandedSection.pol?"expand_less":"expand_more"} s={18} c="#888"/>
           </div>
           <div style={{display:"flex",flexWrap:"wrap",gap:6}}>
@@ -1124,33 +1149,6 @@ function App(){
           </div>
           {expandedSection.pol&&pollenData.text&&<div style={{marginTop:8,paddingTop:8,borderTop:"1px solid #1e293b",fontSize:11,color:"#cbd5e1",lineHeight:1.4}}>{pollenData.text}</div>}
         </div>}
-
-        {/* LUNCH MENU */}
-        <div style={{background:"#0d1117",border:"1px solid #1e2430",borderRadius:12,padding:"clamp(12px,3vw,18px)"}}>
-          <div style={{display:"flex",alignItems:"center",justifyContent:"space-between",marginBottom:10}}>
-            <div style={{display:"flex",alignItems:"center",gap:6,fontSize:13,fontWeight:700,color:"#f59e0b"}}><MI n="restaurant" s={18} c="#f59e0b"/> School Lunch</div>
-            <button onClick={()=>{setSchoolData(null);setSchoolLoading(true);api("/school/menu",{slug:"sollentuna-international-school"}).then(r=>{setSchoolData(r||{weeks:[]});setSchoolLoading(false)})}} style={{...S.btn,background:"#ffffff08",color:"#888",fontSize:9,display:"flex",alignItems:"center",gap:3}}><MI n="refresh" s={12}/> Refresh</button>
-          </div>
-          {schoolLoading?<div style={{color:"#555",fontSize:11,textAlign:"center",padding:20}}>Loading menu...</div>:
-           schoolData?.weeks?.length>0?<div style={{display:"flex",flexDirection:"column",gap:8}}>
-            {schoolData.weeks.slice(0,expandedSection.menu?20:5).map((wk,i)=>{const id="menu"+i;const expanded=expandedSection[id];const desc=wk.description.replace(/<[^>]+>/g,"\n").replace(/\n+/g,"\n").trim();return <div key={i} onClick={()=>toggle(id)} style={{background:"#080a0e",borderRadius:8,padding:"10px 12px",border:"1px solid #1e2430",cursor:"pointer"}}>
-              <div style={{display:"flex",alignItems:"center",justifyContent:"space-between"}}>
-                <div>
-                  <div style={{fontSize:11,color:"#4ade80",fontWeight:700}}>{wk.title||"Untitled"}</div>
-                  {wk.pubDate&&<div style={{fontSize:9,color:"#666"}}>{wk.pubDate}</div>}
-                </div>
-                <MI n={expanded?"expand_less":"expand_more"} s={16} c="#888"/>
-              </div>
-              <div style={{fontSize:11,color:"#ccc",whiteSpace:"pre-line",lineHeight:1.5,marginTop:6,maxHeight:expanded?"none":60,overflow:"hidden",position:"relative"}}>
-                {desc}
-                {!expanded&&desc.length>100&&<div style={{position:"absolute",bottom:0,left:0,right:0,height:20,background:"linear-gradient(transparent,#080a0e)"}}/>}
-              </div>
-            </div>;})}
-            {schoolData.weeks.length>5&&<button onClick={()=>toggle("menu")} style={{...S.btn,background:"#ffffff08",color:"#888",fontSize:10,padding:"6px"}}>{expandedSection.menu?"Show fewer":"Show all "+schoolData.weeks.length+" weeks"}</button>}
-          </div>:<div style={{color:"#555",fontSize:11,textAlign:"center",padding:20}}>
-            {schoolData?.error||"No menu available."}
-          </div>}
-        </div>
       </div>;
     })()}
 
