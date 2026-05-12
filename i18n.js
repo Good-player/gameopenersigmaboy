@@ -149,6 +149,24 @@
       faq_q_contact: "Bug reports / contact?",
       faq_a_contact: "Use the in-game Report button on any message, or DM the owner directly.",
 
+      // Daily bonus
+      daily_title: "Daily Bonus!",
+      daily_subtitle: "Come back every day to climb the streak",
+      daily_claim: "Claim",
+      daily_later: "Later",
+      daily_claimed: "Claimed ${amount}!",
+      daily_streak: "Day {day} streak",
+      // Wheel of fortune
+      tab_wheel: "Wheel",
+      wheel_title: "Wheel of Fortune",
+      wheel_subtitle: "One free spin every 24 hours",
+      wheel_spin: "SPIN",
+      wheel_spinning: "Spinning...",
+      wheel_next_spin: "Next spin in",
+      wheel_won: "You won ${amount}!",
+      wheel_rules: "Prizes: $1K to $2M. Higher prizes are rarer.",
+      wheel_login_required: "Log in to spin the wheel",
+      
       // Language toggle
       lang_label: "Language",
       lang_english: "English",
@@ -302,6 +320,24 @@
       faq_q_contact: "Buggrapporter / kontakt?",
       faq_a_contact: "Använd Rapportera-knappen på meddelanden, eller DM:a ägaren direkt.",
 
+      // Daily bonus
+      daily_title: "Daglig bonus!",
+      daily_subtitle: "Kom tillbaka varje dag för att öka raden",
+      daily_claim: "Hämta",
+      daily_later: "Senare",
+      daily_claimed: "Hämtade ${amount}!",
+      daily_streak: "Dag {day} i rad",
+      // Wheel of fortune
+      tab_wheel: "Hjul",
+      wheel_title: "Lyckohjulet",
+      wheel_subtitle: "Ett gratis snurr var 24:e timme",
+      wheel_spin: "SNURRA",
+      wheel_spinning: "Snurrar...",
+      wheel_next_spin: "Nästa snurr om",
+      wheel_won: "Du vann ${amount}!",
+      wheel_rules: "Priser: $1K till $2M. Större priser är sällsyntare.",
+      wheel_login_required: "Logga in för att snurra hjulet",
+      
       // Language toggle
       lang_label: "Språk",
       lang_english: "English",

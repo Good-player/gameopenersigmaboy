@@ -152,6 +152,53 @@ function App(){
   const[lang,setLang]=useState(typeof window!=='undefined'&&window.I18N?window.I18N.getLang():'en');
   const t=(k,vars)=>typeof window!=='undefined'&&window.I18N?window.I18N.t(k,vars):k;
   useEffect(()=>{const h=(e)=>setLang(e.detail.lang);window.addEventListener('langchange',h);return()=>window.removeEventListener('langchange',h)},[]);
+  useEffect(()=>{if(!account)return;api("/daily/status",{username:account.username}).then(r=>{if(r?.canClaim)setDailyModal(r);else setDailyStatus(r)})},[account?.username]);
+  useEffect(()=>{
+    if(page!=="wheel")return;
+    const cv=wheelCanvasRef.current;
+    if(!cv)return;
+    const W=cv.offsetWidth;
+    if(!W)return;
+    cv.width=W*2;cv.height=W*2;
+    const g=cv.getContext("2d");g.scale(2,2);
+    // Default static segments matching backend
+    const segs=[
+      {label:"$1K"},{label:"$5K"},{label:"$10K"},{label:"$25K"},
+      {label:"$50K"},{label:"$100K"},{label:"$500K"},{label:"$2M"}
+    ];
+    const n=segs.length;
+    const segAng=(Math.PI*2)/n;
+    const colors=["#dc2626","#fb923c","#fbbf24","#84cc16","#22d3ee","#3b82f6","#a855f7","#ec4899"];
+    const cx=W/2,cy=W/2,rad=W/2-8;
+    g.fillStyle="#1a1a2e";g.beginPath();g.arc(cx,cy,W/2-2,0,Math.PI*2);g.fill();
+    segs.forEach((s,i)=>{
+      const a0=-Math.PI/2+i*segAng-segAng/2;
+      const a1=a0+segAng;
+      g.beginPath();
+      g.moveTo(cx,cy);
+      g.arc(cx,cy,rad,a0,a1);
+      g.closePath();
+      g.fillStyle=colors[i%colors.length];
+      g.fill();
+      g.strokeStyle="#0d1117";g.lineWidth=2;g.stroke();
+      g.save();
+      g.translate(cx,cy);
+      g.rotate(a0+segAng/2);
+      g.fillStyle="#fff";
+      g.font="bold "+Math.max(11,W*0.05)+"px sans-serif";
+      g.textAlign="right";
+      g.textBaseline="middle";
+      g.strokeStyle="#000";g.lineWidth=3;
+      g.strokeText(s.label,rad*0.92,0);
+      g.fillText(s.label,rad*0.92,0);
+      g.restore();
+    });
+    g.fillStyle="#2d2d3f";g.beginPath();g.arc(cx,cy,rad*0.18,0,Math.PI*2);g.fill();
+    g.fillStyle="#ffd700";g.beginPath();g.arc(cx,cy,rad*0.08,0,Math.PI*2);g.fill();
+  },[page,wheelResult]);
+
+
+
 
   const[appLoading,setAppLoading]=useState(true);const[offline,setOffline]=useState(false);const offlineRef=useRef(false);useEffect(()=>{window.__setOnline=(v)=>{if(!v&&!offlineRef.current){offlineRef.current=true;setOffline(true)}if(v&&offlineRef.current){offlineRef.current=false;setOffline(false)}};return()=>{window.__setOnline=null}},[]);const[loadProgress,setLoadProgress]=useState(0);const[loadMsg,setLoadMsg]=useState("Initializing...");const[slot,setSlot]=useState(0);const[slotMeta,setSlotMeta]=useState([null,null,null]);const[showSlots,setShowSlots]=useState(true);
   const[st,setSt]=useState(INIT);const[page,setPage]=useState("shop");const[selCase,setSelCase]=useState(null);const[wonItem,setWonItem]=useState(null);const[wonFloat,setWonFloat]=useState(0);const[wonQuote,setWonQuote]=useState("");const[scrollItems,setScrollItems]=useState([]);const[scrollDone,setScrollDone]=useState(false);const[opening,setOpening]=useState(false);const[resetMsg,setResetMsg]=useState("");const[loanAmt,setLoanAmt]=useState("");const[rentPaid,setRentPaid]=useState(0);const[inspecting,setInspecting]=useState(null);const[confirmReset,setConfirmReset]=useState(false);const[drops,setDrops]=useState([]);
@@ -161,7 +208,7 @@ function App(){
   const[dmInbox,setDmInbox]=useState(null);const[dmTo,setDmTo]=useState("");const[dmMsg,setDmMsg]=useState("");const[dmSearch,setDmSearch]=useState("");const[dmResults,setDmResults]=useState([]);const[dmUnread,setDmUnread]=useState(0);
   const[viewProfile,setViewProfile]=useState(null);const[editBio,setEditBio]=useState("");const[editPrivacy,setEditPrivacy]=useState("public");
   const[reportTarget,setReportTarget]=useState("");const[reportReason,setReportReason]=useState("");const[reportMsg,setReportMsg]=useState("");
-  const[toast,setToast]=useState(null);const[reportModal,setReportModal]=useState(null);const[pvpEliminated,setPvpEliminated]=useState(false);const[horseRace,setHorseRace]=useState(null);const[horseAnim,setHorseAnim]=useState(0);const[horseBet,setHorseBet]=useState("");const[horsePick,setHorsePick]=useState(0);const[horseHistory,setHorseHistory]=useState([]);const[multiResults,setMultiResults]=useState(null);const[bjTable,setBjTable]=useState(null);const[bjBet,setBjBet]=useState("10000");const[bjHasCard,setBjHasCard]=useState(false);const[btcPrice,setBtcPrice]=useState(0);const[btcHistory,setBtcHistory]=useState([]);const[btcPortfolio,setBtcPortfolio]=useState({active:[],sold:[]});const[btcInvestAmt,setBtcInvestAmt]=useState("");const[btcDays,setBtcDays]=useState(7);const[btcLastUpdate,setBtcLastUpdate]=useState(0);const[btcNextUpdate,setBtcNextUpdate]=useState(0);const[btcTick,setBtcTick]=useState(0);const[btcChange24h,setBtcChange24h]=useState(0);const[plinkoBet,setPlinkoBet]=useState("1000");const[plinkoRisk,setPlinkoRisk]=useState("medium");const[plinkoRows,setPlinkoRows]=useState(12);const[plinkoResult,setPlinkoResult]=useState(null);const[plinkoAnim,setPlinkoAnim]=useState(false);const[rouletteBets,setRouletteBets]=useState([]);const[rouletteResult,setRouletteResult]=useState(null);const[rouletteAnim,setRouletteAnim]=useState(false);const[rouletteAmt,setRouletteAmt]=useState("1000");const[weatherData,setWeatherData]=useState(null);const[smhiWarnings,setSmhiWarnings]=useState(null);const[pollenData,setPollenData]=useState(null);const[airData,setAirData]=useState(null);const[expandedSection,setExpandedSection]=useState({});const horseCanvasRef=useRef(null);const horseAnimRef=useRef(null);const syncLockRef=useRef(false);const plinkoCanvasRef=useRef(null);const rouletteCanvasRef=useRef(null);const[pvpWinModal,setPvpWinModal]=useState(null);const[warnModal,setWarnModal]=useState(null);const[banModal,setBanModal]=useState(null);const[banTimer,setBanTimer]=useState("");const[giftModal,setGiftModal]=useState(null);const[giftAmt,setGiftAmt]=useState("");
+  const[toast,setToast]=useState(null);const[reportModal,setReportModal]=useState(null);const[pvpEliminated,setPvpEliminated]=useState(false);const[horseRace,setHorseRace]=useState(null);const[horseAnim,setHorseAnim]=useState(0);const[horseBet,setHorseBet]=useState("");const[horsePick,setHorsePick]=useState(0);const[horseHistory,setHorseHistory]=useState([]);const[multiResults,setMultiResults]=useState(null);const[bjTable,setBjTable]=useState(null);const[bjBet,setBjBet]=useState("10000");const[bjHasCard,setBjHasCard]=useState(false);const[btcPrice,setBtcPrice]=useState(0);const[btcHistory,setBtcHistory]=useState([]);const[btcPortfolio,setBtcPortfolio]=useState({active:[],sold:[]});const[btcInvestAmt,setBtcInvestAmt]=useState("");const[btcDays,setBtcDays]=useState(7);const[btcLastUpdate,setBtcLastUpdate]=useState(0);const[btcNextUpdate,setBtcNextUpdate]=useState(0);const[btcTick,setBtcTick]=useState(0);const[btcChange24h,setBtcChange24h]=useState(0);const[plinkoBet,setPlinkoBet]=useState("1000");const[plinkoRisk,setPlinkoRisk]=useState("medium");const[plinkoRows,setPlinkoRows]=useState(12);const[plinkoResult,setPlinkoResult]=useState(null);const[plinkoAnim,setPlinkoAnim]=useState(false);const[rouletteBets,setRouletteBets]=useState([]);const[rouletteResult,setRouletteResult]=useState(null);const[rouletteAnim,setRouletteAnim]=useState(false);const[rouletteAmt,setRouletteAmt]=useState("1000");const[weatherData,setWeatherData]=useState(null);const[smhiWarnings,setSmhiWarnings]=useState(null);const[pollenData,setPollenData]=useState(null);const[airData,setAirData]=useState(null);const[expandedSection,setExpandedSection]=useState({});const[dailyStatus,setDailyStatus]=useState(null);const[dailyModal,setDailyModal]=useState(null);const[wheelStatus,setWheelStatus]=useState(null);const[wheelSpinning,setWheelSpinning]=useState(false);const[wheelResult,setWheelResult]=useState(null);const wheelCanvasRef=useRef(null);const horseCanvasRef=useRef(null);const horseAnimRef=useRef(null);const syncLockRef=useRef(false);const plinkoCanvasRef=useRef(null);const rouletteCanvasRef=useRef(null);const[pvpWinModal,setPvpWinModal]=useState(null);const[warnModal,setWarnModal]=useState(null);const[banModal,setBanModal]=useState(null);const[banTimer,setBanTimer]=useState("");const[giftModal,setGiftModal]=useState(null);const[giftAmt,setGiftAmt]=useState("");
   const[events,setEvents]=useState([]);const[dismissedEvents,setDismissedEvents]=useState({});
   const[friendsList,setFriendsList]=useState([]);
   function showProfile(username){if(!username||username==="Anon"||username==="SYSTEM")return;api("/profile/full",{target:username.toLowerCase(),username:account?.username||""}).then(r=>{if(r?.profile)setViewProfile(r.profile)}).catch(()=>{})}
@@ -464,7 +511,7 @@ function App(){
     {events.filter(e=>!dismissedEvents[e.id]).map(e=>{const ec=e.type==="announcement"?"#f59e0b":e.type==="sale"?"#4ade80":e.type==="maintenance"?"#eb4b4b":e.type==="warning"?"#f97316":e.type==="update"?"#8b5cf6":e.type==="rain"?"#ffd700":e.type==="brainrot"?"#ff6767":e.type==="takeover"?"#e2e8f0":e.type==="jumpscare"?"#eb4b4b":"#3b82f6";const ei=e.type==="announcement"?"campaign":e.type==="sale"?"local_offer":e.type==="maintenance"?"build":e.type==="warning"?"warning":e.type==="update"?"system_update":e.type==="rain"?"payments":e.type==="brainrot"?"psychology":e.type==="takeover"?"wallpaper":e.type==="jumpscare"?"flash_on":"celebration";let sty={};try{sty=JSON.parse(e.style||"{}")}catch{};return <div key={e.id}>{e.type==="takeover"&&sty.image&&<div style={{position:"fixed",inset:0,zIndex:99,backgroundImage:"url("+sty.image+")",backgroundSize:"cover",backgroundPosition:"center",opacity:0.15,pointerEvents:"none"}}/>}{e.type==="jumpscare"&&sty.image&&!dismissedEvents["js_"+e.id]&&<div onClick={()=>setDismissedEvents(d=>({...d,["js_"+e.id]:true}))} style={{position:"fixed",inset:0,zIndex:99998,background:"#000",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}><img src={sty.image} style={{maxWidth:"90vw",maxHeight:"90vh",objectFit:"contain"}}/><div style={{position:"absolute",bottom:40,color:"#666",fontSize:12}}>Click to dismiss</div></div>}{e.type==="rain"&&<div style={{position:"fixed",top:0,left:0,right:0,height:"100vh",pointerEvents:"none",zIndex:98,overflow:"hidden"}}>{[...Array(20)].map((_,i)=><div key={i} style={{position:"absolute",left:Math.random()*100+"%",top:-20,fontSize:Math.random()*14+12,animation:"moneyRain "+(2+Math.random()*3)+"s linear "+(Math.random()*2)+"s infinite",opacity:0.6}}>{["💲","💰","💵","🤑"][i%4]}</div>)}</div>}<div className={"slideIn"+(sty.effect?" effect"+sty.effect[0].toUpperCase()+sty.effect.slice(1):"")} style={{background:ec+"18",borderBottom:"1px solid "+ec+"33",padding:"6px 12px",display:"flex",alignItems:"center",gap:8}}><MI n={ei} s={16} c={ec}/><div style={{flex:1}}><div style={{color:ec,fontWeight:700,fontSize:"clamp(10px,2.5vw,12px)"}}>{e.title}{e.discount>0&&<span style={{background:"#4ade80",color:"#000",padding:"1px 6px",borderRadius:4,fontSize:9,fontWeight:800,marginLeft:6}}>{e.discount}% OFF</span>}{e.type==="brainrot"&&<span style={{marginLeft:6,fontSize:9}}>🧠💀</span>}</div>{e.description&&<div style={{color:"#aaa",fontSize:"clamp(8px,2vw,10px)"}}>{e.description}</div>}{sty.image&&e.type!=="jumpscare"&&e.type!=="takeover"&&<img src={sty.image} style={{maxWidth:120,maxHeight:60,borderRadius:4,marginTop:4,objectFit:"cover"}}/>}</div><button onClick={()=>setDismissedEvents(d=>({...d,[e.id]:true,["js_"+e.id]:true}))} style={{background:"transparent",border:"none",color:"#555",cursor:"pointer"}}><MI n="close" s={14}/></button></div></div>})}
 
     {/* NAV */}
-    <div style={S.nav}>{[["shop",t("tab_shop")],["inv",`${t("tab_inv")} (${st.inv.length})`],["stats",t("tab_stats")],["loan",t("tab_loan")],["flip",t("tab_flip")],["pvp",t("tab_pvp")],["live",t("tab_live")],["lb",t("tab_lb")],["chat",t("tab_chat")],["dm",`${t("tab_dm")}${dmUnread>0?" ("+dmUnread+")":""}`],["me",t("tab_me")],["map",t("tab_map")],["horse",t("tab_horse")],["bj",t("tab_bj")],["btc",t("tab_btc")],["plinko",t("tab_plinko")],["roulette",t("tab_roulette")],["school",t("tab_weather")]].map(([k,l])=>(<button key={k} onClick={()=>{if(!opening||scrollDone||k==="shop"){setPage(k);if(k!=="opening")setOpening(false);if(k==="map")getOnline().then(r=>{if(r)setOnlineData(r)});if(k==="pvp")refreshLobbies();if(k==="bj"&&account){api("/bj/buycard",{username:account.username,token:account.token}).then(r=>{if(r?.hasCard)setBjHasCard(true)})}if(k==="btc"){/* useEffect handles initial load */}if(k==="school"){if(!weatherData){api("/weather/today",{lat:59.4288,lon:17.9498}).then(r=>{setWeatherData(r)})}if(!smhiWarnings){api("/weather/warnings",{}).then(r=>{setSmhiWarnings(r||{warnings:[]})})}if(!pollenData){api("/weather/pollen",{}).then(r=>{setPollenData(r||{today:[]})})}if(!airData){api("/weather/air",{lat:59.4288,lon:17.9498}).then(r=>{setAirData(r)})}}if(k==="dm"&&account){api("/dm/inbox",{username:account.username,token:account.token}).then(r=>{if(r?.ok){setDmInbox(r);setDmUnread(0);api("/dm/read",{username:account.username,token:account.token})}}).catch(()=>{setTimeout(()=>{api("/dm/inbox",{username:account.username,token:account.token}).then(r2=>{if(r2?.ok){setDmInbox(r2);setDmUnread(0)}})},2000)})}}}} style={{...S.tab,...(page===k||(page==="opening"&&k==="shop")?S.tabOn:{}),color:k==="dm"&&dmUnread>0?"#f59e0b":undefined}}>{l}</button>))}{account&&["admin","owner","mod"].includes(account.role)&&<button onClick={()=>{if(account.role==="owner")window.owner();else window.admin()}} style={{...S.tab,background:"#ff000022",color:"#ff4444",border:"1px solid #ff000044"}}>{account.role==="owner"?"Owner":"Admin"}</button>}<button onClick={()=>setConfirmReset(true)} style={{...S.tab,marginLeft:"auto",color:"#eb4b4b"}}>Reset</button></div>
+    <div style={S.nav}>{[["shop",t("tab_shop")],["inv",`${t("tab_inv")} (${st.inv.length})`],["stats",t("tab_stats")],["loan",t("tab_loan")],["flip",t("tab_flip")],["pvp",t("tab_pvp")],["live",t("tab_live")],["lb",t("tab_lb")],["chat",t("tab_chat")],["dm",`${t("tab_dm")}${dmUnread>0?" ("+dmUnread+")":""}`],["me",t("tab_me")],["map",t("tab_map")],["horse",t("tab_horse")],["bj",t("tab_bj")],["btc",t("tab_btc")],["plinko",t("tab_plinko")],["roulette",t("tab_roulette")],["wheel",t("tab_wheel")],["school",t("tab_weather")]].map(([k,l])=>(<button key={k} onClick={()=>{if(!opening||scrollDone||k==="shop"){setPage(k);if(k!=="opening")setOpening(false);if(k==="map")getOnline().then(r=>{if(r)setOnlineData(r)});if(k==="pvp")refreshLobbies();if(k==="bj"&&account){api("/bj/buycard",{username:account.username,token:account.token}).then(r=>{if(r?.hasCard)setBjHasCard(true)})}if(k==="btc"){/* useEffect handles initial load */}if(k==="wheel"&&account){api("/wheel/status",{username:account.username}).then(r=>setWheelStatus(r))}if(k==="school"){if(!weatherData){api("/weather/today",{lat:59.4288,lon:17.9498}).then(r=>{setWeatherData(r)})}if(!smhiWarnings){api("/weather/warnings",{}).then(r=>{setSmhiWarnings(r||{warnings:[]})})}if(!pollenData){api("/weather/pollen",{}).then(r=>{setPollenData(r||{today:[]})})}if(!airData){api("/weather/air",{lat:59.4288,lon:17.9498}).then(r=>{setAirData(r)})}}if(k==="dm"&&account){api("/dm/inbox",{username:account.username,token:account.token}).then(r=>{if(r?.ok){setDmInbox(r);setDmUnread(0);api("/dm/read",{username:account.username,token:account.token})}}).catch(()=>{setTimeout(()=>{api("/dm/inbox",{username:account.username,token:account.token}).then(r2=>{if(r2?.ok){setDmInbox(r2);setDmUnread(0)}})},2000)})}}}} style={{...S.tab,...(page===k||(page==="opening"&&k==="shop")?S.tabOn:{}),color:k==="dm"&&dmUnread>0?"#f59e0b":undefined}}>{l}</button>))}{account&&["admin","owner","mod"].includes(account.role)&&<button onClick={()=>{if(account.role==="owner")window.owner();else window.admin()}} style={{...S.tab,background:"#ff000022",color:"#ff4444",border:"1px solid #ff000044"}}>{account.role==="owner"?"Owner":"Admin"}</button>}<button onClick={()=>setConfirmReset(true)} style={{...S.tab,marginLeft:"auto",color:"#eb4b4b"}}>Reset</button></div>
 
     {/* SHOP */}
     {page==="shop"&&<div style={S.body}><div style={S.grid}>{CASES.map(c=>{const cP=saleDiscount>0?Math.floor(c.price*(1-saleDiscount/100)):c.price;const ok=st.bal>=cP;return(<div key={c.id} style={{...S.card,borderColor:c.color+"44",opacity:ok?1:.35}}><div style={{...S.cardIcon,background:c.color+"12",borderColor:c.color+"28"}}><span style={{fontSize:"clamp(26px,6.5vw,40px)"}}>{c.icon}</span></div><div style={S.cardName}>{c.name}</div><div style={{...S.cardPrice,color:c.color}}>{saleDiscount>0&&<span style={{textDecoration:"line-through",color:"#666",fontSize:"clamp(9px,2.5vw,12px)",marginRight:4}}>{money(c.price)}</span>}{money(saleDiscount>0?Math.floor(c.price*(1-saleDiscount/100)):c.price)}</div><div style={{display:"flex",flexDirection:"column",gap:3,width:"100%"}}><div style={{display:"flex",gap:3}}><button disabled={!ok} onClick={()=>doOpen(c)} style={{...S.btn,background:ok?c.color:"#333",color:"#fff",flex:2,padding:"clamp(5px,1.2vw,8px) 0",fontSize:"clamp(9px,2.3vw,12px)"}}>Open</button><button disabled={st.bal<cP*10||c.id==="epstein"} onClick={()=>{if(c.id==="epstein"){setToast({msg:"No bulk opening for this case",color:"#eb4b4b"});return}doMultiOpen(c,10)}} style={{...S.btn,background:st.bal>=cP*10?c.color+"aa":"#222",color:st.bal>=cP*10?"#fff":"#555",flex:1,padding:"clamp(5px,1.2vw,8px) 0",fontSize:"clamp(8px,2vw,10px)"}}>x10</button></div><button onClick={()=>{setInspecting(c);setPage("inspect")}} style={{...S.btn,background:"#ffffff06",color:"#666",padding:"3px 0",fontSize:"clamp(8px,2vw,10px)"}}>Inspect</button></div></div>)})}</div></div>}
@@ -1224,6 +1271,121 @@ function App(){
       </div>;
     })()}
 
+            {/* WHEEL OF FORTUNE */}
+    {page==="wheel"&&<div style={{...S.body,maxWidth:520,margin:"0 auto"}}>
+      <div style={{fontSize:"clamp(20px,5vw,28px)",fontWeight:800,marginBottom:6,display:"flex",alignItems:"center",gap:8,animation:"fadeUp .4s"}}><MI n="casino" s={28} c="#ffd700" f={{filter:"drop-shadow(0 0 8px #ffd70066)"}}/> {t("wheel_title")}</div>
+      <div style={{color:"#94a3b8",fontSize:12,marginBottom:16,animation:"fadeUp .5s"}}>{t("wheel_subtitle")}</div>
+
+      {!account?<div style={{padding:20,background:"#0d1117",border:"1px solid #1e2430",borderRadius:12,textAlign:"center",animation:"fadeUp .5s"}}>
+        <MI n="lock" s={32} c="#888"/>
+        <div style={{color:"#cbd5e1",fontSize:13,marginTop:6}}>{t("wheel_login_required")}</div>
+      </div>:<>
+        <div style={{position:"relative",margin:"0 auto",width:"min(380px,90vw)",aspectRatio:"1"}}>
+          {/* Pointer at top */}
+          <div style={{position:"absolute",top:-2,left:"50%",transform:"translateX(-50%)",zIndex:2,width:0,height:0,borderLeft:"14px solid transparent",borderRight:"14px solid transparent",borderTop:"22px solid #ffd700",filter:"drop-shadow(0 2px 4px #0008)"}}/>
+          <canvas ref={wheelCanvasRef} style={{width:"100%",height:"100%",display:"block"}}/>
+        </div>
+
+        {wheelResult&&<div className="bounceIn" style={{textAlign:"center",margin:"14px 0",padding:"14px 18px",background:"linear-gradient(135deg,#4ade8022,#16a34a22)",border:"1px solid #4ade8055",borderRadius:12}}>
+          <MI n="celebration" s={32} c="#4ade80" f={{filter:"drop-shadow(0 0 8px #4ade8088)"}}/>
+          <div style={{fontSize:18,fontWeight:800,color:"#4ade80",marginTop:4}}>{t("wheel_won",{amount:wheelResult.amount.toLocaleString()})}</div>
+        </div>}
+
+        <div style={{textAlign:"center",marginTop:16}}>
+          {wheelStatus?.canSpin===false?<div style={{padding:"10px 16px",background:"#0d1117",border:"1px solid #1e2430",borderRadius:8,display:"inline-flex",alignItems:"center",gap:8}}>
+            <MI n="schedule" s={18} c="#888"/>
+            <div>
+              <div style={{fontSize:11,color:"#888"}}>{t("wheel_next_spin")}</div>
+              <div style={{fontSize:14,fontWeight:700,color:"#cbd5e1"}}>{wheelStatus.nextSpinMs?(()=>{const h=Math.floor(wheelStatus.nextSpinMs/3600000);const m=Math.floor((wheelStatus.nextSpinMs%3600000)/60000);return h+"h "+m+"m"})():"–"}</div>
+            </div>
+          </div>:<button disabled={wheelSpinning||!wheelStatus?.canSpin} onClick={async()=>{
+            setWheelSpinning(true);
+            setWheelResult(null);
+            const r=await api("/wheel/spin",{username:account.username,token:account.token});
+            if(!r?.ok){
+              setWheelSpinning(false);
+              setToast({msg:r?.error||"Failed",color:"#eb4b4b"});
+              if(r?.nextSpinMs)setWheelStatus({canSpin:false,nextSpinMs:r.nextSpinMs});
+              return;
+            }
+            // Animate canvas
+            const cv=wheelCanvasRef.current;
+            if(!cv){setWheelSpinning(false);return}
+            const W=cv.offsetWidth;
+            cv.width=W*2;cv.height=W*2;
+            const g=cv.getContext("2d");g.scale(2,2);
+            const segs=r.segments;
+            const n=segs.length;
+            const segAng=(Math.PI*2)/n;
+            // Colors for each segment
+            const colors=["#dc2626","#fb923c","#fbbf24","#84cc16","#22d3ee","#3b82f6","#a855f7","#ec4899"];
+            // Target: land on segs[r.prizeIndex] at top (-PI/2)
+            // Static placement: seg i is centered at -PI/2 + i*segAng. To put prizeIndex at top, rotation must be -prizeIndex*segAng
+            const landRot=-r.prizeIndex*segAng;
+            const totalRot=-(Math.PI*2*7)+landRot;
+            const t0=performance.now();
+            const dur=5500;
+            const drawWheel=(rot)=>{
+              g.clearRect(0,0,W,W);
+              const cx=W/2,cy=W/2,rad=W/2-8;
+              // Outer ring
+              g.fillStyle="#1a1a2e";
+              g.beginPath();g.arc(cx,cy,W/2-2,0,Math.PI*2);g.fill();
+              // Segments
+              segs.forEach((s,i)=>{
+                const a0=-Math.PI/2+i*segAng-segAng/2+rot;
+                const a1=a0+segAng;
+                g.beginPath();
+                g.moveTo(cx,cy);
+                g.arc(cx,cy,rad,a0,a1);
+                g.closePath();
+                g.fillStyle=colors[i%colors.length];
+                g.fill();
+                g.strokeStyle="#0d1117";g.lineWidth=2;g.stroke();
+                // Label
+                g.save();
+                g.translate(cx,cy);
+                g.rotate(a0+segAng/2);
+                g.fillStyle="#fff";
+                g.font="bold "+Math.max(11,W*0.05)+"px sans-serif";
+                g.textAlign="right";
+                g.textBaseline="middle";
+                g.strokeStyle="#000";g.lineWidth=3;
+                g.strokeText(s.label,rad*0.92,0);
+                g.fillText(s.label,rad*0.92,0);
+                g.restore();
+              });
+              // Center hub
+              g.fillStyle="#2d2d3f";g.beginPath();g.arc(cx,cy,rad*0.18,0,Math.PI*2);g.fill();
+              g.fillStyle="#ffd700";g.beginPath();g.arc(cx,cy,rad*0.08,0,Math.PI*2);g.fill();
+            };
+            const loop=()=>{
+              const tt=Math.min(1,(performance.now()-t0)/dur);
+              const eased=1-Math.pow(1-tt,3.5);
+              const rot=totalRot*eased;
+              drawWheel(rot);
+              if(tt<1){requestAnimationFrame(loop)}
+              else{
+                setTimeout(()=>{
+                  setSt(p=>{const ns={...p,bal:p.bal+r.amount};save(ns,drops);return ns});
+                  setWheelResult({amount:r.amount,label:r.label,index:r.prizeIndex});
+                  setWheelSpinning(false);
+                  setWheelStatus({canSpin:false,nextSpinMs:24*3600*1000});
+                  if(r.amount>=100000){document.body.classList.add("shakeHard");setTimeout(()=>document.body.classList.remove("shakeHard"),400);sndReveal(true)}
+                  else sndReveal(false);
+                },600);
+              }
+            };
+            loop();
+          }} style={{...S.btn,background:wheelSpinning?"#333":"linear-gradient(135deg,#ffd700,#fbbf24)",color:"#000",fontWeight:800,padding:"12px 36px",fontSize:16,boxShadow:wheelSpinning?"none":"0 4px 20px #ffd70044"}}>{wheelSpinning?t("wheel_spinning"):t("wheel_spin")}</button>}
+        </div>
+
+        <div style={{marginTop:14,padding:10,background:"#0d1117",border:"1px solid #1e2430",borderRadius:8,fontSize:10,color:"#64748b",textAlign:"center"}}>
+          {t("wheel_rules")}
+        </div>
+      </>}
+    </div>}
+
                 {/* BLACKJACK */}
     {page==="bj"&&<div style={{...S.body,maxWidth:650,margin:"0 auto"}}>
       <div style={{fontSize:"clamp(16px,4vw,22px)",fontWeight:800,marginBottom:8}}>♠ Blackjack</div>
@@ -1374,6 +1536,40 @@ function App(){
     </div>}
 
     {/* BAN MODAL */}
+    {/* DAILY LOGIN BONUS MODAL */}
+    {dailyModal&&dailyModal.canClaim&&<div style={S.overlay}><div style={{...S.modal,maxWidth:420,padding:20,position:"relative",overflow:"hidden"}}>
+      <div style={{position:"absolute",inset:0,background:"radial-gradient(circle at 50% 0%, #ffd70022, transparent 60%)",pointerEvents:"none"}}/>
+      <div style={{position:"relative",display:"flex",flexDirection:"column",alignItems:"center",gap:6}}>
+        <MI n="redeem" s={48} c="#ffd700" f={{filter:"drop-shadow(0 0 12px #ffd70088)",animation:"bounceIn .6s ease-out"}}/>
+        <div style={{fontSize:22,fontWeight:800,color:"#ffd700"}}>{t("daily_title")}</div>
+        <div style={{fontSize:11,color:"#94a3b8",textAlign:"center"}}>{t("daily_subtitle")}</div>
+        {/* 7-day streak grid */}
+        <div style={{display:"grid",gridTemplateColumns:"repeat(7,1fr)",gap:4,width:"100%",margin:"8px 0"}}>
+          {[5000,10000,25000,50000,100000,250000,1000000].map((amt,i)=>{
+            const dayNum=i+1;
+            const currentDay=Math.min((dailyModal.streak||0)+1,7);
+            const isToday=dayNum===currentDay;
+            const isPast=dayNum<currentDay;
+            return <div key={i} style={{padding:"6px 2px",borderRadius:6,background:isToday?"#ffd70022":isPast?"#4ade8011":"#0d1117",border:"1px solid "+(isToday?"#ffd700":isPast?"#4ade8044":"#1e2430"),textAlign:"center",position:"relative",animation:isToday?"glow 2s infinite":"none"}}>
+              <div style={{fontSize:9,color:isToday?"#ffd700":isPast?"#4ade80":"#666",fontWeight:700}}>{lang==="sv"?"DAG":"DAY"} {dayNum}</div>
+              <div style={{fontSize:10,color:isToday?"#fff":isPast?"#4ade80":"#888",fontWeight:700,marginTop:2}}>{amt>=1000000?(amt/1000000)+"M":amt>=1000?(amt/1000)+"K":amt}</div>
+              {isPast&&<div style={{position:"absolute",top:1,right:2,fontSize:9}}><MI n="check_circle" s={11} c="#4ade80"/></div>}
+            </div>;
+          })}
+        </div>
+        <button onClick={async()=>{
+          const r=await api("/daily/claim",{username:account.username,token:account.token});
+          if(r?.ok){
+            setSt(p=>{const ns={...p,bal:p.bal+r.reward};save(ns,drops);return ns});
+            setToast({msg:t("daily_claimed",{amount:r.reward.toLocaleString()}),color:"#4ade80"});
+            setDailyStatus({canClaim:false,streak:r.streak,nextClaimMs:24*3600*1000});
+            setDailyModal(null);
+          }else{setToast({msg:r?.error||"Failed",color:"#eb4b4b"})}
+        }} style={{...S.btn,background:"linear-gradient(135deg,#ffd700,#fbbf24)",color:"#000",fontWeight:800,padding:"10px 28px",fontSize:14,marginTop:4,boxShadow:"0 4px 20px #ffd70044"}}>{t("daily_claim")} {(()=>{const rewards=[5000,10000,25000,50000,100000,250000,1000000];const day=Math.min((dailyModal.streak||0),6);return "$"+rewards[day].toLocaleString()})()}</button>
+        <button onClick={()=>{setDailyModal(null);setDailyStatus({canClaim:true,streak:dailyModal.streak})}} style={{...S.btn,background:"transparent",color:"#64748b",fontSize:10,marginTop:4}}>{t("daily_later")}</button>
+      </div>
+    </div></div>}
+
     {giftModal&&<div style={S.overlay} onClick={()=>setGiftModal(null)}><div style={{...S.modal,maxWidth:340}} onClick={e=>e.stopPropagation()}>
       <div style={{fontSize:16,fontWeight:800,color:"#ffd700"}}><MI n="redeem" s={20} c="#ffd700"/> Gift money to @{giftModal.to}</div>
       <div style={{color:"#888",fontSize:11}}>Your balance: {money(st.bal)}</div>
