@@ -1,66 +1,116 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Warning</title>
-
-  <style>
-    body {
-      background: #111;
-      color: white;
-      font-family: Arial, sans-serif;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      height: 100vh;
-      margin: 0;
-    }
-
-    .box {
-      text-align: center;
-      background: #1e1e1e;
-      padding: 30px;
-      border-radius: 12px;
-      box-shadow: 0 0 20px rgba(0,0,0,0.5);
-      max-width: 400px;
-    }
-
-    h1 {
-      font-size: 22px;
-      margin-bottom: 20px;
-      color: #ffcc00;
-    }
-
-    button {
-      background: #0078ff;
-      color: white;
-      border: none;
-      padding: 12px 24px;
-      border-radius: 8px;
-      font-size: 16px;
-      cursor: pointer;
-      transition: 0.2s;
-    }
-
-    button:hover {
-      background: #005fd1;
-    }
-  </style>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>CASES v20</title>
+<link rel="stylesheet" href="styles.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
+<link href="https://fonts.googleapis.com/css2?family=Material+Symbols+Rounded:opsz,wght,FILL,GRAD@24,400,0,0&display=swap" rel="stylesheet">
+<link rel="icon" href="https://good-player.github.io/sigmaweb/pic/icon.png"/>
 </head>
 <body>
+<div id="root"></div>
+<script src="i18n.js"></script>
+<script type="text/babel" data-presets="react" src="app.js"></script>
+<script>
+// Admin console command - type admin("password") in dev console
+// This is intentionally a plain script, not JSX, for security isolation
+(function(){
+  var _API = "https://samptonweb.dpdns.org/api/caseopen/adminpanel";
+  var _active = false;
+  window.admin = async function(pwd) {
+    if (_active) { console.log("%c[ADMIN] Panel already open", "color:#ffd700"); return; }
+    // Auto-auth for admin/owner accounts
+    var acct = null;
+    try { acct = JSON.parse(localStorage.getItem("co-account")); } catch {}
+    var postBody;
+    if (pwd) { postBody = { password: pwd }; }
+    else if (acct && acct.token) { postBody = { username: acct.username, token: acct.token }; }
+    else { console.log("%c[ADMIN] Usage: admin('password') or login as admin first", "color:#eb4b4b"); return; }
+    console.log("%c[ADMIN] Authenticating...", "color:#888");
+    try {
+      var r = await fetch(_API, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(postBody)
+      });
+      var d = await r.json();
+      if (!r.ok) { console.log("%c[ADMIN] " + (d.error || "Failed"), "color:#eb4b4b"); return; }
+      if (!d.ok || !d.html) { console.log("%c[ADMIN] Invalid response", "color:#eb4b4b"); return; }
+      // Inject admin panel as overlay - does NOT touch React root
+      var container = document.createElement("div");
+      container.id = "__admin_container";
+      container.innerHTML = d.html;
+      document.body.appendChild(container);
+      // Execute admin JS from server (separate from HTML, no script tag needed)
+      if (d.js) { var sc = document.createElement("script"); sc.textContent = d.js; document.head.appendChild(sc); }
+      _active = true;
+      // Watch for panel removal (close button or page change)
+      var obs = new MutationObserver(function() {
+        if (!document.getElementById("__admin_overlay")) {
+          _active = false;
+          var c = document.getElementById("__admin_container");
+          if (c) c.remove();
+          obs.disconnect();
+          console.log("%c[ADMIN] Panel closed", "color:#888");
+        }
+      });
+      obs.observe(document.body, { childList: true, subtree: true });
+      console.log("%c[ADMIN] Panel loaded. Click RELOAD GAME to apply changes.", "color:#4ade80;font-weight:bold");
+    } catch(e) {
+      console.log("%c[ADMIN] Network error: " + e.message, "color:#eb4b4b");
+    }
+  };
+  // Hint in console
+  console.log("%c[CASES] Admin available. Type: admin('password')", "color:#444;font-size:10px");
+  console.log("%c[CASES] Owner panel: owner('password')", "color:#444;font-size:10px");
 
-  <div class="box">
-    <h1>
-      Currently all icon is broken.<br>
-      And some features may not work.<br><br>
-      Are you sure to proceed?
-    </h1>
-
-    <button onclick="window.location.href='index3.html'">
-      Proceed
-    </button>
-  </div>
-
+  // Owner panel - fetched from backend (not client-side)
+  var _ownerActive = false;
+  window.owner = async function(pwd) {
+    if (_ownerActive) { console.log("%c[OWNER] Already open", "color:#ff0000"); return; }
+    var acct = null;
+    try { acct = JSON.parse(localStorage.getItem("co-account")); } catch {}
+    var postBody;
+    if (pwd) { postBody = { password: pwd }; }
+    else if (acct && acct.token) { postBody = { username: acct.username, token: acct.token }; }
+    else { console.log("%c[OWNER] Usage: owner('password') or login as owner", "color:#eb4b4b"); return; }
+    console.log("%c[OWNER] Authenticating...", "color:#888");
+    try {
+      var r = await fetch("https://samptonweb.dpdns.org/api/caseopen/ownerpanel", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(postBody)
+      });
+      var d = await r.json();
+      if (!r.ok || !d.ok) { console.log("%c[OWNER] " + (d.error || "Failed"), "color:#eb4b4b"); return; }
+      window.__ownerPwd = pwd || "";
+      window.__ownerAcct = acct;
+      var container = document.createElement("div");
+      container.id = "__owner_container";
+      container.innerHTML = d.html;
+      document.body.appendChild(container);
+      if (d.js) { var sc = document.createElement("script"); sc.textContent = d.js; document.head.appendChild(sc); }
+      _ownerActive = true;
+      var obs = new MutationObserver(function() {
+        if (!document.getElementById("__owner_overlay")) {
+          _ownerActive = false;
+          var c = document.getElementById("__owner_container");
+          if (c) c.remove();
+          obs.disconnect();
+          console.log("%c[OWNER] Panel closed", "color:#888");
+        }
+      });
+      obs.observe(document.body, { childList: true, subtree: true });
+      console.log("%c[OWNER] Panel loaded", "color:#ff0000;font-weight:bold");
+    } catch(e) {
+      console.log("%c[OWNER] Network error: " + e.message, "color:#eb4b4b");
+    }
+  };
+})();
+</script>
 </body>
 </html>
