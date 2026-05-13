@@ -165,17 +165,25 @@ function App(){
   const[events,setEvents]=useState([]);const[dismissedEvents,setDismissedEvents]=useState({});
   const[friendsList,setFriendsList]=useState([]);
   function showProfile(username){if(!username||username==="Anon"||username==="SYSTEM")return;api("/profile/full",{target:username.toLowerCase(),username:account?.username||""}).then(r=>{if(r?.profile)setViewProfile(r.profile)}).catch(()=>{})}
-  const[lobbies,setLobbies]=useState([]);const[curLobby,setCurLobby]=useState(null);const[lobbyChat,setLobbyChat]=useState([]);const[lobbyChatMsg,setLobbyChatMsg]=useState("");const[lobbyTimer,setLobbyTimer]=useState(0);const[createLobbyName,setCreateLobbyName]=useState("");const[createLobbyPw,setCreateLobbyPw]=useState("");const[createLobbyMode,setCreateLobbyMode]=useState("profit_race");
+  const[lobbies,setLobbies]=useState([]);const[curLobby,setCurLobby]=useState(null);const[lobbyChat,setLobbyChat]=useState([]);const[lobbyChatMsg,setLobbyChatMsg]=useState("");const[lobbyTimer,setLobbyTimer]=useState(0);const[createLobbyName,setCreateLobbyName]=useState("");const[createLobbyPw,setCreateLobbyPw]=useState("");const[createLobbyMode,setCreateLobbyMode]=useState("profit_race");const[createLobbyBet,setCreateLobbyBet]=useState("1000");const[buckshotState,setBuckshotState]=useState(null);
   const stripRef=useRef(null);const lockRef=useRef(false);const lobbyPollRef=useRef(null);
 
   async function refreshLobbies(){const r=await api("/lobby/list",{});if(r?.lobbies)setLobbies(r.lobbies)}
   async function refreshLobby(id){const r=await api("/lobby/info",{lobbyId:id||curLobby?.id});if(r?.lobby){setCurLobby(r.lobby);if(r.chat)setLobbyChat(r.chat);if(r.players)setCurLobby(prev=>({...prev,...r.lobby,_players:r.players}))}}
-  async function joinLobby(id,pw){const r=await api("/lobby/join",{username:account?.username,lobbyId:id,lobbyPassword:pw||""});if(r?.ok){await refreshLobby(id);return true}else{setToast({msg:r?.error||"Failed",color:"#eb4b4b"});return false}}
+  async function joinLobby(id,pw){const r=await api("/lobby/join",{username:account?.username,lobbyId:id,lobbyPassword:pw||"",slot});if(r?.ok){if(r.betLocked>0){setSt(p=>{const ns={...p,bal:p.bal-r.betLocked};save(ns,drops);return ns});setToast({msg:"Locked $"+r.betLocked.toLocaleString()+" — game ON!",color:"#f59e0b"})}await refreshLobby(id);return true}else{setToast({msg:r?.error||"Failed",color:"#eb4b4b"});return false}}
   async function leaveLobby(){if(curLobby){setPvpEliminated(false);setPvpWinModal(null);await api("/lobby/leave",{username:account?.username,lobbyId:curLobby.id});setCurLobby(null);setLobbyChat([]);clearInterval(lobbyPollRef.current);refreshLobbies()}}
   async function deleteLobby(){if(curLobby){setPvpEliminated(false);setPvpWinModal(null);await api("/lobby/end",{lobbyId:curLobby.id,username:account?.username});setCurLobby(null);setLobbyChat([]);clearInterval(lobbyPollRef.current);refreshLobbies()}}
 
   // Poll lobby while in one
   useEffect(()=>{if(!curLobby?.id)return;const id=setInterval(()=>refreshLobby(curLobby.id),3000);lobbyPollRef.current=id;return()=>clearInterval(id)},[curLobby?.id]);
+  // Buckshot Roulette: poll game state every 1s while in a buckshot lobby
+  useEffect(()=>{
+    if(!curLobby?.id||curLobby.mode!=="buckshot")return;
+    const fetchState=()=>{api("/buckshot/state",{lobbyId:curLobby.id,username:account?.username||""}).then(r=>{if(r?.state)setBuckshotState(r.state)})};
+    fetchState();
+    const id=setInterval(fetchState,1000);
+    return()=>clearInterval(id);
+  },[curLobby?.id,curLobby?.mode]);
   // Daily login bonus check on account login
   useEffect(()=>{if(!account)return;api("/daily/status",{username:account.username}).then(r=>{if(r?.canClaim)setDailyModal(r);else setDailyStatus(r)})},[account?.username]);
   // Wheel of Fortune - draw static wheel on page enter
@@ -661,16 +669,16 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
         {/* IN-LOBBY VIEW */}
         <div style={{background:"#0d1117",border:"1px solid #151820",borderRadius:12,padding:"clamp(12px,3vw,20px)",marginBottom:10}}>
           <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
-            <div><div style={{fontWeight:700,fontSize:"clamp(14px,3.5vw,18px)"}}>{curLobby.name}</div><div style={{color:"#888",fontSize:"clamp(8px,2vw,10px)"}}>Mode: {curLobby.mode==="profit_race"?"Profit Race":"Coin Flip Duel"} · Host: {curLobby.host}{curLobby.password_hash?<> · <MI n="lock" s={10}/></>:""}</div></div>
+            <div><div style={{fontWeight:700,fontSize:"clamp(14px,3.5vw,18px)"}}>{curLobby.name}</div><div style={{color:"#888",fontSize:"clamp(8px,2vw,10px)"}}>Mode: {curLobby.mode==="profit_race"?"Profit Race":curLobby.mode==="buckshot"?"Buckshot 🔫":"Coin Flip Duel"} · Host: {curLobby.host}{curLobby.password_hash?<> · <MI n="lock" s={10}/></>:""}</div></div>
             <div style={{display:"flex",gap:4}}>
-              {curLobby.status==="waiting"&&curLobby.host===account.username&&<button onClick={async()=>{await api("/lobby/start",{lobbyId:curLobby.id,username:account.username});refreshLobby(curLobby.id)}} style={{...S.btn,background:"#4ade80",color:"#000",fontSize:"clamp(10px,2.5vw,13px)"}}>Start</button>}
+              {curLobby.status==="waiting"&&curLobby.host===account.username&&curLobby.mode!=="buckshot"&&<button onClick={async()=>{await api("/lobby/start",{lobbyId:curLobby.id,username:account.username});refreshLobby(curLobby.id)}} style={{...S.btn,background:"#4ade80",color:"#000",fontSize:"clamp(10px,2.5vw,13px)"}}>Start</button>}
               {curLobby._spectating?<button onClick={()=>{setCurLobby(null);clearInterval(lobbyPollRef.current)}} style={{...S.btn,background:"#ffffff08",color:"#888",fontSize:"clamp(9px,2.2vw,11px)"}}>Stop Watching</button>:
               curLobby.host===account.username?<button onClick={deleteLobby} style={{...S.btn,background:"#eb4b4b22",color:"#eb4b4b",fontSize:"clamp(9px,2.2vw,11px)"}}>Delete</button>:
               <button onClick={leaveLobby} style={{...S.btn,background:"#f59e0b22",color:"#f59e0b",fontSize:"clamp(9px,2.2vw,11px)"}}>Leave</button>}
             </div>
           </div>
           {/* Timer */}
-          {curLobby.status==="playing"&&<div style={{background:"#141820",borderRadius:8,padding:"8px 14px",marginBottom:8,textAlign:"center"}}><div style={{color:"#f59e0b",fontWeight:800,fontSize:"clamp(20px,6vw,32px)"}}>{Math.floor(lobbyTimer/60000)}:{String(Math.floor((lobbyTimer%60000)/1000)).padStart(2,"0")}</div><div style={{color:"#888",fontSize:"clamp(8px,2vw,10px)"}}>Time remaining · $10,000 start · No loan</div></div>}
+          {curLobby.status==="playing"&&curLobby.mode!=="buckshot"&&<div style={{background:"#141820",borderRadius:8,padding:"8px 14px",marginBottom:8,textAlign:"center"}}><div style={{color:"#f59e0b",fontWeight:800,fontSize:"clamp(20px,6vw,32px)"}}>{Math.floor(lobbyTimer/60000)}:{String(Math.floor((lobbyTimer%60000)/1000)).padStart(2,"0")}</div><div style={{color:"#888",fontSize:"clamp(8px,2vw,10px)"}}>Time remaining · $10,000 start · No loan</div></div>}
           {curLobby.status==="finished"&&<div style={{background:"#4ade8011",border:"1px solid #4ade8033",borderRadius:8,padding:10,marginBottom:8,textAlign:"center"}}><div style={{color:"#4ade80",fontWeight:800,fontSize:"clamp(14px,3.5vw,18px)"}}>Game Over!</div>{pvpWinModal&&<div style={{marginTop:6}}><div style={{color:"#4ade80",fontWeight:700}}>{pvpWinModal.winner===account?.username?<><MI n="celebration" s={16}/> YOU WON!</>:pvpWinModal.winner+" wins!"}</div>{(pvpWinModal.results||[]).map((p,i)=><div key={p.username} style={{display:"flex",justifyContent:"center",gap:8,fontSize:11,padding:2,color:i===0?"#ffd700":p.eliminated?"#eb4b4b88":"#ccc"}}><span>#{i+1}</span><span>{p.username}</span><span style={{color:p.profit>=0?"#4ade80":"#eb4b4b"}}>{p.profit>=0?"+":""}${(p.profit||0).toLocaleString()}</span>{p.eliminated&&<span style={{color:"#eb4b4b",fontSize:8}}>OUT</span>}</div>)}</div>}</div>}
           {/* Players */}
           <div style={{fontSize:"clamp(10px,2.5vw,12px)",fontWeight:600,color:"#888",marginBottom:4}}>Players ({curLobby._players?.length||0}/5)</div>
@@ -683,8 +691,69 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
               {curLobby.status==="waiting"&&curLobby.host===account.username&&p.username!==account.username&&!["admin","owner","mod"].includes(p.role)&&<button onClick={async()=>{await api("/lobby/kick",{username:account.username,target:p.username,lobbyId:curLobby.id});refreshLobby(curLobby.id)}} style={{background:"#eb4b4b22",color:"#eb4b4b",border:"none",padding:"2px 6px",borderRadius:3,cursor:"pointer",fontSize:9}}>Kick</button>}
             </div>)}
           </div>
+          {/* BUCKSHOT ROULETTE GAME */}
+          {curLobby.mode==="buckshot"&&<div style={{background:"#0a0c10",border:"1px solid #f59e0b33",borderRadius:8,padding:10,marginBottom:10}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+              <div style={{color:"#f59e0b",fontWeight:800,fontSize:13,display:"flex",alignItems:"center",gap:6}}><MI n="local_fire_department" s={18}/> Buckshot Roulette</div>
+              <div style={{color:"#ffd700",fontWeight:700,fontSize:14}}>Pot: ${(curLobby.pot||0).toLocaleString()}</div>
+            </div>
+            {curLobby.status==="waiting"&&<div>
+              <div style={{color:"#888",fontSize:11,textAlign:"center",padding:8}}>
+                {(curLobby._players?.length||0)<2?"Waiting for opponent ("+(curLobby._players?.length||0)+"/2)...":"Both players ready. Host can start."}
+              </div>
+              <div style={{color:"#94a3b8",fontSize:10,textAlign:"center",marginBottom:8}}>Each player has 3 charges. Shells are loaded with a mix of live and blank rounds. Shoot yourself or your opponent. Last one standing wins ${(curLobby.pot||0).toLocaleString()}.</div>
+              {curLobby.host===account.username&&(curLobby._players?.length||0)===2&&<button onClick={async()=>{const r=await api("/buckshot/start",{lobbyId:curLobby.id,username:account.username});if(r?.ok){refreshLobby(curLobby.id)}else setToast({msg:r?.error||"Failed",color:"#eb4b4b"})}} style={{...S.btn,background:"#eb4b4b",color:"#fff",fontWeight:800,width:"100%",padding:10}}>START GAME 🔫</button>}
+              {curLobby.host===account.username&&<button onClick={async()=>{if(!confirm("Cancel lobby and refund all bets?"))return;const r=await api("/buckshot/cancel",{lobbyId:curLobby.id,username:account.username});if(r?.ok){if(r.refunded){setSt(p=>{const ns={...p,bal:p.bal+(curLobby.bet||0)};save(ns,drops);return ns});setToast({msg:"Refunded $"+(curLobby.bet||0).toLocaleString(),color:"#4ade80"})}setCurLobby(null);clearInterval(lobbyPollRef.current);refreshLobbies()}else setToast({msg:r?.error||"Failed",color:"#eb4b4b"})}} style={{...S.btn,background:"#eb4b4b22",color:"#eb4b4b",fontWeight:700,width:"100%",marginTop:6,fontSize:11}}>Cancel & Refund</button>}
+            </div>}
+            {curLobby.status==="playing"&&buckshotState&&<div>
+              {/* Player charge displays */}
+              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:10}}>
+                {[buckshotState.p1,buckshotState.p2].map(pn=>{
+                  const isYou=pn===account.username;
+                  const isTurn=buckshotState.turn===pn;
+                  const charges=buckshotState.charges?.[pn]||0;
+                  return <div key={pn} style={{background:isTurn?"#f59e0b22":"#141820",border:"1px solid "+(isTurn?"#f59e0b":"#1e2430"),borderRadius:8,padding:8,textAlign:"center"}}>
+                    <div style={{color:isYou?"#4ade80":"#cbd5e1",fontWeight:700,fontSize:12}}>{pn}{isYou&&" (you)"}</div>
+                    <div style={{display:"flex",justifyContent:"center",gap:3,marginTop:6,height:18}}>
+                      {[0,1,2].map(i=><div key={i} style={{width:14,height:14,borderRadius:"50%",background:i<charges?"#eb4b4b":"#333",boxShadow:i<charges?"0 0 4px #eb4b4b88":"none"}}/>)}
+                    </div>
+                    <div style={{color:"#888",fontSize:10,marginTop:4}}>{charges}/3 charges</div>
+                    {buckshotState.cuffs?.[pn]&&<div style={{color:"#a855f7",fontSize:9,marginTop:2}}>🔗 cuffed</div>}
+                    {isTurn&&!buckshotState.winner&&<div style={{color:"#f59e0b",fontSize:10,marginTop:2,fontWeight:700}}>► TURN</div>}
+                  </div>;
+                })}
+              </div>
+              {/* Shells visualization */}
+              <div style={{background:"#141820",borderRadius:6,padding:8,marginBottom:8,textAlign:"center"}}>
+                <div style={{color:"#888",fontSize:10,marginBottom:4}}>Shells loaded ({buckshotState.shellsRemaining} remaining)</div>
+                <div style={{display:"flex",justifyContent:"center",gap:8}}>
+                  <span style={{color:"#eb4b4b",fontWeight:700}}>🔴 {buckshotState.liveRemaining} LIVE</span>
+                  <span style={{color:"#3b82f6",fontWeight:700}}>🔵 {buckshotState.blankRemaining} BLANK</span>
+                </div>
+              </div>
+              {/* Action buttons - only for the player whose turn it is */}
+              {!buckshotState.winner&&buckshotState.turn===account.username&&!buckshotState.isSpectator&&<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:8}}>
+                <button onClick={async()=>{if(!confirm("Shoot yourself?"))return;const r=await api("/buckshot/shoot",{lobbyId:curLobby.id,username:account.username,target:"self"});if(r?.ok){if(r.shellType==="live"){document.body.classList.add("shakeHard");setTimeout(()=>document.body.classList.remove("shakeHard"),400);setToast({msg:"LIVE — "+r.damage+" damage to yourself!",color:"#eb4b4b"})}else setToast({msg:"Blank! You're safe — keep turn.",color:"#3b82f6"});if(r.winner){if(r.winner===account.username){setSt(p=>{const ns={...p,bal:p.bal+(curLobby.pot||0)};save(ns,drops);return ns})}}}else setToast({msg:r?.error||"Failed",color:"#eb4b4b"})}} style={{...S.btn,background:"#eb4b4b22",color:"#eb4b4b",border:"1px solid #eb4b4b55",fontWeight:700,padding:12}}>🔫 Shoot Self</button>
+                <button onClick={async()=>{if(!confirm("Shoot your opponent?"))return;const r=await api("/buckshot/shoot",{lobbyId:curLobby.id,username:account.username,target:"opponent"});if(r?.ok){if(r.shellType==="live"){document.body.classList.add("shakeHard");setTimeout(()=>document.body.classList.remove("shakeHard"),400);setToast({msg:"LIVE — "+r.damage+" damage to opponent!",color:"#4ade80"})}else setToast({msg:"Blank...",color:"#3b82f6"});if(r.winner){if(r.winner===account.username){setSt(p=>{const ns={...p,bal:p.bal+(curLobby.pot||0)};save(ns,drops);return ns})}}}else setToast({msg:r?.error||"Failed",color:"#eb4b4b"})}} style={{...S.btn,background:"#eb4b4b",color:"#fff",fontWeight:700,padding:12}}>🔫 Shoot Opponent</button>
+              </div>}
+              {/* Waiting for opponent */}
+              {!buckshotState.winner&&buckshotState.turn!==account.username&&!buckshotState.isSpectator&&<div style={{background:"#141820",borderRadius:6,padding:10,textAlign:"center",color:"#888",fontSize:11,marginBottom:8}}>Waiting for {buckshotState.turn} to act...</div>}
+              {/* Spectator notice */}
+              {buckshotState.isSpectator&&!buckshotState.winner&&<div style={{background:"#3b82f622",borderRadius:6,padding:6,textAlign:"center",color:"#3b82f6",fontSize:10,marginBottom:8}}>👁 Spectating · {buckshotState.turn}'s turn</div>}
+              {/* Winner */}
+              {buckshotState.winner&&<div style={{background:buckshotState.winner===account.username?"#4ade8022":"#eb4b4b22",border:"1px solid "+(buckshotState.winner===account.username?"#4ade8055":"#eb4b4b55"),borderRadius:8,padding:12,textAlign:"center"}}>
+                <div style={{color:buckshotState.winner===account.username?"#4ade80":"#eb4b4b",fontWeight:800,fontSize:18}}>{buckshotState.winner===account.username?"🏆 YOU WON!":buckshotState.winner+" wins"}</div>
+                <div style={{color:"#cbd5e1",fontSize:12,marginTop:4}}>Pot: ${(curLobby.pot||0).toLocaleString()}{buckshotState.winner===account.username&&" added to your balance"}</div>
+              </div>}
+              {/* Game log */}
+              <div style={{background:"#080a0e",borderRadius:6,padding:6,maxHeight:120,overflowY:"auto",fontSize:10}}>
+                <div style={{color:"#666",fontSize:9,marginBottom:4}}>GAME LOG</div>
+                {(buckshotState.log||[]).slice().reverse().map((l,i)=><div key={i} style={{color:"#cbd5e1",padding:"1px 0"}}>{l}</div>)}
+              </div>
+            </div>}
+          </div>}
           {/* Lobby opening (during game) */}
-          {curLobby.status==="playing"&&!curLobby._spectating&&<div style={{marginBottom:10}}>
+          {curLobby.status==="playing"&&!curLobby._spectating&&curLobby.mode!=="buckshot"&&<div style={{marginBottom:10}}>
             {pvpEliminated&&<div style={{background:"#eb4b4b11",border:"1px solid #eb4b4b33",borderRadius:8,padding:8,textAlign:"center",marginBottom:6}}><div style={{color:"#eb4b4b",fontWeight:700}}>Eliminated! Spectating...</div></div>}
             <div style={{fontSize:"clamp(10px,2.5vw,12px)",fontWeight:600,color:"#888",marginBottom:4,opacity:pvpEliminated?0.3:1}}>Open Cases {curLobby._myBal!==undefined&&<span style={{color:"#4ade80"}}> — ${curLobby._myBal?.toLocaleString()||"10,000"} left</span>}</div>
             <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>{CASES.filter(c=>c.price<=10000).map(c=><button key={c.id} disabled={curLobby._myBal!==undefined&&curLobby._myBal<c.price} onClick={async()=>{const r=await api("/lobby/roll",{username:account.username,lobbyId:curLobby.id,caseId:c.id});if(r?.timeUp||r?.error==="Time up"){refreshLobby(curLobby.id);return}if(r?.cantAfford||r?.eliminated){setPvpEliminated(true);setCurLobby(prev=>({...prev,_myBal:0}));setToast({msg:r?.error||"Bankrupt!",color:"#eb4b4b"});if(r?.matchEnded)setPvpWinModal({winner:r?.winner,results:r?.matchResults||r?.results});return}if(r?.throttle){setToast({msg:"Slow down! 2/sec max",color:"#f59e0b"});return}if(r?.ok&&r.result){setWonItem({name:r.result.name,rarity:r.result.rarity,value:r.result.value,icon:c.items.find(i=>i.name===r.result.name)?.icon||"?"});sndReveal(r.result.value>=c.price);if(r.result.balance!==undefined)setCurLobby(prev=>({...prev,_myBal:r.result.balance}));if(r.result.eliminated){setPvpEliminated(true);setToast({msg:"Eliminated!",color:"#eb4b4b"})}if(r.result.matchEnded)setPvpWinModal({winner:r.result.winner,results:r.result.matchResults});refreshLobby(curLobby.id)}else if(r?.error){setToast({msg:r.error,color:"#eb4b4b"})}}} style={{...S.btn,background:c.color+"22",color:c.color,border:"1px solid "+c.color+"44",padding:"4px 8px",fontSize:"clamp(8px,2vw,10px)",opacity:(curLobby._myBal!==undefined&&curLobby._myBal<c.price)?0.3:1}}>{c.icon} ${c.price}</button>)}</div>
@@ -707,10 +776,19 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
             <input value={createLobbyName} onChange={e=>setCreateLobbyName(e.target.value.slice(0,30))} placeholder="Lobby name" style={{...S.input,flex:2,minWidth:100}} maxLength={30}/>
             <input value={createLobbyPw} onChange={e=>setCreateLobbyPw(e.target.value.slice(0,20))} placeholder="Password (optional)" style={{...S.input,flex:1,minWidth:80}} maxLength={20} type="password"/>
           </div>
-          <div style={{display:"flex",gap:4,marginBottom:8}}>
-            {[["profit_race","Profit Race"],["coinflip_duel","Coin Flip Duel"]].map(([v,l])=><button key={v} onClick={()=>setCreateLobbyMode(v)} style={{...S.btn,background:createLobbyMode===v?"#3b82f6":"#ffffff08",color:createLobbyMode===v?"#fff":"#888",flex:1,fontSize:"clamp(9px,2.2vw,11px)"}}>{l}</button>)}
+          <div style={{display:"flex",gap:4,marginBottom:8,flexWrap:"wrap"}}>
+            {[["profit_race","Profit Race"],["coinflip_duel","Coin Flip Duel"],["buckshot","Buckshot 🔫"]].map(([v,l])=><button key={v} onClick={()=>setCreateLobbyMode(v)} style={{...S.btn,background:createLobbyMode===v?"#3b82f6":"#ffffff08",color:createLobbyMode===v?"#fff":"#888",flex:1,fontSize:"clamp(9px,2.2vw,11px)"}}>{l}</button>)}
           </div>
-          <button onClick={async()=>{const name=createLobbyName.trim()||account.username+"'s lobby";const r=await api("/lobby/create",{username:account.username,name,lobbyPassword:createLobbyPw,mode:createLobbyMode});if(r?.lobbyId){setCreateLobbyName("");setCreateLobbyPw("");await refreshLobby(r.lobbyId)}else{setToast({msg:r?.error||"Failed",color:"#eb4b4b"})}}} style={{...S.btn,background:"#4ade80",color:"#000",fontWeight:700,width:"100%"}}>Create Lobby</button>
+          {createLobbyMode==="buckshot"&&<div style={{background:"#0a0c10",border:"1px solid #f59e0b22",borderRadius:6,padding:8,marginBottom:8}}>
+            <div style={{color:"#f59e0b",fontSize:10,fontWeight:700,marginBottom:6}}>Buckshot Roulette · 2 players, winner takes all</div>
+            <div style={{display:"flex",gap:4,alignItems:"center"}}>
+              <span style={{color:"#888",fontSize:10}}>Bet:</span>
+              <input value={createLobbyBet} onChange={e=>setCreateLobbyBet(e.target.value.replace(/[^0-9]/g,""))} placeholder="1000" style={{...S.input,flex:1,fontSize:11}}/>
+              <div style={{color:"#888",fontSize:9}}>Each player puts in. Total pool: ${(parseInt(createLobbyBet)*2||0).toLocaleString()}</div>
+            </div>
+            <div style={{color:"#888",fontSize:9,marginTop:4}}>Money locked on join. Refunded only if lobby canceled before start. Once started: winner gets the pool, loser gets nothing.</div>
+          </div>}
+          <button onClick={async()=>{const name=createLobbyName.trim()||account.username+"'s lobby";const bet=parseInt(createLobbyBet)||0;if(createLobbyMode==="buckshot"&&(bet<100||bet>st.bal)){setToast({msg:bet>st.bal?"Insufficient balance for bet":"Min bet $100",color:"#eb4b4b"});return}const r=await api("/lobby/create",{username:account.username,name,lobbyPassword:createLobbyPw,mode:createLobbyMode,bet,slot});if(r?.lobbyId){if(r.betLocked>0){setSt(p=>{const ns={...p,bal:p.bal-r.betLocked};save(ns,drops);return ns});setToast({msg:"Locked $"+r.betLocked.toLocaleString()+" in pot",color:"#f59e0b"})}setCreateLobbyName("");setCreateLobbyPw("");await refreshLobby(r.lobbyId)}else{setToast({msg:r?.error||"Failed",color:"#eb4b4b"})}}} style={{...S.btn,background:"#4ade80",color:"#000",fontWeight:700,width:"100%"}}>Create Lobby</button>
         </div>
         {/* LOBBY LIST */}
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
