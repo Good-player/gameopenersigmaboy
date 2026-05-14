@@ -534,6 +534,21 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
     }catch{setSaveStatus("Error")}
     setTimeout(()=>setSaveStatus(""),3000);
   }
+  // Pull latest cloud state for THIS slot silently, no confirm, no reload. Used after server-side balance changes (buckshot payout etc).
+  async function silentCloudSync(){
+    if(!account)return null;
+    try{
+      const r=await authLoad(account.username,account.token);
+      if(r?.slots&&r.slots[slot]){
+        const fresh=r.slots[slot];
+        await _stSet("co-s"+slot,JSON.stringify(fresh));
+        if(fresh.st)setSt(fresh.st);
+        if(fresh.drops)setDrops(fresh.drops);
+        return fresh;
+      }
+    }catch(e){console.warn("silentCloudSync failed",e)}
+    return null;
+  }
   function logout(){clearAccount();setAccount(null)}
 
   function sellItem(item){sndSell();setSt(p=>{const idx=p.inv.findIndex(i=>i.id===item.id);if(idx===-1)return p;const ni=[...p.inv];ni.splice(idx,1);const starred={...p.starred};delete starred[item.id];const ns={...p,bal:p.bal+item.value,inv:ni,stats:{...p.stats,sold:(p.stats.sold||0)+item.value},starred};save(ns,drops);return ns});setSelItem(null)}
@@ -951,8 +966,8 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
               </div>
               {/* Action buttons - only for the player whose turn it is */}
               {!buckshotState.winner&&buckshotState.turn===account.username&&!buckshotState.isSpectator&&<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:8}}>
-                <button onClick={async()=>{if(!confirm("Shoot yourself?"))return;const r=await api("/buckshot/shoot",{lobbyId:curLobby.id,username:account.username,target:"self"});if(r?.ok){if(r.shellType==="live"){document.body.classList.add("shakeHard");setTimeout(()=>document.body.classList.remove("shakeHard"),400);setToast({msg:"LIVE — "+r.damage+" damage to yourself!",color:"#eb4b4b"})}else setToast({msg:"Blank! You're safe — keep turn.",color:"#3b82f6"});if(r.winner){if(r.winner===account.username){setSt(p=>{const ns={...p,bal:p.bal+(curLobby.pot||0)};save(ns,drops);return ns})}}}else setToast({msg:r?.error||"Failed",color:"#eb4b4b"})}} style={{...S.btn,background:"#eb4b4b22",color:"#eb4b4b",border:"1px solid #eb4b4b55",fontWeight:700,padding:12}}>🔫 Shoot Self</button>
-                <button onClick={async()=>{if(!confirm("Shoot your opponent?"))return;const r=await api("/buckshot/shoot",{lobbyId:curLobby.id,username:account.username,target:"opponent"});if(r?.ok){if(r.shellType==="live"){document.body.classList.add("shakeHard");setTimeout(()=>document.body.classList.remove("shakeHard"),400);setToast({msg:"LIVE — "+r.damage+" damage to opponent!",color:"#4ade80"})}else setToast({msg:"Blank...",color:"#3b82f6"});if(r.winner){if(r.winner===account.username){setSt(p=>{const ns={...p,bal:p.bal+(curLobby.pot||0)};save(ns,drops);return ns})}}}else setToast({msg:r?.error||"Failed",color:"#eb4b4b"})}} style={{...S.btn,background:"#eb4b4b",color:"#fff",fontWeight:700,padding:12}}>🔫 Shoot Opponent</button>
+                <button onClick={async()=>{if(!confirm("Shoot yourself?"))return;const r=await api("/buckshot/shoot",{lobbyId:curLobby.id,username:account.username,target:"self"});if(r?.ok){if(r.shellType==="live"){document.body.classList.add("shakeHard");setTimeout(()=>document.body.classList.remove("shakeHard"),400);setToast({msg:"LIVE — "+r.damage+" damage to yourself!",color:"#eb4b4b"})}else setToast({msg:"Blank! You're safe — keep turn.",color:"#3b82f6"});if(r.winner){if(r.forceSync){await silentCloudSync()}if(r.winner===account.username){if(r.payoutError){setToast({msg:"Won but payout failed: "+r.payoutError,color:"#eb4b4b"})}else{setToast({msg:"You won $"+(r.payout||0).toLocaleString()+"!",color:"#4ade80"})}}}}else setToast({msg:r?.error||"Failed",color:"#eb4b4b"})}} style={{...S.btn,background:"#eb4b4b22",color:"#eb4b4b",border:"1px solid #eb4b4b55",fontWeight:700,padding:12}}>🔫 Shoot Self</button>
+                <button onClick={async()=>{if(!confirm("Shoot your opponent?"))return;const r=await api("/buckshot/shoot",{lobbyId:curLobby.id,username:account.username,target:"opponent"});if(r?.ok){if(r.shellType==="live"){document.body.classList.add("shakeHard");setTimeout(()=>document.body.classList.remove("shakeHard"),400);setToast({msg:"LIVE — "+r.damage+" damage to opponent!",color:"#4ade80"})}else setToast({msg:"Blank...",color:"#3b82f6"});if(r.winner){if(r.forceSync){await silentCloudSync()}if(r.winner===account.username){if(r.payoutError){setToast({msg:"Won but payout failed: "+r.payoutError,color:"#eb4b4b"})}else{setToast({msg:"You won $"+(r.payout||0).toLocaleString()+"!",color:"#4ade80"})}}}}else setToast({msg:r?.error||"Failed",color:"#eb4b4b"})}} style={{...S.btn,background:"#eb4b4b",color:"#fff",fontWeight:700,padding:12}}>🔫 Shoot Opponent</button>
               </div>}
               {/* Waiting for opponent */}
               {!buckshotState.winner&&buckshotState.turn!==account.username&&!buckshotState.isSpectator&&<div style={{background:"#141820",borderRadius:6,padding:10,textAlign:"center",color:"#888",fontSize:11,marginBottom:8}}>Waiting for {buckshotState.turn} to act...</div>}
