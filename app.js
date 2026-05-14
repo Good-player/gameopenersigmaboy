@@ -526,7 +526,7 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
   async function doOpen(c){
     const sd=events.find(e=>e.type==="sale"&&e.discount>0);const cPrice=sd?Math.floor(c.price*(1-sd.discount/100)):c.price;if(lockRef.current||st.bal<cPrice)return;lockRef.current=true;setOpening(true);setScrollDone(false);setSelCase(c);sndOpen();
     // Server-side roll
-    const rollResp=await api("/roll",{caseId:c.id,username:account?.username||"",token:account?.token||""});
+    const rollResp=await api("/roll",{caseId:c.id,username:account?.username||"",token:account?.token||"",slot});
     if(!rollResp?.ok||!rollResp.result){lockRef.current=false;setOpening(false);return}
     const sr=rollResp.result;const winner={name:sr.name,rarity:sr.rarity,value:sr.value,icon:c.items.find(i=>i.name===sr.name)?.icon||"?"};
     const fl=sr.float,quotes=winner.value>=c.price?QUOTES_WIN:QUOTES_LOSS;
@@ -811,9 +811,11 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
     <div style={S.nav}>{[["shop",t("tab_shop")],["inv",`${t("tab_inv")} (${st.inv.length})`],["stats",t("tab_stats")],["loan",t("tab_loan")],["flip",t("tab_flip")],["pvp",t("tab_pvp")],["live",t("tab_live")],["lb",t("tab_lb")],["chat",t("tab_chat")],["dm",`${t("tab_dm")}${dmUnread>0?" ("+dmUnread+")":""}`],["me",t("tab_me")],["map",t("tab_map")],["horse",t("tab_horse")],["bj",t("tab_bj")],["btc",t("tab_btc")],["plinko",t("tab_plinko")],["roulette",t("tab_roulette")],["wheel",t("tab_wheel")],["school",t("tab_weather")]].map(([k,l])=>(<button key={k} onClick={()=>{if(!opening||scrollDone||k==="shop"){setPage(k);if(k!=="opening")setOpening(false);if(k==="map")getOnline().then(r=>{if(r)setOnlineData(r)});if(k==="pvp")refreshLobbies();if(k==="bj"&&account){api("/bj/buycard",{username:account.username,token:account.token}).then(r=>{if(r?.hasCard)setBjHasCard(true)})}if(k==="btc"){/* useEffect handles initial load */}if(k==="wheel"&&account){api("/wheel/status",{username:account.username}).then(r=>setWheelStatus(r))}if(k==="school"){if(!weatherData){api("/weather/today",{lat:59.4288,lon:17.9498}).then(r=>{setWeatherData(r)})}if(!smhiWarnings){api("/weather/warnings",{}).then(r=>{setSmhiWarnings(r||{warnings:[]})})}if(!pollenData){api("/weather/pollen",{}).then(r=>{setPollenData(r||{today:[]})})}if(!airData){api("/weather/air",{lat:59.4288,lon:17.9498}).then(r=>{setAirData(r)})}}if(k==="dm"&&account){api("/dm/inbox",{username:account.username,token:account.token}).then(r=>{if(r?.ok){setDmInbox(r);setDmUnread(0);const mx=Math.max(0,...(r.received||[]).map(m=>m.id||0),...(r.sent||[]).map(m=>m.id||0));if(mx>lastDmIdRef.current)lastDmIdRef.current=mx;api("/dm/read",{username:account.username,token:account.token})}}).catch(()=>{setTimeout(()=>{api("/dm/inbox",{username:account.username,token:account.token}).then(r2=>{if(r2?.ok){setDmInbox(r2);setDmUnread(0);const mx=Math.max(0,...(r2.received||[]).map(m=>m.id||0),...(r2.sent||[]).map(m=>m.id||0));if(mx>lastDmIdRef.current)lastDmIdRef.current=mx}})},2000)})}}}} style={{...S.tab,...(page===k||(page==="opening"&&k==="shop")?S.tabOn:{}),color:k==="dm"&&dmUnread>0?"#f59e0b":undefined}}>{l}</button>))}{account&&["admin","owner","mod"].includes(account.role)&&<button onClick={()=>{if(account.role==="owner")window.owner();else window.admin()}} style={{...S.tab,background:"#ff000022",color:"#ff4444",border:"1px solid #ff000044"}}>{account.role==="owner"?"Owner":"Admin"}</button>}<button onClick={()=>setConfirmReset(true)} style={{...S.tab,marginLeft:"auto",color:"#eb4b4b"}}>Reset</button></div>
 
     {/* SHOP */}
+    /* ═══════════ SHOP / case grid ═══════════ */
     {page==="shop"&&<div style={S.body}><div style={S.grid}>{CASES.map(c=>{const cP=saleDiscount>0?Math.floor(c.price*(1-saleDiscount/100)):c.price;const ok=st.bal>=cP;return(<div key={c.id} style={{...S.card,borderColor:c.color+"44",opacity:ok?1:.35}}><div style={{...S.cardIcon,background:c.color+"12",borderColor:c.color+"28"}}><span style={{fontSize:"clamp(26px,6.5vw,40px)"}}>{c.icon}</span></div><div style={S.cardName}>{c.name}</div><div style={{...S.cardPrice,color:c.color}}>{saleDiscount>0&&<span style={{textDecoration:"line-through",color:"#666",fontSize:"clamp(9px,2.5vw,12px)",marginRight:4}}>{money(c.price)}</span>}{money(saleDiscount>0?Math.floor(c.price*(1-saleDiscount/100)):c.price)}</div><div style={{display:"flex",flexDirection:"column",gap:3,width:"100%"}}><div style={{display:"flex",gap:3}}><button disabled={!ok} onClick={()=>doOpen(c)} style={{...S.btn,background:ok?c.color:"#333",color:"#fff",flex:2,padding:"clamp(5px,1.2vw,8px) 0",fontSize:"clamp(9px,2.3vw,12px)"}}>Open</button><button disabled={st.bal<cP*10||c.id==="epstein"} onClick={()=>{if(c.id==="epstein"){setToast({msg:"No bulk opening for this case",color:"#eb4b4b"});return}doMultiOpen(c,10)}} style={{...S.btn,background:st.bal>=cP*10?c.color+"aa":"#222",color:st.bal>=cP*10?"#fff":"#555",flex:1,padding:"clamp(5px,1.2vw,8px) 0",fontSize:"clamp(8px,2vw,10px)"}}>x10</button></div><button onClick={()=>{setInspecting(c);setPage("inspect")}} style={{...S.btn,background:"#ffffff06",color:"#666",padding:"3px 0",fontSize:"clamp(8px,2vw,10px)"}}>Inspect</button></div></div>)})}</div></div>}
 
     {/* OPENING */}
+    /* ═══════════ CASE OPENING animation ═══════════ */
     {page==="opening"&&<div style={S.body}>
       <div style={{textAlign:"center",padding:"clamp(6px,1.5vw,10px) 0",color:"#555",fontSize:"clamp(10px,2.5vw,13px)"}}>{scrollDone?"":"Opening "+selCase?.name+"..."}</div>
       <div style={S.scrollOuter}><div style={S.marker}/><div style={S.scrollClip}><div ref={stripRef} style={S.strip}>{scrollItems.map((item,i)=>{const rar=R[item.rarity];const won=i===WIN_IDX&&scrollDone;return(<div key={i} style={{...S.sItem,borderBottomColor:rar.color,background:won?rar.bg:"#0c0e13",transform:won?"scale(1.08)":"none",transition:"all 0.3s ease",boxShadow:won?"0 0 12px "+rar.color+"66":"none",zIndex:won?2:0}}><div style={{fontSize:"clamp(16px,4vw,28px)",lineHeight:1}}>{item.rarity==="chroma"?<span style={{color:"#ffd700",textShadow:"0 0 8px #ffd70066"}}><MI n="star" s={24} c="#ffd700"/></span>:<span>{item.icon||"?"}</span>}</div><div style={{fontSize:"clamp(6px,1.6vw,9px)",color:rar.color,fontWeight:600,textAlign:"center",lineHeight:1.15,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",width:"100%"}}>{item.name}</div></div>)})}</div></div></div>
@@ -842,9 +844,11 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
     </div>}
 
     {/* INSPECT */}
+    /* ═══════════ INSPECT case ═══════════ */
     {page==="inspect"&&inspecting&&<div style={S.body}><button onClick={()=>setPage("shop")} style={{...S.btn,background:"#ffffff08",color:"#666",marginBottom:10}}>&larr; Back</button><div style={{fontSize:"clamp(15px,4vw,20px)",fontWeight:700,marginBottom:10}}>{inspecting.icon} {inspecting.name} &mdash; {money(inspecting.price)}</div><div style={S.iList}><div style={S.iHdr}><span>Item</span><span>Rarity</span><span>Value</span><span>Rate</span></div>{[...inspecting.items].sort((a,b)=>R[b.rarity].chance-R[a.rarity].chance).map((item,i)=>{const pool=inspecting.items.filter(x=>x.rarity===item.rarity).length;const p=((R[item.rarity].chance/pool)*100).toFixed(2);return(<div key={i} style={{...S.iRow,borderLeftColor:R[item.rarity].color}}><span style={{fontWeight:600}}>{item.icon} {item.name}</span><span style={{color:R[item.rarity].color,fontWeight:600}}>{R[item.rarity].label}</span><span style={{color:"#4ade80"}}>{money(item.value)}</span><span style={{color:"#666"}}>{p}%</span></div>)})}</div><div style={{marginTop:16}}><div style={{fontSize:"clamp(12px,3vw,14px)",fontWeight:600,marginBottom:8,color:"#777"}}>Drop Rates</div>{Object.entries(R).map(([k,v])=><div key={k} style={{display:"flex",alignItems:"center",gap:6,marginBottom:3}}><span style={{color:v.color,fontWeight:600,width:"clamp(60px,18vw,90px)",fontSize:"clamp(9px,2.5vw,12px)"}}>{v.label}</span><div style={{flex:1,height:5,background:"#1a1d24",borderRadius:3,overflow:"hidden"}}><div style={{height:"100%",borderRadius:3,background:v.color,width:`${Math.max(v.chance*200,1)}%`}}/></div><span style={{color:"#666",width:"clamp(32px,10vw,48px)",textAlign:"right",fontSize:"clamp(8px,2.2vw,11px)"}}>{(v.chance*100).toFixed(1)}%</span></div>)}</div></div>}
 
     {/* INVENTORY */}
+    /* ═══════════ INVENTORY ═══════════ */
     {page==="inv"&&<div style={S.body}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8,flexWrap:"wrap",gap:6}}><div style={{fontSize:"clamp(15px,4vw,20px)",fontWeight:700}}>Inventory ({st.inv.length})</div><div style={{color:"#888",fontSize:"clamp(9px,2.2vw,11px)"}}>Total: {money(invTotal)} | <MI n="star" s={11} c="#ffd700"/> {Object.keys(st.starred||{}).length}</div></div>
       <div style={{display:"flex",gap:4,marginBottom:10,flexWrap:"wrap",alignItems:"center"}}>
@@ -862,6 +866,7 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
     </div>}
 
     {/* STATS */}
+    /* ═══════════ STATS chart ═══════════ */
     {page==="stats"&&(()=>{const hist=st.history||[{n:0,bal:DEFAULT_BAL}];const vals=hist.map(h=>h.bal);const minV=Math.min(...vals,0);const maxV=Math.max(...vals,DEFAULT_BAL);const range=maxV-minV||1;const W=800,H=320,PAD={t:30,r:20,b:40,l:60};const cw=W-PAD.l-PAD.r,ch=H-PAD.t-PAD.b;const x=i=>PAD.l+(hist.length<=1?cw/2:(i/(hist.length-1))*cw);const y=v=>PAD.t+ch-((v-minV)/range)*ch;const pts=hist.map((h,i)=>`${x(i)},${y(h.bal)}`).join(" ");const area=`M${x(0)},${y(hist[0].bal)} `+hist.map((h,i)=>`L${x(i)},${y(h.bal)}`).join(" ")+` L${x(hist.length-1)},${y(minV)} L${x(0)},${y(minV)} Z`;const tips=hist.map((h,i)=>h.label?{...h,i}:null).filter(Boolean);const gridLines=[];for(let g=0;g<=5;g++){const val=minV+(range*g)/5;gridLines.push({y:y(val),val})}const startY=y(DEFAULT_BAL);return(
       <div style={S.body}><div style={{fontSize:"clamp(15px,4vw,20px)",fontWeight:700,marginBottom:10}}>Stats</div>
         <div style={{background:"#0d1117",border:"1px solid #151820",borderRadius:10,padding:"clamp(10px,2.5vw,16px)",marginBottom:14,overflow:"hidden"}}><div style={{fontSize:"clamp(10px,2.5vw,13px)",fontWeight:700,color:"#888",marginBottom:8}}>Balance History</div>
@@ -883,6 +888,7 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
       </div>)})()}
 
     {/* LOAN */}
+    /* ═══════════ LOAN / credit ═══════════ */
     {page==="loan"&&(()=>{
       const cs=st.creditScore||500;
       const tier=cs>=700?"Excellent":cs>=500?"Good":cs>=300?"Fair":cs>=150?"Poor":"Very Poor";
@@ -948,6 +954,7 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
     })()}
 
     {/* LIVE FEED */}
+    /* ═══════════ LIVE FEED ═══════════ */
     {page==="live"&&<div style={S.body}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
         <div style={{fontSize:"clamp(15px,4vw,20px)",fontWeight:700}}><MI n="stream" s={20} c="#eb4b4b"/> Live Opens</div>
@@ -972,6 +979,7 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
     </div>}
 
     {/* LEADERBOARD */}
+    /* ═══════════ LEADERBOARD ═══════════ */
     {page==="lb"&&<div style={S.body}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
         <div style={{fontSize:"clamp(15px,4vw,20px)",fontWeight:700}}><MI n="leaderboard" s={20}/> Leaderboard</div>
@@ -991,6 +999,7 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
     </div>}
 
     {/* CHAT */}
+    /* ═══════════ GLOBAL CHAT ═══════════ */
     {page==="chat"&&<div style={S.body}>
       <div style={{fontSize:"clamp(15px,4vw,20px)",fontWeight:700,marginBottom:12}}><MI n="chat" s={20}/> Chat Room</div>
       <div style={{background:"#0d1117",border:"1px solid #151820",borderRadius:8,padding:10,height:"clamp(200px,50vh,400px)",overflowY:"auto",display:"flex",flexDirection:"column-reverse",gap:4,marginBottom:10}} id="__chatbox">
@@ -1010,6 +1019,7 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
     </div>}
 
     {/* COIN FLIP */}
+    /* ═══════════ COIN FLIP ═══════════ */
     {page==="flip"&&<div style={S.body}>
       <div style={{fontSize:"clamp(15px,4vw,20px)",fontWeight:700,marginBottom:12}}><MI n="monetization_on" s={20}/> Coin Flip <span style={{color:"#888",fontSize:"clamp(9px,2.2vw,11px)",fontWeight:400}}>49% win rate</span></div>
       <div style={{background:"#0d1117",border:"1px solid #151820",borderRadius:12,padding:"clamp(16px,4vw,28px)",display:"flex",flexDirection:"column",alignItems:"center",gap:12}}>
@@ -1017,14 +1027,15 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
         {wonItem?.flipResult&&<div style={{fontSize:"clamp(16px,4vw,22px)",fontWeight:800,color:wonItem.flipWon?"#4ade80":"#eb4b4b",animation:"fadeUp .4s"}}>{wonItem.flipWon?"+"+money(wonItem.flipBet):"-"+money(wonItem.flipBet)}</div>}
         <div style={{display:"flex",gap:6,alignItems:"center"}}><input type="number" placeholder="Bet amount" id="flipBet" style={{...S.input,width:"clamp(100px,30vw,160px)"}} min="1"/></div>
         <div style={{display:"flex",gap:8}}>
-          <button onClick={async()=>{const bet=parseInt(document.getElementById("flipBet")?.value);if(!bet||bet<=0||bet>st.bal)return;const r=await api("/coinflip",{bet,choice:"heads",username:account?.username,token:account?.token});if(!r?.ok)return;setWonItem(w=>({...w,flipResult:r.result,flipWon:r.won,flipBet:bet}));setSt(p=>{const ns={...p,bal:p.bal+(r.won?bet:-bet)};save(ns,drops);return ns});if(r.won)sndReveal(true);else sndReveal(false)}} style={{...S.btn,background:"#f59e0b",color:"#000",padding:"10px 24px",fontSize:"clamp(12px,3vw,16px)",fontWeight:800}}>Heads</button>
-          <button onClick={async()=>{const bet=parseInt(document.getElementById("flipBet")?.value);if(!bet||bet<=0||bet>st.bal)return;const r=await api("/coinflip",{bet,choice:"tails",username:account?.username,token:account?.token});if(!r?.ok)return;setWonItem(w=>({...w,flipResult:r.result,flipWon:r.won,flipBet:bet}));setSt(p=>{const ns={...p,bal:p.bal+(r.won?bet:-bet)};save(ns,drops);return ns});if(r.won)sndReveal(true);else sndReveal(false)}} style={{...S.btn,background:"#8b5cf6",color:"#fff",padding:"10px 24px",fontSize:"clamp(12px,3vw,16px)",fontWeight:800}}>Tails</button>
+          <button onClick={async()=>{const bet=parseInt(document.getElementById("flipBet")?.value);if(!bet||bet<=0||bet>st.bal)return;const r=await api("/coinflip",{bet,choice:"heads",username:account?.username,token:account?.token,slot});if(!r?.ok){setToast({msg:r?.error||"Failed",color:"#eb4b4b"});return}setWonItem(w=>({...w,flipResult:r.result,flipWon:r.won,flipBet:bet}));setSt(p=>{const newBal=(r.serverBal!==null&&r.serverBal!==undefined)?r.serverBal:p.bal+(r.won?bet:-bet);const ns={...p,bal:newBal};save(ns,drops);return ns});if(r.won)sndReveal(true);else sndReveal(false)}} style={{...S.btn,background:"#f59e0b",color:"#000",padding:"10px 24px",fontSize:"clamp(12px,3vw,16px)",fontWeight:800}}>Heads</button>
+          <button onClick={async()=>{const bet=parseInt(document.getElementById("flipBet")?.value);if(!bet||bet<=0||bet>st.bal)return;const r=await api("/coinflip",{bet,choice:"tails",username:account?.username,token:account?.token,slot});if(!r?.ok){setToast({msg:r?.error||"Failed",color:"#eb4b4b"});return}setWonItem(w=>({...w,flipResult:r.result,flipWon:r.won,flipBet:bet}));setSt(p=>{const newBal=(r.serverBal!==null&&r.serverBal!==undefined)?r.serverBal:p.bal+(r.won?bet:-bet);const ns={...p,bal:newBal};save(ns,drops);return ns});if(r.won)sndReveal(true);else sndReveal(false)}} style={{...S.btn,background:"#8b5cf6",color:"#fff",padding:"10px 24px",fontSize:"clamp(12px,3vw,16px)",fontWeight:800}}>Tails</button>
         </div>
         <div style={{color:"#888",fontSize:"clamp(8px,2vw,10px)"}}>Server-side — provably fair</div>
       </div>
     </div>}
 
     {/* PVP LOBBY */}
+    /* ═══════════ PVP ARENA + BUCKSHOT ROULETTE ═══════════ */
     {page==="pvp"&&<div style={S.body}>
       <div style={{fontSize:"clamp(15px,4vw,20px)",fontWeight:700,marginBottom:12}}><MI n="sports_kabaddi" s={20}/> PvP Arena</div>
       {!account?<div style={{color:"#f59e0b",background:"#f59e0b11",padding:12,borderRadius:8,textAlign:"center"}}>Login required for PvP</div>:
@@ -1228,6 +1239,7 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
     </div>}
 
     {/* DMs - Discord-style */}
+    /* ═══════════ DIRECT MESSAGES ═══════════ */
     {page==="dm"&&<div style={S.body}>
       <div style={{fontSize:"clamp(15px,4vw,20px)",fontWeight:700,marginBottom:12}}><MI n="mail" s={20}/> Messages</div>
       {!account?<div style={{color:"#f59e0b",padding:12,textAlign:"center"}}>Login required</div>:<div style={{display:"flex",gap:10,height:"clamp(300px,60vh,500px)"}}>
@@ -1257,7 +1269,7 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
             </div>
             {/* Messages */}
             <div style={{flex:1,overflowY:"auto",padding:10,display:"flex",flexDirection:"column-reverse",gap:4}}>
-              {(()=>{const all=[...(dmInbox?.received||[]).filter(m=>m.from_user===dmTo).map(m=>({...m,dir:"in",t:m.created_at})),...(dmInbox?.sent||[]).filter(m=>m.to_user===dmTo).map(m=>({...m,dir:"out",t:m.created_at}))].sort((a,b)=>b.t-a.t);return all.length===0?<div style={{color:"#555",textAlign:"center"}}>No messages yet</div>:all.map((m,i)=><div key={m.id||i} className="slideIn" style={{display:"flex",justifyContent:m.dir==="out"?"flex-end":"flex-start"}}><div style={{maxWidth:"75%",background:m.dir==="out"?"#3b82f622":"#141820",border:"1px solid "+(m.dir==="out"?"#3b82f633":"#1e2430"),borderRadius:10,borderBottomRightRadius:m.dir==="out"?2:10,borderBottomLeftRadius:m.dir==="in"?2:10,padding:"6px 10px"}}><div style={{fontSize:"clamp(9px,2.3vw,12px)",color:"#ccc"}} dangerouslySetInnerHTML={{__html:renderMd(m.msg)}}/>{m.gift_amount>0&&<div style={{marginTop:3}}>{m.gift_status==="pending"?<button onClick={async()=>{const r=await api("/gift/claim",{username:account.username,token:account.token,dmId:m.id});if(r?.ok){if(r.amount){const ns={...st,bal:(st.bal||0)+r.amount};setSt(ns)}setToast({msg:"Claimed $"+(r.amount||0).toLocaleString()+"!",color:"#4ade80"});api("/dm/inbox",{username:account.username,token:account.token,after:lastDmIdRef.current}).then(r2=>{if(r2?.ok){const mx=Math.max(lastDmIdRef.current,...(r2.received||[]).map(m=>m.id||0),...(r2.sent||[]).map(m=>m.id||0));lastDmIdRef.current=mx;if(r2.incremental){setDmInbox(prev=>{if(!prev)return r2;const ex=new Set([...(prev.received||[]).map(m=>m.id),...(prev.sent||[]).map(m=>m.id)]);return{...prev,unread:r2.unread,received:[...(r2.received||[]).filter(m=>!ex.has(m.id)),...(prev.received||[])].slice(0,200),sent:[...(r2.sent||[]).filter(m=>!ex.has(m.id)),...(prev.sent||[])].slice(0,200)}})}else setDmInbox(r2)}})}else setToast({msg:r?.error||"Failed",color:"#eb4b4b"})}} style={{background:"#4ade8022",border:"1px solid #4ade8033",borderRadius:6,padding:"4px 10px",color:"#4ade80",cursor:"pointer",fontSize:10,fontWeight:700,fontFamily:"inherit"}}>Claim {"$"+(m.gift_amount||0).toLocaleString()}</button>:<span style={{color:"#888",fontSize:9}}>Claimed{m.gift_claimed_by?" by "+m.gift_claimed_by:""}</span>}</div>}<div style={{fontSize:8,color:"#555",textAlign:m.dir==="out"?"right":"left",marginTop:2}}>{m.ago}</div></div></div>)})()}
+              {(()=>{const all=[...(dmInbox?.received||[]).filter(m=>m.from_user===dmTo).map(m=>({...m,dir:"in",t:m.created_at})),...(dmInbox?.sent||[]).filter(m=>m.to_user===dmTo).map(m=>({...m,dir:"out",t:m.created_at}))].sort((a,b)=>b.t-a.t);return all.length===0?<div style={{color:"#555",textAlign:"center"}}>No messages yet</div>:all.map((m,i)=><div key={m.id||i} className="slideIn" style={{display:"flex",justifyContent:m.dir==="out"?"flex-end":"flex-start"}}><div style={{maxWidth:"75%",background:m.dir==="out"?"#3b82f622":"#141820",border:"1px solid "+(m.dir==="out"?"#3b82f633":"#1e2430"),borderRadius:10,borderBottomRightRadius:m.dir==="out"?2:10,borderBottomLeftRadius:m.dir==="in"?2:10,padding:"6px 10px"}}><div style={{fontSize:"clamp(9px,2.3vw,12px)",color:"#ccc"}} dangerouslySetInnerHTML={{__html:renderMd(m.msg)}}/>{m.gift_amount>0&&<div style={{marginTop:3}}>{m.gift_status==="pending"?<button onClick={async()=>{const r=await api("/gift/claim",{username:account.username,token:account.token,dmId:m.id});if(r?.ok){if(r.amount){const ns={...st,bal:(st.bal||0)+r.amount};setSt(ns)}setToast({msg:"Claimed $"+(r.amount||0).toLocaleString()+"!",color:"#4ade80"});api("/dm/inbox",{username:account.username,token:account.token,after:lastDmIdRef.current}).then(r2=>{if(r2?.ok){const mx=Math.max(lastDmIdRef.current,...(r2.received||[]).map(m=>m.id||0),...(r2.sent||[]).map(m=>m.id||0));lastDmIdRef.current=mx;if(r2.incremental){setDmInbox(prev=>{if(!prev)return r2;const ex=new Set([...(prev.received||[]).map(m=>m.id),...(prev.sent||[]).map(m=>m.id)]);return{...prev,unread:r2.unread,received:[...(r2.received||[]).filter(m=>!ex.has(m.id)),...(prev.received||[])].slice(0,200),sent:[...(r2.sent||[]).filter(m=>!ex.has(m.id)),...(prev.sent||[])].slice(0,200)}})}else setDmInbox(r2)}})}else setToast({msg:r?.error||"Failed",color:"#eb4b4b"})}} style={{background:"#4ade8022",border:"1px solid #4ade8033",borderRadius:6,padding:"4px 10px",color:"#4ade80",cursor:"pointer",fontSize:10,fontWeight:700,fontFamily:"inherit"}}>Claim {money(m.gift_amount||0)}</button>:<span style={{color:"#888",fontSize:9}}>Claimed{m.gift_claimed_by?" by "+m.gift_claimed_by:""}</span>}</div>}<div style={{fontSize:8,color:"#555",textAlign:m.dir==="out"?"right":"left",marginTop:2}}>{m.ago}</div></div></div>)})()}
             </div>
             {/* Input */}
             <div style={{padding:"8px 10px",borderTop:"1px solid #151820",display:"flex",gap:4}}>
@@ -1271,6 +1283,7 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
     </div>}
 
     {/* PROFILE */}
+    /* ═══════════ ME / profile / settings ═══════════ */
     {page==="me"&&<div style={S.body}>
       <div style={{fontSize:"clamp(15px,4vw,20px)",fontWeight:700,marginBottom:12}}><MI n="person" s={20}/> My Profile</div>
       {!account?<div style={{color:"#f59e0b",padding:12,textAlign:"center"}}>Login required</div>:<>
@@ -1291,6 +1304,7 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
 
     
     {/* MULTI OPEN RESULTS */}
+    /* ═══════════ MULTI-OPEN results ═══════════ */
     {page==="multi"&&multiResults&&<div style={S.body}>
       <div style={{fontSize:"clamp(15px,4vw,20px)",fontWeight:700,marginBottom:8}}>x{multiResults.items.length} Opening Results</div>
       <div style={{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap",justifyContent:"center"}}>
@@ -1314,6 +1328,7 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
     </div>}
 
         {/* PLINKO */}
+    /* ═══════════ PLINKO ═══════════ */
     {page==="plinko"&&<div style={{...S.body,maxWidth:600,margin:"0 auto"}}>
       <div style={{fontSize:"clamp(16px,4vw,22px)",fontWeight:800,marginBottom:8}}>🎯 Plinko</div>
       <canvas ref={plinkoCanvasRef} style={{width:"100%",maxWidth:500,background:"#0d1117",border:"1px solid #1e2430",borderRadius:8,display:"block",margin:"0 auto"}}/>
@@ -1378,6 +1393,7 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
     </div>}
 
     {/* ROULETTE */}
+    /* ═══════════ ROULETTE ═══════════ */
     {page==="roulette"&&<div style={{...S.body,maxWidth:700,margin:"0 auto"}}>
       <div style={{fontSize:"clamp(16px,4vw,22px)",fontWeight:800,marginBottom:8}}>🎰 Roulette</div>
       <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:8}}>
@@ -1517,6 +1533,7 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
     </div>}
 
     {/* FAQ */}
+    /* ═══════════ FAQ ═══════════ */
     {page==="faq"&&<div style={{...S.body,maxWidth:720,margin:"0 auto"}}>
       <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
         <button onClick={()=>setPage("shop")} style={{...S.btn,background:"#ffffff08",color:"#888",padding:"4px 10px",fontSize:11,display:"inline-flex",alignItems:"center",gap:3}}><MI n="arrow_back" s={14}/>{t("back")}</button>
@@ -1548,6 +1565,7 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
     </div>}
 
     {/* WEATHER */}
+    /* ═══════════ WEATHER ═══════════ */
     {page==="school"&&(()=>{
       const wIcon=(s)=>{
         if(!s)return"cloud";
@@ -1755,6 +1773,7 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
     })()}
 
             {/* WHEEL OF FORTUNE */}
+    /* ═══════════ WHEEL OF FORTUNE ═══════════ */
     {page==="wheel"&&<div style={{...S.body,maxWidth:520,margin:"0 auto"}}>
       <div style={{fontSize:"clamp(20px,5vw,28px)",fontWeight:800,marginBottom:6,display:"flex",alignItems:"center",gap:8,animation:"fadeUp .4s"}}><MI n="casino" s={28} c="#ffd700" f={{filter:"drop-shadow(0 0 8px #ffd70066)"}}/> {t("wheel_title")}</div>
       <div style={{color:"#94a3b8",fontSize:12,marginBottom:16,animation:"fadeUp .5s"}}>{t("wheel_subtitle")}</div>
@@ -1784,7 +1803,7 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
           </div>:<button disabled={wheelSpinning||!wheelStatus?.canSpin} onClick={async()=>{
             setWheelSpinning(true);
             setWheelResult(null);
-            const r=await api("/wheel/spin",{username:account.username,token:account.token});
+            const r=await api("/wheel/spin",{username:account.username,token:account.token,slot});
             if(!r?.ok){
               setWheelSpinning(false);
               setToast({msg:r?.error||"Failed",color:"#eb4b4b"});
@@ -1850,7 +1869,7 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
               if(tt<1){requestAnimationFrame(loop)}
               else{
                 setTimeout(()=>{
-                  setSt(p=>{const ns={...p,bal:p.bal+r.amount};save(ns,drops);return ns});
+                  setSt(p=>{const newBal=(r.serverBal!==null&&r.serverBal!==undefined)?r.serverBal:p.bal+r.amount;const ns={...p,bal:newBal};save(ns,drops);return ns});
                   setWheelResult({amount:r.amount,label:r.label,index:r.prizeIndex});
                   setWheelSpinning(false);
                   setWheelStatus({canSpin:false,nextSpinMs:24*3600*1000});
@@ -1870,6 +1889,7 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
     </div>}
 
                 {/* BLACKJACK */}
+    /* ═══════════ BLACKJACK ═══════════ */
     {page==="bj"&&<div style={{...S.body,maxWidth:650,margin:"0 auto"}}>
       <div style={{fontSize:"clamp(16px,4vw,22px)",fontWeight:800,marginBottom:8}}>♠ Blackjack</div>
       {bjTable?(()=>{
@@ -1920,6 +1940,7 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
     </div>}
 
     {/* BITCOIN */}
+    /* ═══════════ BITCOIN ═══════════ */
     {page==="btc"&&<div style={{...S.body,maxWidth:650,margin:"0 auto"}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8,flexWrap:"wrap",gap:6}}>
         <div style={{fontSize:"clamp(16px,4vw,22px)",fontWeight:800}}>₿ Bitcoin Investment</div>
@@ -1953,12 +1974,13 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
     </div>}
 
     {/* HORSE RACING */}
+    /* ═══════════ HORSE RACING ═══════════ */
     {page==="horse"&&<div style={{...S.body,maxWidth:600,margin:"0 auto"}}>
       <div style={{fontSize:"clamp(15px,4vw,20px)",fontWeight:700,marginBottom:12}}><MI n="emoji_nature" s={20}/> Horse Racing</div>
       {!horseRace?<div style={{display:"flex",flexDirection:"column",gap:12,alignItems:"center"}}>
         <div style={{color:"#888",fontSize:"clamp(10px,2.5vw,12px)",textAlign:"center"}}>Pick a horse. 3 laps. 6x payout on win!</div>
         <div style={{display:"flex",gap:5,width:"100%",flexWrap:"wrap",justifyContent:"center"}}>{["Thunder","Lightning","Shadow","Storm","Blaze","Rocket","Phantom"].map((n,i)=>{const colors=["#eb4b4b","#3b82f6","#8b5cf6","#f59e0b","#4ade80","#f472b6","#06b6d4"];return <button key={i} onClick={()=>setHorsePick(i)} style={{...S.btn,background:horsePick===i?colors[i]+"33":colors[i]+"11",color:colors[i],border:"2px solid "+(horsePick===i?colors[i]:colors[i]+"33"),padding:"8px 10px",fontSize:"clamp(9px,2.2vw,12px)",fontWeight:700,flex:"1 1 65px",minWidth:60,transition:"all .2s"}}>{n}</button>})}</div>
-        <div style={{display:"flex",gap:4,flexWrap:"wrap",justifyContent:"center"}}>{[100,500,1000,5000,10000].map(a=><button key={a} onClick={()=>setHorseBet(String(a))} style={{...S.btn,background:horseBet===String(a)?"#ffffff22":"#ffffff08",color:"#ccc",padding:"4px 10px",fontSize:10}}>{"$"+a.toLocaleString()}</button>)}<button onClick={()=>setHorseBet(String(Math.floor(st.bal/2)))} style={{...S.btn,background:"#f59e0b22",color:"#f59e0b",padding:"4px 10px",fontSize:10}}>Half</button><button onClick={()=>setHorseBet(String(st.bal))} style={{...S.btn,background:"#eb4b4b22",color:"#eb4b4b",padding:"4px 10px",fontSize:10}}>All In</button></div>
+        <div style={{display:"flex",gap:4,flexWrap:"wrap",justifyContent:"center"}}>{[100,500,1000,5000,10000].map(a=><button key={a} onClick={()=>setHorseBet(String(a))} style={{...S.btn,background:horseBet===String(a)?"#ffffff22":"#ffffff08",color:"#ccc",padding:"4px 10px",fontSize:10}}>{money(a)}</button>)}<button onClick={()=>setHorseBet(String(Math.floor(st.bal/2)))} style={{...S.btn,background:"#f59e0b22",color:"#f59e0b",padding:"4px 10px",fontSize:10}}>Half</button><button onClick={()=>setHorseBet(String(st.bal))} style={{...S.btn,background:"#eb4b4b22",color:"#eb4b4b",padding:"4px 10px",fontSize:10}}>All In</button></div>
         <div style={{display:"flex",gap:6,alignItems:"center"}}><span style={{color:"#888",fontSize:12}}>Bet: $</span><input value={horseBet} onChange={e=>setHorseBet(e.target.value.replace(/[^0-9]/g,""))} placeholder="Amount" style={{...S.btn,background:"#0d1117",border:"1px solid #333",padding:"8px 12px",width:120,textAlign:"center",fontSize:14,color:"#e2e8f0"}}/></div>
         <button onClick={async()=>{const bet=parseInt(horseBet);if(!bet||bet<=0||bet>st.bal){setToast({msg:"Invalid bet",color:"#eb4b4b"});return}setSt(p=>({...p,bal:p.bal-bet}));const r=await api("/horse/race",{bet,pick:horsePick,username:account?.username,token:account?.token});if(r?.ok){const NH=r.horses.length,NS=r.horses[0].segments.length,cum=r.horses.map(hr=>{const c=[0];for(let j=0;j<NS;j++)c.push(c[j]+hr.segments[j]);return c}),mx=Math.max(...cum.map(c=>c[NS]));r._cum=cum;r._mx=mx;r._nh=NH;r._ns=NS;setHorseRace(r);setHorseAnim(0);const raceDur=20000;const t0=performance.now();const LAPS=3;const cols=r.horses.map(x=>x.color);const drawFrame=(t)=>{const cv=horseCanvasRef.current;if(!cv)return;const dpr=2,cw=cv.offsetWidth;if(!cw)return;const ch=Math.round(cw*0.62);cv.width=cw*dpr;cv.height=ch*dpr;cv.style.height=ch+"px";const g=cv.getContext("2d");g.scale(dpr,dpr);const W=cw,H=ch,cx=W/2,cy=H*0.44,rx=W*0.38,ry=H*0.32;g.fillStyle="#080b12";g.fillRect(0,0,W,H);g.beginPath();g.ellipse(cx,cy,rx+16,ry+16,0,0,Math.PI*2);g.fillStyle="#0e1220";g.fill();g.beginPath();g.ellipse(cx,cy,rx,ry,0,0,Math.PI*2);g.strokeStyle="#1a2030";g.lineWidth=28;g.stroke();g.beginPath();g.ellipse(cx,cy,rx,ry,0,0,Math.PI*2);g.strokeStyle="#141c2a";g.lineWidth=24;g.stroke();const sa=-Math.PI/2;const slx=cx+rx*Math.cos(sa),sly=cy+ry*Math.sin(sa);g.fillStyle="#f59e0b55";g.fillRect(slx-3,sly-15,6,30);g.fillStyle="#f59e0b";g.fillRect(slx-1,sly-15,2,30);g.font="bold "+Math.max(7,W*0.018|0)+"px sans-serif";g.textAlign="center";g.fillStyle="#f59e0b";g.fillText("S/F",slx,sly-20);const fIdx=t*NS,lo=Math.min(Math.floor(fIdx),NS),hi=Math.min(lo+1,NS),fr=fIdx-lo;const dists=cum.map(c=>c[lo]+(c[hi]-c[lo])*fr);const ranked=[...Array(NH)].map((_,i)=>({i,d:dists[i]})).sort((a,b)=>b.d-a.d);const tPos=f=>{const a=sa+f*Math.PI*2;return{x:cx+rx*Math.cos(a),y:cy+ry*Math.sin(a)}};ranked.slice().reverse().forEach(({i:idx})=>{const d=dists[idx],lp=(d/mx)*LAPS,tf=lp%1,pt=tPos(tf),rk=ranked.findIndex(s=>s.i===idx),lane=(rk-Math.floor(NH/2))*3.8,ang=sa+tf*Math.PI*2,nx=-Math.sin(ang),ny=Math.cos(ang),px=pt.x+nx*lane,py=pt.y+ny*lane*(ry/rx),sz=Math.max(7,W*0.024|0),ip=idx===r.pick;g.beginPath();g.arc(px,py,sz+3,0,Math.PI*2);g.fillStyle=cols[idx]+"22";g.fill();g.beginPath();g.arc(px,py,sz,0,Math.PI*2);g.fillStyle=cols[idx];g.fill();if(ip){g.strokeStyle="#fff";g.lineWidth=2.5;g.stroke()}g.fillStyle="#fff";g.font="bold "+Math.max(6,sz*0.75|0)+"px sans-serif";g.textAlign="center";g.textBaseline="middle";g.fillText(String(idx+1),px,py+0.5)});g.textBaseline="alphabetic";g.fillStyle="#e2e8f0";g.font="bold "+Math.max(11,W*0.036|0)+"px sans-serif";g.textAlign="center";const fin=t>=1;if(fin){g.fillText("FINISH!",cx,cy-4);g.fillStyle=cols[r.winner];g.font="bold "+Math.max(9,W*0.026|0)+"px sans-serif";g.fillText(r.horses[r.winner].name+" WINS!",cx,cy+W*0.032)}else{const ll=Math.min(LAPS,Math.floor((dists[ranked[0].i]/mx)*LAPS)+1);g.fillText("Lap "+ll+" / "+LAPS,cx,cy-4);g.fillStyle=cols[ranked[0].i]+"bb";g.font=Math.max(8,W*0.02|0)+"px sans-serif";g.fillText(r.horses[ranked[0].i].name+" leads",cx,cy+W*0.03)}const lbY=cy+ry+30;const lbH2=NH*16+20;if(lbY+lbH2<H){g.fillStyle="#0c101888";g.fillRect(8,lbY,W-16,lbH2);ranked.forEach(({i:idx},pos)=>{const yy=lbY+8+pos*16;const lp=(dists[idx]/mx)*LAPS;const cl=Math.min(LAPS,Math.floor(lp));const ip=idx===r.pick;g.fillStyle=pos===0?"#ffd700":pos===1?"#c0c0c0":pos===2?"#cd7f32":"#555";g.font="bold 9px sans-serif";g.textAlign="left";g.fillText(fin?(r.horses[idx].place===1?"1st":r.horses[idx].place===2?"2nd":r.horses[idx].place===3?"3rd":r.horses[idx].place+"th"):String(pos+1),14,yy+10);g.beginPath();g.arc(34,yy+6,4,0,Math.PI*2);g.fillStyle=cols[idx];g.fill();g.fillStyle=cols[idx];g.font=(ip?"bold ":"")+"10px sans-serif";g.fillText(r.horses[idx].name+(ip?" ★":""),44,yy+10);g.fillStyle="#888";g.textAlign="right";g.fillText(fin?"Done":"L"+(cl+1),W-14,yy+10);if(!fin){const bx=W-70,bw=40,by=yy+2,bh=4;g.fillStyle="#1e2430";g.fillRect(bx,by,bw,bh);g.fillStyle=cols[idx];g.fillRect(bx,by,bw*((lp%1)),bh)}})}};const loop=()=>{const elapsed=performance.now()-t0;const t=Math.min(1,elapsed/raceDur);horseAnimRef.current=t;drawFrame(t);if(t<1){requestAnimationFrame(loop)}else{setHorseAnim(1);setTimeout(()=>{if(r.won){document.body.classList.add("shakeHard");setTimeout(()=>document.body.classList.remove("shakeHard"),500);sndReveal(true);setSt(p=>{const ns={...p,bal:p.bal+r.payout};save(ns,drops);return ns});setToast({msg:"WON $"+r.payout.toLocaleString()+"!",color:"#4ade80"});setHorseHistory(prev=>[{won:true,amount:r.payout,horse:r.horses[r.winner].name,t:Date.now()},...prev].slice(0,20))}else{sndReveal(false);setSt(p=>{save(p,drops);return p});setToast({msg:"Lost! "+r.horses[r.winner].name+" won",color:"#eb4b4b"});setHorseHistory(prev=>[{won:false,amount:r.bet,horse:r.horses[r.winner].name,t:Date.now()},...prev].slice(0,20))}},500)}};requestAnimationFrame(loop)}else{setSt(p=>({...p,bal:p.bal+bet}));setToast({msg:r?.error||"Failed",color:"#eb4b4b"})}}} disabled={!horseBet||parseInt(horseBet)<=0} style={{...S.btn,background:"#4ade80",color:"#000",padding:"12px 32px",fontSize:"clamp(13px,3.5vw,16px)",fontWeight:800}}>Race!</button>
       </div>:
@@ -2026,7 +2048,7 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
       {viewProfile.bio&&viewProfile.privacy!=="private"&&<div style={{color:"#ccc",fontSize:"clamp(10px,2.5vw,12px)",fontStyle:"italic",textAlign:"center"}}>{viewProfile.bio}</div>}
       {/* Always-public stats */}
       <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:4,width:"100%",fontSize:"clamp(8px,2vw,10px)"}}>
-        {[["Level",viewProfile.level||1],["Wins",viewProfile.wins||0],["Losses",viewProfile.losses||0],["Win Rate",(viewProfile.win_rate||"0.0")+"%"],["Streak",viewProfile.win_streak||0],["Best",viewProfile.best_streak||0],["Opened",viewProfile.total_opened||0],["Earned",viewProfile.total_earned!==undefined?"$"+(viewProfile.total_earned||0).toLocaleString():"?"],["Joined",viewProfile.created_at?new Date(viewProfile.created_at).toLocaleDateString():"?"]].map(([l,v])=><div key={l} style={{background:"#080a0e",padding:"4px 6px",borderRadius:4,textAlign:"center"}}><div style={{color:"#555",fontSize:7,textTransform:"uppercase"}}>{l}</div><div style={{fontWeight:600,color:l==="Win Rate"&&parseFloat(v)>50?"#4ade80":l==="Win Rate"&&parseFloat(v)<50?"#eb4b4b":"#e2e8f0"}}>{v}</div></div>)}</div>
+        {[["Level",viewProfile.level||1],["Wins",viewProfile.wins||0],["Losses",viewProfile.losses||0],["Win Rate",(viewProfile.win_rate||"0.0")+"%"],["Streak",viewProfile.win_streak||0],["Best",viewProfile.best_streak||0],["Opened",viewProfile.total_opened||0],["Earned",viewProfile.total_earned!==undefined?money(viewProfile.total_earned||0):"?"],["Joined",viewProfile.created_at?new Date(viewProfile.created_at).toLocaleDateString():"?"]].map(([l,v])=><div key={l} style={{background:"#080a0e",padding:"4px 6px",borderRadius:4,textAlign:"center"}}><div style={{color:"#555",fontSize:7,textTransform:"uppercase"}}>{l}</div><div style={{fontWeight:600,color:l==="Win Rate"&&parseFloat(v)>50?"#4ade80":l==="Win Rate"&&parseFloat(v)<50?"#eb4b4b":"#e2e8f0"}}>{v}</div></div>)}</div>
       {viewProfile.privacy==="private"&&<div style={{color:"#888",fontSize:10}}>Some details hidden (private profile)</div>}{viewProfile.warned>0&&<div style={{color:"#f59e0b",background:"#f59e0b11",padding:"4px 8px",borderRadius:6,fontSize:10,textAlign:"center"}}><MI n="warning" s={12} c="#f59e0b"/> Warned: {viewProfile.warn_reason}</div>}
       <div style={{display:"flex",gap:4,width:"100%",flexWrap:"wrap"}}>
         {account&&viewProfile.username!==account.username&&<button onClick={async()=>{const r=await api("/friends/add",{username:account.username,token:account.token,target:viewProfile.username});if(r?.ok)setToast({msg:r.action==="accepted"?"Friend accepted!":"Friend request sent!",color:"#4ade80"});else setToast({msg:r?.error||"Failed",color:"#eb4b4b"})}} style={{...S.btn,background:viewProfile.friendStatus==="friends"?"#4ade8022":"#3b82f622",color:viewProfile.friendStatus==="friends"?"#4ade80":"#3b82f6",flex:1,border:"1px solid "+(viewProfile.friendStatus==="friends"?"#4ade8033":"#3b82f633")}}>{viewProfile.friendStatus==="friends"?"Friends ✓":viewProfile.friendStatus==="sent"?"Pending...":viewProfile.friendStatus==="received"?"Accept ✓":"+ Add Friend"}</button>}
@@ -2038,6 +2060,7 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
     </div></div>}
 
     {/* ONLINE MAP */}
+    /* ═══════════ WORLD MAP ═══════════ */
     {page==="map"&&<div style={S.body}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
         <div style={{fontSize:"clamp(15px,4vw,20px)",fontWeight:700}}><MI n="public" s={20}/> Online Players</div>
@@ -2085,9 +2108,9 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
           })}
         </div>
         <button onClick={async()=>{
-          const r=await api("/daily/claim",{username:account.username,token:account.token});
+          const r=await api("/daily/claim",{username:account.username,token:account.token,slot});
           if(r?.ok){
-            setSt(p=>{const ns={...p,bal:p.bal+r.reward};save(ns,drops);return ns});
+            setSt(p=>{const newBal=(r.serverBal!==null&&r.serverBal!==undefined)?r.serverBal:p.bal+r.reward;const ns={...p,bal:newBal};save(ns,drops);return ns});
             setToast({msg:t("daily_claimed",{amount:r.reward.toLocaleString()}),color:"#4ade80"});
             setDailyStatus({canClaim:false,streak:r.streak,nextClaimMs:24*3600*1000});
             setDailyModal(null);
