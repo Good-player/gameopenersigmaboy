@@ -157,6 +157,22 @@ function StatusDot({status,size,withLabel}){
   </span>;
 }
 
+// Right-click / long-press context menu for usernames anywhere in the app.
+// Wrap a username with <UserName name={u}>display</UserName> and right-click → menu.
+function UserName({name,children,style,onClick,as}){
+  const Tag=as||"span";
+  const handler=(e)=>{
+    if(!name)return;
+    e.preventDefault();
+    e.stopPropagation();
+    window.__showUserMenu&&window.__showUserMenu(name,e.clientX,e.clientY);
+  };
+  let touchTimer=null;
+  const touchStart=(e)=>{if(!name)return;touchTimer=setTimeout(()=>{const t=e.touches?.[0];if(t)window.__showUserMenu&&window.__showUserMenu(name,t.clientX,t.clientY)},500)};
+  const touchEnd=()=>{if(touchTimer){clearTimeout(touchTimer);touchTimer=null}};
+  return <Tag data-username={name} onContextMenu={handler} onTouchStart={touchStart} onTouchEnd={touchEnd} onTouchMove={touchEnd} onClick={onClick} style={style}>{children}</Tag>;
+}
+
 function BalanceTicker({value,color,fontSize}){
   const[display,setDisplay]=useState(value);
   const prevRef=useRef(value);
@@ -202,7 +218,7 @@ function App(){
   const[dmInbox,setDmInbox]=useState(null);const[dmTo,setDmTo]=useState("");const[dmMsg,setDmMsg]=useState("");const[dmSearch,setDmSearch]=useState("");const[dmResults,setDmResults]=useState([]);const[dmUnread,setDmUnread]=useState(0);
   const[viewProfile,setViewProfile]=useState(null);const[editBio,setEditBio]=useState("");const[editPrivacy,setEditPrivacy]=useState("public");
   const[reportTarget,setReportTarget]=useState("");const[reportReason,setReportReason]=useState("");const[reportMsg,setReportMsg]=useState("");
-  const[toast,setToast]=useState(null);const[reportModal,setReportModal]=useState(null);const[pvpEliminated,setPvpEliminated]=useState(false);const[horseRace,setHorseRace]=useState(null);const[horseAnim,setHorseAnim]=useState(0);const[horseBet,setHorseBet]=useState("");const[horsePick,setHorsePick]=useState(0);const[horseHistory,setHorseHistory]=useState([]);const[multiResults,setMultiResults]=useState(null);const[bjTable,setBjTable]=useState(null);const[bjBet,setBjBet]=useState("10000");const[bjHasCard,setBjHasCard]=useState(false);const[btcPrice,setBtcPrice]=useState(0);const[btcHistory,setBtcHistory]=useState([]);const[btcPortfolio,setBtcPortfolio]=useState({active:[],sold:[]});const[btcInvestAmt,setBtcInvestAmt]=useState("");const[btcDays,setBtcDays]=useState(7);const[btcLastUpdate,setBtcLastUpdate]=useState(0);const[btcNextUpdate,setBtcNextUpdate]=useState(0);const[btcTick,setBtcTick]=useState(0);const[btcChange24h,setBtcChange24h]=useState(0);const[plinkoBet,setPlinkoBet]=useState("1000");const[plinkoRisk,setPlinkoRisk]=useState("medium");const[plinkoRows,setPlinkoRows]=useState(12);const[plinkoResult,setPlinkoResult]=useState(null);const[plinkoAnim,setPlinkoAnim]=useState(false);const[rouletteBets,setRouletteBets]=useState([]);const[rouletteResult,setRouletteResult]=useState(null);const[rouletteAnim,setRouletteAnim]=useState(false);const[rouletteAmt,setRouletteAmt]=useState("1000");const[weatherData,setWeatherData]=useState(null);const[smhiWarnings,setSmhiWarnings]=useState(null);const[pollenData,setPollenData]=useState(null);const[airData,setAirData]=useState(null);const[expandedSection,setExpandedSection]=useState({});const[dailyStatus,setDailyStatus]=useState(null);const[dailyModal,setDailyModal]=useState(null);const[wheelStatus,setWheelStatus]=useState(null);const[wheelSpinning,setWheelSpinning]=useState(false);const[wheelResult,setWheelResult]=useState(null);const wheelCanvasRef=useRef(null);const horseCanvasRef=useRef(null);const horseAnimRef=useRef(null);const syncLockRef=useRef(false);const plinkoCanvasRef=useRef(null);const rouletteCanvasRef=useRef(null);const[pvpWinModal,setPvpWinModal]=useState(null);const[warnModal,setWarnModal]=useState(null);const[banModal,setBanModal]=useState(null);const[banTimer,setBanTimer]=useState("");const[giftModal,setGiftModal]=useState(null);const[giftAmt,setGiftAmt]=useState("");
+  const[toast,setToast]=useState(null);const[userMenu,setUserMenu]=useState(null);const[reportModal,setReportModal]=useState(null);const[pvpEliminated,setPvpEliminated]=useState(false);const[horseRace,setHorseRace]=useState(null);const[horseAnim,setHorseAnim]=useState(0);const[horseBet,setHorseBet]=useState("");const[horsePick,setHorsePick]=useState(0);const[horseHistory,setHorseHistory]=useState([]);const[multiResults,setMultiResults]=useState(null);const[bjTable,setBjTable]=useState(null);const[bjBet,setBjBet]=useState("10000");const[bjHasCard,setBjHasCard]=useState(false);const[btcPrice,setBtcPrice]=useState(0);const[btcHistory,setBtcHistory]=useState([]);const[btcPortfolio,setBtcPortfolio]=useState({active:[],sold:[]});const[btcInvestAmt,setBtcInvestAmt]=useState("");const[btcDays,setBtcDays]=useState(7);const[btcLastUpdate,setBtcLastUpdate]=useState(0);const[btcNextUpdate,setBtcNextUpdate]=useState(0);const[btcTick,setBtcTick]=useState(0);const[btcChange24h,setBtcChange24h]=useState(0);const[plinkoBet,setPlinkoBet]=useState("1000");const[plinkoRisk,setPlinkoRisk]=useState("medium");const[plinkoRows,setPlinkoRows]=useState(12);const[plinkoResult,setPlinkoResult]=useState(null);const[plinkoAnim,setPlinkoAnim]=useState(false);const[rouletteBets,setRouletteBets]=useState([]);const[rouletteResult,setRouletteResult]=useState(null);const[rouletteAnim,setRouletteAnim]=useState(false);const[rouletteAmt,setRouletteAmt]=useState("1000");const[weatherData,setWeatherData]=useState(null);const[smhiWarnings,setSmhiWarnings]=useState(null);const[pollenData,setPollenData]=useState(null);const[airData,setAirData]=useState(null);const[expandedSection,setExpandedSection]=useState({});const[dailyStatus,setDailyStatus]=useState(null);const[dailyModal,setDailyModal]=useState(null);const[wheelStatus,setWheelStatus]=useState(null);const[wheelSpinning,setWheelSpinning]=useState(false);const[wheelResult,setWheelResult]=useState(null);const wheelCanvasRef=useRef(null);const horseCanvasRef=useRef(null);const horseAnimRef=useRef(null);const syncLockRef=useRef(false);const plinkoCanvasRef=useRef(null);const rouletteCanvasRef=useRef(null);const[pvpWinModal,setPvpWinModal]=useState(null);const[warnModal,setWarnModal]=useState(null);const[banModal,setBanModal]=useState(null);const[banTimer,setBanTimer]=useState("");const[giftModal,setGiftModal]=useState(null);const[giftAmt,setGiftAmt]=useState("");
   const[events,setEvents]=useState([]);const[dismissedEvents,setDismissedEvents]=useState({});
   const[friendsList,setFriendsList]=useState([]);
   function showProfile(username){if(!username||username==="Anon"||username==="SYSTEM")return;api("/profile/full",{target:username.toLowerCase(),username:account?.username||""}).then(r=>{if(r?.profile)setViewProfile(r.profile)}).catch(()=>{})}
@@ -223,6 +239,21 @@ function App(){
     fetchStatus();
     const id=setInterval(fetchStatus,30000);
     return()=>clearInterval(id);
+  },[]);
+  // Global right-click user menu
+  useEffect(()=>{
+    window.__showUserMenu=(uname,x,y)=>{
+      if(!uname)return;
+      // Position menu, but keep on screen
+      const menuW=180,menuH=240;
+      const px=Math.min(x,window.innerWidth-menuW-10);
+      const py=Math.min(y,window.innerHeight-menuH-10);
+      setUserMenu({name:uname,x:px,y:py});
+    };
+    const closer=(e)=>{if(!e.target.closest("[data-user-menu]"))setUserMenu(null)};
+    window.addEventListener("click",closer);
+    window.addEventListener("scroll",()=>setUserMenu(null),true);
+    return()=>{window.removeEventListener("click",closer);window.__showUserMenu=null};
   },[]);
   // Online-minutes tracking: increment onlineMinutes once per minute as long as the tab is visible
   useEffect(()=>{
@@ -804,12 +835,12 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
       <div style={{display:"flex",flexDirection:"column",gap:3}}>
         {lb.length===0?<div style={{color:"#555",textAlign:"center",padding:20}}>No players yet.</div>:
         lb.map((p,i)=>{const medal=null;return(
-          <div key={i} style={{display:"grid",gridTemplateColumns:"28px 1fr 80px 65px",alignItems:"center",gap:8,padding:"8px 12px",background:i<3?"#ffd70008":"#0d1117",border:i<3?"1px solid #ffd70022":"1px solid #151820",borderRadius:6,fontSize:"clamp(9px,2.2vw,12px)",cursor:"pointer"}} onClick={()=>showProfile(p.uname)}>
+          <UserName key={i} name={p.uname} as="div" style={{display:"grid",gridTemplateColumns:"28px 1fr 80px 65px",alignItems:"center",gap:8,padding:"8px 12px",background:i<3?"#ffd70008":"#0d1117",border:i<3?"1px solid #ffd70022":"1px solid #151820",borderRadius:6,fontSize:"clamp(9px,2.2vw,12px)",cursor:"pointer"}} onClick={()=>showProfile(p.uname)}>
             <span style={{fontWeight:800,color:i<3?"#ffd700":"#888",textAlign:"center"}}>{i<3?<MI n={["emoji_events","military_tech","workspace_premium"][i]} s={16} c={["#ffd700","#c0c0c0","#cd7f32"][i]}/>:`#${i+1}`}</span>{p.banned?<span style={{color:"#eb4b4b",fontSize:8,marginLeft:2}}>BAN</span>:null}{p.deleted?<span style={{color:"#666",fontSize:8,marginLeft:2}}>DEL</span>:null}
             <span style={{fontWeight:600,color:"#e2e8f0",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",display:"flex",alignItems:"center",gap:5}}><StatusDot status={userStatusMap[p.uname]||"offline"}/>{dName(p)} <span style={{color:"#666",fontSize:"clamp(7px,1.8vw,9px)"}}>Lv{p.level||1}</span></span>
             <span style={{color:"#4ade80",fontWeight:600,textAlign:"right"}}>{money(p.totalWon||0)}</span>
             <span style={{color:"#888",textAlign:"right"}}>{p.opens||0} opens</span>
-          </div>
+          </UserName>
         )})}
       </div>
     </div>}
@@ -822,7 +853,7 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
         chatLog.map((m,i)=><div key={i} style={{display:"flex",gap:6,fontSize:"clamp(8px,2.2vw,11px)",padding:"4px 0",alignItems:"flex-start"}}>
           <span style={{color:"#888",flexShrink:0,width:42}}>{m.ago||""}</span>
           <div style={{width:20,height:20,borderRadius:"50%",background:"#1e2430",display:"flex",alignItems:"center",justifyContent:"center",fontSize:9,flexShrink:0,cursor:"pointer",overflow:"hidden"}} onClick={()=>{if(m.uid!=="SYSTEM")showProfile(m.uname)}}>{m.pfp?<img src={m.pfp} style={{width:18,height:18,borderRadius:"50%",objectFit:"cover"}}/>:<MI n="person" s={12} c="#666"/>}</div>
-          <span style={{color:m.uid===USER_ID?"#4ade80":m.uid==="SYSTEM"?"#f59e0b":m.role==="owner"?"#ff4444":m.role==="admin"?"#ffd700":m.role==="mod"?"#8b5cf6":"#3b82f6",fontWeight:700,flexShrink:0,cursor:m.uid!=="SYSTEM"?"pointer":"default"}} onClick={()=>{if(m.uid!=="SYSTEM")showProfile(m.uname)}}>{dName(m)}</span>
+          {m.uid!=="SYSTEM"?<UserName name={m.uname} style={{color:m.uid===USER_ID?"#4ade80":m.role==="owner"?"#ff4444":m.role==="admin"?"#ffd700":m.role==="mod"?"#8b5cf6":"#3b82f6",fontWeight:700,flexShrink:0,cursor:"pointer"}} onClick={()=>showProfile(m.uname)}>{dName(m)}</UserName>:<span style={{color:"#f59e0b",fontWeight:700,flexShrink:0}}>{dName(m)}</span>}
           <span style={{color:m.uid==="SYSTEM"?"#fbbf24":"#ccc"}} dangerouslySetInnerHTML={{__html:renderMd(m.msg)}}/>
           {m.uid!=="SYSTEM"&&m.uid!==USER_ID&&account&&<span onClick={()=>setReportModal({targetUser:m.uname,messageId:m.id,channel:"global",content:m.msg})} style={{color:"#f59e0b",cursor:"pointer",fontSize:11,marginLeft:4,opacity:0.7,flexShrink:0}} title="Report"><MI n="flag" s={11} c="#f59e0b"/></span>}
         </div>)}
@@ -1842,6 +1873,30 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
 
     {/* TOAST */}
     {toast&&<div style={{position:"fixed",top:20,left:"50%",transform:"translateX(-50%)",background:toast.color+"22",border:"1px solid "+toast.color+"44",color:toast.color,padding:"10px 20px",borderRadius:8,fontWeight:700,fontSize:"clamp(10px,2.5vw,13px)",zIndex:99999,pointerEvents:"none",animation:"bounceIn .4s ease-out",backdropFilter:"blur(8px)"}}>{toast.msg}</div>}
+    {userMenu&&(()=>{
+      const u=userMenu.name;
+      const isMe=account&&u===account.username;
+      const status=userStatusMap[u]||"offline";
+      const closeMenu=()=>setUserMenu(null);
+      return <div data-user-menu="1" style={{position:"fixed",top:userMenu.y,left:userMenu.x,background:"#0d1117",border:"1px solid #2a3040",borderRadius:8,boxShadow:"0 8px 24px rgba(0,0,0,0.5)",zIndex:99998,minWidth:180,padding:6,animation:"fadeUp .15s ease-out"}}>
+        <div style={{padding:"8px 10px",borderBottom:"1px solid #1e2430",marginBottom:4,display:"flex",alignItems:"center",gap:6}}>
+          <StatusDot status={status}/>
+          <div style={{flex:1,fontSize:13,fontWeight:700,color:"#e2e8f0",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{u}</div>
+        </div>
+        {[
+          ["person","View profile","#3b82f6",()=>{showProfile&&showProfile(u);closeMenu()}],
+          !isMe&&account?["chat","Send DM","#a855f7",()=>{setPage("dm");setTimeout(()=>{const input=document.querySelector("[data-dm-to]");if(input)input.value=u;},100);closeMenu()}]:null,
+          !isMe&&account?["person_add","Add friend","#4ade80",async()=>{const r=await api("/friend/request",{username:account.username,token:account.token,target:u});setToast({msg:r?.ok?"Friend request sent":r?.error||"Failed",color:r?.ok?"#4ade80":"#eb4b4b"});closeMenu()}]:null,
+          !isMe&&account?["block","Block",  "#666",async()=>{if(!confirm("Block "+u+"?"))return;const r=await api("/block",{username:account.username,token:account.token,target:u,action:"block"});setToast({msg:r?.ok?"Blocked "+u:r?.error||"Failed",color:r?.ok?"#888":"#eb4b4b"});closeMenu()}]:null,
+          !isMe&&account?["flag","Report","#eb4b4b",()=>{const reason=prompt("Report "+u+" for:");if(!reason)return;api("/report",{username:account.username,token:account.token,target:u,reason}).then(r=>{setToast({msg:r?.ok?"Report submitted":r?.error||"Failed",color:r?.ok?"#4ade80":"#eb4b4b"})});closeMenu()}]:null,
+          ["content_copy","Copy username","#888",()=>{navigator.clipboard?.writeText(u);setToast({msg:"Copied",color:"#4ade80"});closeMenu()}],
+        ].filter(Boolean).map(([icon,label,color,act],i)=>
+          <button key={i} onClick={act} style={{display:"flex",alignItems:"center",gap:8,width:"100%",background:"transparent",border:"none",color:color,padding:"7px 10px",fontSize:12,cursor:"pointer",textAlign:"left",borderRadius:4,fontFamily:"inherit"}} onMouseEnter={e=>e.currentTarget.style.background=color+"22"} onMouseLeave={e=>e.currentTarget.style.background="transparent"}>
+            <MI n={icon} s={16}/>{label}
+          </button>
+        )}
+      </div>;
+    })()}
 
     {/* REPORT MODAL */}
     {reportModal&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,.85)",zIndex:99998,display:"flex",alignItems:"center",justifyContent:"center"}} onClick={()=>setReportModal(null)}><div style={{background:"#0d1117",border:"1px solid #1e2430",borderRadius:12,padding:20,maxWidth:400,width:"92vw",display:"flex",flexDirection:"column",gap:8}} onClick={e=>e.stopPropagation()}>
