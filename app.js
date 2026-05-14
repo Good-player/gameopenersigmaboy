@@ -95,7 +95,18 @@ const CASES=[
 const DEFAULT_BAL=1000,RENT_EVERY=5,BASE_RENT=200,MAX_LOAN=50000,LOAN_RATE=.2,SCROLL_COUNT=55,WIN_IDX=48;
 const INIT={bal:DEFAULT_BAL,inv:[],stats:{opened:0,spent:0,won:0,sold:0,best:null,bestVal:0},loan:0,creditScore:500,loansPaid:0,loansDefaulted:0,onlineMinutes:0,loanDeadline:0,loanRequestAt:0,loanTermMinutes:0,rentCtr:0,history:[{n:0,bal:DEFAULT_BAL,label:"Start"}],starred:{}};
 function roll(c){let r2=Math.random(),cum=0;for(const[k,v]of Object.entries(R)){cum+=v.chance;if(r2<=cum){const pool=c.items.filter(i=>i.rarity===k);if(pool.length)return pool[Math.floor(Math.random()*pool.length)]}}return c.items.filter(i=>i.rarity==="consumer")[0]}
-function money(n){return"$"+n.toLocaleString()}
+function money(n){
+  if(n===null||n===undefined||isNaN(n))return"$0";
+  if(n<0)return"-"+money(-n);
+  if(n<1e6)return"$"+Math.round(n).toLocaleString();
+  // For very large numbers, use suffix notation
+  const suffixes=["","K","M","B","T","Qa","Qi","Sx","Sp","Oc","No","Dc","Ud","Dd","Td","Qad","Qid"];
+  let i=0;
+  let v=n;
+  while(v>=1000&&i<suffixes.length-1){v/=1000;i++}
+  if(i<=1)return"$"+Math.round(n).toLocaleString();
+  return"$"+v.toFixed(v>=100?0:v>=10?1:2)+suffixes[i];
+}
 function genFloat(){return Math.random()}
 function getCondition(f){if(f<.07)return CONDITIONS[0];if(f<.15)return CONDITIONS[1];if(f<.38)return CONDITIONS[2];if(f<.45)return CONDITIONS[3];return CONDITIONS[4]}
 function condAbbr(c){return c.split(" ").map(w=>w[0]).join("")}
@@ -126,6 +137,69 @@ async function _ensureTick(){
 }
 // Preload at module load so first ticks fire instantly
 _ensureTick();
+
+// ============================================================
+// Sound manager: SFX + Music with separate volumes + mute toggles
+// Persisted in localStorage.
+// ============================================================
+const _SND={
+  sfxVol:0.7,musicVol:0.4,sfxMuted:false,musicMuted:false,
+  _ctx:null,_buffers:{},_loading:{},_musicEl:null,_currentMusic:null,
+  load(){try{const s=JSON.parse(localStorage.getItem("co-sound")||"{}");if(s.sfxVol!==undefined)this.sfxVol=s.sfxVol;if(s.musicVol!==undefined)this.musicVol=s.musicVol;if(s.sfxMuted!==undefined)this.sfxMuted=s.sfxMuted;if(s.musicMuted!==undefined)this.musicMuted=s.musicMuted;if(this._musicEl)this._musicEl.volume=this.musicMuted?0:this.musicVol;}catch{}},
+  save(){try{localStorage.setItem("co-sound",JSON.stringify({sfxVol:this.sfxVol,musicVol:this.musicVol,sfxMuted:this.sfxMuted,musicMuted:this.musicMuted}))}catch{}},
+  _ensureCtx(){if(!this._ctx){try{this._ctx=new (window.AudioContext||window.webkitAudioContext)()}catch{}}return this._ctx},
+  async _loadBuffer(name){
+    if(this._buffers[name])return this._buffers[name];
+    if(this._loading[name])return this._loading[name];
+    this._loading[name]=(async()=>{
+      try{
+        const ctx=this._ensureCtx();if(!ctx)return null;
+        const r=await fetch("sound/"+name+".mp3");
+        if(!r.ok)return null;
+        const ab=await r.arrayBuffer();
+        const buf=await ctx.decodeAudioData(ab);
+        this._buffers[name]=buf;
+        return buf;
+      }catch{return null}
+    })();
+    return this._loading[name];
+  },
+  async sfx(name,volMult){
+    if(this.sfxMuted)return;
+    const buf=await this._loadBuffer(name);
+    if(!buf)return;
+    try{
+      const ctx=this._ensureCtx();if(!ctx)return;
+      if(ctx.state==="suspended")ctx.resume();
+      const src=ctx.createBufferSource();src.buffer=buf;
+      const g=ctx.createGain();g.gain.value=this.sfxVol*(volMult||1);
+      src.connect(g);g.connect(ctx.destination);
+      src.start();
+    }catch{}
+  },
+  playMusic(name,loop){
+    if(this._currentMusic===name&&this._musicEl&&!this._musicEl.paused)return;
+    this.stopMusic();
+    try{
+      const el=new Audio("sound/"+name+".mp3");
+      el.loop=loop!==false;
+      el.volume=this.musicMuted?0:this.musicVol;
+      el.play().catch(()=>{/* autoplay blocked, will start on next user gesture */});
+      this._musicEl=el;
+      this._currentMusic=name;
+    }catch{}
+  },
+  stopMusic(){
+    if(this._musicEl){try{this._musicEl.pause();this._musicEl=null}catch{}}
+    this._currentMusic=null;
+  },
+  setSfxVol(v){this.sfxVol=Math.max(0,Math.min(1,v));this.save()},
+  setMusicVol(v){this.musicVol=Math.max(0,Math.min(1,v));if(this._musicEl)this._musicEl.volume=this.musicMuted?0:this.musicVol;this.save()},
+  toggleSfx(){this.sfxMuted=!this.sfxMuted;this.save()},
+  toggleMusic(){this.musicMuted=!this.musicMuted;if(this._musicEl)this._musicEl.volume=this.musicMuted?0:this.musicVol;this.save()},
+};
+_SND.load();
+window._SND=_SND;
 function sndTick(){
   if(!_tickBuf||!_tickCtx)return;
   try{
@@ -198,7 +272,7 @@ function BalanceTicker({value,color,fontSize}){
     animRef.current=requestAnimationFrame(tick);
     return()=>{if(animRef.current)cancelAnimationFrame(animRef.current)};
   },[value]);
-  return <span ref={flashRef} style={{color:color||"#4ade80",fontWeight:700,fontSize:fontSize||"clamp(14px,3.5vw,20px)",display:"inline-block"}}>${Math.round(display).toLocaleString()}</span>;
+  return <span ref={flashRef} style={{color:color||"#4ade80",fontWeight:700,fontSize:fontSize||"clamp(14px,3.5vw,20px)",display:"inline-block"}}>{money(display)}</span>;
 }
 
 
@@ -211,7 +285,7 @@ function App(){
   useEffect(()=>{const h=(e)=>setLang(e.detail.lang);window.addEventListener('langchange',h);return()=>window.removeEventListener('langchange',h)},[]);
 
   const[appLoading,setAppLoading]=useState(true);const[offline,setOffline]=useState(false);const offlineRef=useRef(false);useEffect(()=>{window.__setOnline=(v)=>{if(!v&&!offlineRef.current){offlineRef.current=true;setOffline(true)}if(v&&offlineRef.current){offlineRef.current=false;setOffline(false)}};return()=>{window.__setOnline=null}},[]);const[loadProgress,setLoadProgress]=useState(0);const[loadMsg,setLoadMsg]=useState("Initializing...");const[slot,setSlot]=useState(0);const[slotMeta,setSlotMeta]=useState([null,null,null]);const[showSlots,setShowSlots]=useState(true);
-  const[st,setSt]=useState(INIT);const[page,setPage]=useState("shop");const[selCase,setSelCase]=useState(null);const[wonItem,setWonItem]=useState(null);const[wonFloat,setWonFloat]=useState(0);const[wonQuote,setWonQuote]=useState("");const[scrollItems,setScrollItems]=useState([]);const[scrollDone,setScrollDone]=useState(false);const[opening,setOpening]=useState(false);const[resetMsg,setResetMsg]=useState("");const[loanAmt,setLoanAmt]=useState("");const[loanMinutes,setLoanMinutes]=useState("5");const[showLoanModal,setShowLoanModal]=useState(false);const[rentPaid,setRentPaid]=useState(0);const[inspecting,setInspecting]=useState(null);const[confirmReset,setConfirmReset]=useState(false);const[drops,setDrops]=useState([]);
+  const[st,setSt]=useState(INIT);const[page,setPage]=useState("shop");const[selCase,setSelCase]=useState(null);const[wonItem,setWonItem]=useState(null);const[wonFloat,setWonFloat]=useState(0);const[wonQuote,setWonQuote]=useState("");const[scrollItems,setScrollItems]=useState([]);const[scrollDone,setScrollDone]=useState(false);const[opening,setOpening]=useState(false);const[resetMsg,setResetMsg]=useState("");const[loanAmt,setLoanAmt]=useState("");const[loanMinutes,setLoanMinutes]=useState("5");const[showLoanModal,setShowLoanModal]=useState(false);const[rentPaid,setRentPaid]=useState(0);const[inspecting,setInspecting]=useState(null);const[confirmReset,setConfirmReset]=useState(false);const[drops,setDrops]=useState([]);const[showSoundModal,setShowSoundModal]=useState(false);const[soundVer,setSoundVer]=useState(0);
   const[invSort,setInvSort]=useState("newest");const[invFilter,setInvFilter]=useState("all");const[invView,setInvView]=useState("grid");const[selItem,setSelItem]=useState(null);const[sellAmt,setSellAmt]=useState("");const[sellConfirm,setSellConfirm]=useState(null);const[lastWonId,setLastWonId]=useState(null);
   const[feed,setFeed]=useState([]);const[lb,setLb]=useState([]);const[chatLog,setChatLog]=useState([]);const pfpCache=useRef({});const lastChatIdRef=useRef(0);const lastDmIdRef=useRef(0);const[chatMsg,setChatMsg]=useState("");const[nickname,setNickname]=useState(getUserName());const[nameEditing,setNameEditing]=useState(false);const[chatCd,setChatCd]=useState(0);
   const[account,setAccount]=useState(getAccount());const[showAuth,setShowAuth]=useState(false);const[authTab,setAuthTab]=useState("login");const[authUser,setAuthUser]=useState("");const[authPass,setAuthPass]=useState("");const[authErr,setAuthErr]=useState("");const[authLoading,setAuthLoading]=useState(false);const[saveStatus,setSaveStatus]=useState("");const[consent,setConsent]=useState(hasConsent());const[onlineData,setOnlineData]=useState(null);const[userStatusMap,setUserStatusMap]=useState({});
@@ -292,8 +366,24 @@ function App(){
     const fetchState=()=>{api("/buckshot/state",{lobbyId:curLobby.id,username:account?.username||""}).then(r=>{if(r?.state)setBuckshotState(r.state)})};
     fetchState();
     const id=setInterval(fetchState,1000);
-    return()=>clearInterval(id);
+    return()=>{clearInterval(id);_SND.stopMusic()};
   },[curLobby?.id,curLobby?.mode]);
+  // Buckshot music tracks: count reloads from log to pick the right round
+  useEffect(()=>{
+    if(curLobby?.mode!=="buckshot"||curLobby?.status!=="playing"||!buckshotState)return;
+    const reloads=(buckshotState.log||[]).filter(l=>l&&l.startsWith&&l.startsWith("RELOAD")).length;
+    const round=Math.min(reloads,2); // 0,1,2 -> general/before-every-load/socket-calibration
+    const tracks=["general-release","before-every-load","socket-calibration"];
+    const want=tracks[round];
+    if(_SND._currentMusic!==want&&!_SND.musicMuted)_SND.playMusic(want);
+  },[curLobby?.status,curLobby?.mode,buckshotState?.shellIdx]);
+  // Force user to stay on PvP tab during active buckshot game
+  useEffect(()=>{
+    if(curLobby?.mode==="buckshot"&&curLobby?.status==="playing"&&page!=="pvp"){
+      setPage("pvp");
+      setToast({msg:"Locked to PvP — game in progress",color:"#f59e0b"});
+    }
+  },[curLobby?.status,curLobby?.mode,page]);
   // Daily login bonus check on account login
   useEffect(()=>{if(!account)return;api("/daily/status",{username:account.username}).then(r=>{if(r?.canClaim)setDailyModal(r);else setDailyStatus(r)})},[account?.username]);
   // Wheel of Fortune - draw static wheel on page enter
@@ -673,7 +763,7 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
     {resetMsg&&<div style={S.overlay}><div style={S.modal}><div style={{fontSize:"clamp(36px,10vw,56px)"}}><MI n="dangerous" s={44} c="#eb4b4b"/></div><div style={{fontSize:"clamp(16px,4vw,22px)",fontWeight:700,color:"#eb4b4b"}}>{resetMsg}</div></div></div>}
 
     {/* HEADER */}
-    <div style={S.hdr}><div style={{display:"flex",alignItems:"center",gap:"clamp(6px,1.5vw,10px)"}}><button onClick={()=>setShowSlots(true)} style={{...S.btn,background:"#ffffff08",color:"#888",padding:"clamp(4px,1vw,6px) clamp(6px,1.5vw,10px)",fontSize:"clamp(9px,2.2vw,11px)"}}>Slot {slot+1}</button><div style={S.title}>CASES</div></div><div style={S.hdrRight}><button onClick={()=>{const cur=lang;const next=cur==="en"?"sv":"en";if(window.I18N)window.I18N.setLang(next);setToast({msg:next==="sv"?"Språk: Svenska":"Language: English",color:"#4ade80"})}} title={t("lang_label")} style={{...S.btn,background:"#ffffff08",color:"#cbd5e1",padding:"6px 10px",fontSize:"clamp(9px,2.2vw,11px)",fontWeight:700,display:"inline-flex",alignItems:"center",gap:4}}><MI n="language" s={14}/>{lang.toUpperCase()}</button><button onClick={()=>setPage("faq")} title="FAQ" style={{...S.btn,background:"#ffffff08",color:"#cbd5e1",padding:"6px 8px",fontSize:"clamp(9px,2.2vw,11px)"}}><MI n="help_outline" s={14}/></button><button onClick={()=>setShowAuth(true)} style={{...S.btn,background:account?"#4ade8022":"#ffffff08",color:account?"#4ade80":"#888",padding:"6px 12px",fontSize:"clamp(9px,2.2vw,12px)",border:account?"1px solid #4ade8033":"1px solid #333",fontWeight:700}}>{account?"✓ "+account.username:t("login")}</button>{account&&<><button onClick={cloudSave} style={{...S.btn,background:"#3b82f6",color:"#fff",padding:"6px 14px",fontSize:"clamp(10px,2.5vw,13px)",fontWeight:700}}><><MI n="cloud_upload" s={14}/> Save</></button><button onClick={cloudLoad} style={{...S.btn,background:"#8b5cf622",color:"#8b5cf6",padding:"6px 10px",fontSize:"clamp(9px,2.2vw,11px)"}}><><MI n="cloud_download" s={14}/> Load</></button></>}{saveStatus&&<span style={{color:saveStatus==="Saved!"?"#4ade80":"#fbbf24",fontSize:"clamp(9px,2.2vw,11px)",fontWeight:700,animation:"fadeUp .3s"}}>{saveStatus}</span>}<div style={S.chip}><span style={S.chipLbl}>BAL</span><BalanceTicker value={st.bal} color={st.bal<100?"#eb4b4b":"#4ade80"} fontSize="clamp(14px,3.5vw,20px)"/></div>{st.loan>0&&<div style={{...S.chip,borderColor:"#eb4b4b33"}}><span style={S.chipLbl}>DEBT</span><span style={{color:"#eb4b4b",fontWeight:700,fontSize:"clamp(12px,3vw,18px)"}}>{money(st.loan)}</span></div>}<div style={S.rentChip}>Rent: {money(RENT_AMT)} in {rentIn} opens</div></div></div>
+    <div style={S.hdr}><div style={{display:"flex",alignItems:"center",gap:"clamp(6px,1.5vw,10px)"}}><button onClick={()=>setShowSlots(true)} style={{...S.btn,background:"#ffffff08",color:"#888",padding:"clamp(4px,1vw,6px) clamp(6px,1.5vw,10px)",fontSize:"clamp(9px,2.2vw,11px)"}}>Slot {slot+1}</button><div style={S.title}>CASES</div></div><div style={S.hdrRight}><button onClick={()=>{const cur=lang;const next=cur==="en"?"sv":"en";if(window.I18N)window.I18N.setLang(next);setToast({msg:next==="sv"?"Språk: Svenska":"Language: English",color:"#4ade80"})}} title={t("lang_label")} style={{...S.btn,background:"#ffffff08",color:"#cbd5e1",padding:"6px 10px",fontSize:"clamp(9px,2.2vw,11px)",fontWeight:700,display:"inline-flex",alignItems:"center",gap:4}}><MI n="language" s={14}/>{lang.toUpperCase()}</button><button onClick={()=>setPage("faq")} title="FAQ" style={{...S.btn,background:"#ffffff08",color:"#cbd5e1",padding:"6px 8px",fontSize:"clamp(9px,2.2vw,11px)"}}><MI n="help_outline" s={14}/></button><button onClick={()=>setShowSoundModal(true)} title="Sound settings" style={{...S.btn,background:"#ffffff08",color:"#cbd5e1",padding:"6px 8px",fontSize:"clamp(9px,2.2vw,11px)"}}><MI n={_SND.sfxMuted&&_SND.musicMuted?"volume_off":"volume_up"} s={14}/></button><button onClick={()=>setShowAuth(true)} style={{...S.btn,background:account?"#4ade8022":"#ffffff08",color:account?"#4ade80":"#888",padding:"6px 12px",fontSize:"clamp(9px,2.2vw,12px)",border:account?"1px solid #4ade8033":"1px solid #333",fontWeight:700}}>{account?"✓ "+account.username:t("login")}</button>{account&&<><button onClick={cloudSave} style={{...S.btn,background:"#3b82f6",color:"#fff",padding:"6px 14px",fontSize:"clamp(10px,2.5vw,13px)",fontWeight:700}}><><MI n="cloud_upload" s={14}/> Save</></button><button onClick={cloudLoad} style={{...S.btn,background:"#8b5cf622",color:"#8b5cf6",padding:"6px 10px",fontSize:"clamp(9px,2.2vw,11px)"}}><><MI n="cloud_download" s={14}/> Load</></button></>}{saveStatus&&<span style={{color:saveStatus==="Saved!"?"#4ade80":"#fbbf24",fontSize:"clamp(9px,2.2vw,11px)",fontWeight:700,animation:"fadeUp .3s"}}>{saveStatus}</span>}<div style={S.chip}><span style={S.chipLbl}>BAL</span><BalanceTicker value={st.bal} color={st.bal<100?"#eb4b4b":"#4ade80"} fontSize="clamp(14px,3.5vw,20px)"/></div>{st.loan>0&&<div style={{...S.chip,borderColor:"#eb4b4b33"}}><span style={S.chipLbl}>DEBT</span><span style={{color:"#eb4b4b",fontWeight:700,fontSize:"clamp(12px,3vw,18px)"}}>{money(st.loan)}</span></div>}<div style={S.rentChip}>Rent: {money(RENT_AMT)} in {rentIn} opens</div></div></div>
     {!account&&<div style={{background:"#f59e0b11",borderBottom:"1px solid #f59e0b22",padding:"4px 12px",textAlign:"center",fontSize:"clamp(8px,2vw,10px)",color:"#f59e0b"}}>Login to save progress to cloud. Your data is local only!</div>}
     {events.filter(e=>!dismissedEvents[e.id]).map(e=>{const ec=e.type==="announcement"?"#f59e0b":e.type==="sale"?"#4ade80":e.type==="maintenance"?"#eb4b4b":e.type==="warning"?"#f97316":e.type==="update"?"#8b5cf6":e.type==="rain"?"#ffd700":e.type==="brainrot"?"#ff6767":e.type==="takeover"?"#e2e8f0":e.type==="jumpscare"?"#eb4b4b":"#3b82f6";const ei=e.type==="announcement"?"campaign":e.type==="sale"?"local_offer":e.type==="maintenance"?"build":e.type==="warning"?"warning":e.type==="update"?"system_update":e.type==="rain"?"payments":e.type==="brainrot"?"psychology":e.type==="takeover"?"wallpaper":e.type==="jumpscare"?"flash_on":"celebration";let sty={};try{sty=JSON.parse(e.style||"{}")}catch{};return <div key={e.id}>{e.type==="takeover"&&sty.image&&<div style={{position:"fixed",inset:0,zIndex:99,backgroundImage:"url("+sty.image+")",backgroundSize:"cover",backgroundPosition:"center",opacity:0.15,pointerEvents:"none"}}/>}{e.type==="jumpscare"&&sty.image&&!dismissedEvents["js_"+e.id]&&<div onClick={()=>setDismissedEvents(d=>({...d,["js_"+e.id]:true}))} style={{position:"fixed",inset:0,zIndex:99998,background:"#000",display:"flex",alignItems:"center",justifyContent:"center",cursor:"pointer"}}><img src={sty.image} style={{maxWidth:"90vw",maxHeight:"90vh",objectFit:"contain"}}/><div style={{position:"absolute",bottom:40,color:"#666",fontSize:12}}>Click to dismiss</div></div>}{e.type==="rain"&&<div style={{position:"fixed",top:0,left:0,right:0,height:"100vh",pointerEvents:"none",zIndex:98,overflow:"hidden"}}>{[...Array(20)].map((_,i)=><div key={i} style={{position:"absolute",left:Math.random()*100+"%",top:-20,fontSize:Math.random()*14+12,animation:"moneyRain "+(2+Math.random()*3)+"s linear "+(Math.random()*2)+"s infinite",opacity:0.6}}>{["💲","💰","💵","🤑"][i%4]}</div>)}</div>}<div className={"slideIn"+(sty.effect?" effect"+sty.effect[0].toUpperCase()+sty.effect.slice(1):"")} style={{background:ec+"18",borderBottom:"1px solid "+ec+"33",padding:"6px 12px",display:"flex",alignItems:"center",gap:8}}><MI n={ei} s={16} c={ec}/><div style={{flex:1}}><div style={{color:ec,fontWeight:700,fontSize:"clamp(10px,2.5vw,12px)"}}>{e.title}{e.discount>0&&<span style={{background:"#4ade80",color:"#000",padding:"1px 6px",borderRadius:4,fontSize:9,fontWeight:800,marginLeft:6}}>{e.discount}% OFF</span>}{e.type==="brainrot"&&<span style={{marginLeft:6,fontSize:9}}>🧠💀</span>}</div>{e.description&&<div style={{color:"#aaa",fontSize:"clamp(8px,2vw,10px)"}}>{e.description}</div>}{sty.image&&e.type!=="jumpscare"&&e.type!=="takeover"&&<img src={sty.image} style={{maxWidth:120,maxHeight:60,borderRadius:4,marginTop:4,objectFit:"cover"}}/>}</div><button onClick={()=>setDismissedEvents(d=>({...d,[e.id]:true,["js_"+e.id]:true}))} style={{background:"transparent",border:"none",color:"#555",cursor:"pointer"}}><MI n="close" s={14}/></button></div></div>})}
 
@@ -914,7 +1004,7 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
           {curLobby.status==="playing"&&curLobby.mode!=="buckshot"&&<div style={{background:"#141820",borderRadius:8,padding:"8px 14px",marginBottom:8,textAlign:"center"}}><div style={{color:"#f59e0b",fontWeight:800,fontSize:"clamp(20px,6vw,32px)"}}>{Math.floor(lobbyTimer/60000)}:{String(Math.floor((lobbyTimer%60000)/1000)).padStart(2,"0")}</div><div style={{color:"#888",fontSize:"clamp(8px,2vw,10px)"}}>Time remaining · $10,000 start · No loan</div></div>}
           {curLobby.status==="finished"&&<div style={{background:"#4ade8011",border:"1px solid #4ade8033",borderRadius:8,padding:10,marginBottom:8,textAlign:"center"}}><div style={{color:"#4ade80",fontWeight:800,fontSize:"clamp(14px,3.5vw,18px)"}}>Game Over!</div>{pvpWinModal&&<div style={{marginTop:6}}><div style={{color:"#4ade80",fontWeight:700}}>{pvpWinModal.winner===account?.username?<><MI n="celebration" s={16}/> YOU WON!</>:pvpWinModal.winner+" wins!"}</div>{(pvpWinModal.results||[]).map((p,i)=><div key={p.username} style={{display:"flex",justifyContent:"center",gap:8,fontSize:11,padding:2,color:i===0?"#ffd700":p.eliminated?"#eb4b4b88":"#ccc"}}><span>#{i+1}</span><span>{p.username}</span><span style={{color:p.profit>=0?"#4ade80":"#eb4b4b"}}>{p.profit>=0?"+":""}${(p.profit||0).toLocaleString()}</span>{p.eliminated&&<span style={{color:"#eb4b4b",fontSize:8}}>OUT</span>}</div>)}</div>}</div>}
           {/* Players */}
-          <div style={{fontSize:"clamp(10px,2.5vw,12px)",fontWeight:600,color:"#888",marginBottom:4}}>Players ({curLobby._players?.length||0}/5)</div>
+          <div style={{fontSize:"clamp(10px,2.5vw,12px)",fontWeight:600,color:"#888",marginBottom:4}}>Players ({curLobby._players?.length||0}/{curLobby.mode==="buckshot"?2:5})</div>
           <div style={{display:"flex",flexDirection:"column",gap:2,marginBottom:10}}>
             {(curLobby._players||[]).map((p,i)=><div key={p.username} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 10px",background:i===0&&curLobby.status==="finished"?"#4ade8011":"#141820",borderRadius:6,borderLeft:"3px solid "+(p.username===curLobby.host?"#f59e0b":"#333")}}>
               <span style={{color:i===0&&curLobby.status==="finished"?"#ffd700":"#888",fontWeight:700,width:20}}>{curLobby.status==="finished"?"#"+(i+1):""}</span>
@@ -925,10 +1015,10 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
             </div>)}
           </div>
           {/* BUCKSHOT ROULETTE GAME */}
-          {curLobby.mode==="buckshot"&&<div style={{background:"#0a0c10",border:"1px solid #f59e0b33",borderRadius:8,padding:10,marginBottom:10}}>
-            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
-              <div style={{color:"#f59e0b",fontWeight:800,fontSize:13,display:"flex",alignItems:"center",gap:6}}><MI n="local_fire_department" s={18}/> Buckshot Roulette</div>
-              <div style={{color:"#ffd700",fontWeight:700,fontSize:14}}>Pot: ${(curLobby.pot||0).toLocaleString()}</div>
+          {curLobby.mode==="buckshot"&&<div style={{...S.buckshotPanel,marginBottom:10}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
+              <div style={{...S.buckshotTitle,display:"flex",alignItems:"center",gap:8}}><MI n="local_fire_department" s={22} c="#eb4b4b"/> BUCKSHOT ROULETTE</div>
+              <div style={{fontFamily:"'Black Ops One',sans-serif",color:"#ffd700",fontSize:16,letterSpacing:2,textShadow:"0 0 6px #ffd70044"}}>POT: {money(curLobby.pot||0)}</div>
             </div>
             {curLobby.status==="waiting"&&<div>
               <div style={{color:"#888",fontSize:11,textAlign:"center",padding:8}}>
@@ -966,8 +1056,8 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
               </div>
               {/* Action buttons - only for the player whose turn it is */}
               {!buckshotState.winner&&buckshotState.turn===account.username&&!buckshotState.isSpectator&&<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:8}}>
-                <button onClick={async()=>{if(!confirm("Shoot yourself?"))return;const r=await api("/buckshot/shoot",{lobbyId:curLobby.id,username:account.username,target:"self"});if(r?.ok){if(r.shellType==="live"){document.body.classList.add("shakeHard");setTimeout(()=>document.body.classList.remove("shakeHard"),400);setToast({msg:"LIVE — "+r.damage+" damage to yourself!",color:"#eb4b4b"})}else setToast({msg:"Blank! You're safe — keep turn.",color:"#3b82f6"});if(r.winner){if(r.forceSync){await silentCloudSync()}if(r.winner===account.username){if(r.payoutError){setToast({msg:"Won but payout failed: "+r.payoutError,color:"#eb4b4b"})}else{setToast({msg:"You won $"+(r.payout||0).toLocaleString()+"!",color:"#4ade80"})}}}}else setToast({msg:r?.error||"Failed",color:"#eb4b4b"})}} style={{...S.btn,background:"#eb4b4b22",color:"#eb4b4b",border:"1px solid #eb4b4b55",fontWeight:700,padding:12}}>🔫 Shoot Self</button>
-                <button onClick={async()=>{if(!confirm("Shoot your opponent?"))return;const r=await api("/buckshot/shoot",{lobbyId:curLobby.id,username:account.username,target:"opponent"});if(r?.ok){if(r.shellType==="live"){document.body.classList.add("shakeHard");setTimeout(()=>document.body.classList.remove("shakeHard"),400);setToast({msg:"LIVE — "+r.damage+" damage to opponent!",color:"#4ade80"})}else setToast({msg:"Blank...",color:"#3b82f6"});if(r.winner){if(r.forceSync){await silentCloudSync()}if(r.winner===account.username){if(r.payoutError){setToast({msg:"Won but payout failed: "+r.payoutError,color:"#eb4b4b"})}else{setToast({msg:"You won $"+(r.payout||0).toLocaleString()+"!",color:"#4ade80"})}}}}else setToast({msg:r?.error||"Failed",color:"#eb4b4b"})}} style={{...S.btn,background:"#eb4b4b",color:"#fff",fontWeight:700,padding:12}}>🔫 Shoot Opponent</button>
+                <button onClick={async()=>{if(!confirm("Shoot yourself?"))return;const r=await api("/buckshot/shoot",{lobbyId:curLobby.id,username:account.username,target:"self"});if(r?.ok){if(r.shellType==="live"){_SND.sfx("live-shell",1.5);document.body.classList.add("shakeHard");setTimeout(()=>document.body.classList.remove("shakeHard"),400);setToast({msg:"LIVE — "+r.damage+" damage to yourself!",color:"#eb4b4b"})}else{_SND.sfx("empty-shell",1.2);setToast({msg:"Blank! You're safe — keep turn.",color:"#3b82f6"})}if(r.winner){_SND.stopMusic();if(r.forceSync){await silentCloudSync()}if(r.winner===account.username){if(r.payoutError){setToast({msg:"Won but payout failed: "+r.payoutError,color:"#eb4b4b"})}else{setToast({msg:"You won $"+(r.payout||0).toLocaleString()+"!",color:"#4ade80"})}}}}else setToast({msg:r?.error||"Failed",color:"#eb4b4b"})}} style={{...S.btnBuckshot,background:"#3a0a0a",color:"#eb4b4b",border:"2px solid #6b1818",fontWeight:700,padding:14}}>🔫 SHOOT SELF</button>
+                <button onClick={async()=>{if(!confirm("Shoot your opponent?"))return;const r=await api("/buckshot/shoot",{lobbyId:curLobby.id,username:account.username,target:"opponent"});if(r?.ok){if(r.shellType==="live"){_SND.sfx("live-shell",1.5);document.body.classList.add("shakeHard");setTimeout(()=>document.body.classList.remove("shakeHard"),400);setToast({msg:"LIVE — "+r.damage+" damage to opponent!",color:"#4ade80"})}else{_SND.sfx("empty-shell",1.2);setToast({msg:"Blank...",color:"#3b82f6"})}if(r.winner){_SND.stopMusic();if(r.forceSync){await silentCloudSync()}if(r.winner===account.username){if(r.payoutError){setToast({msg:"Won but payout failed: "+r.payoutError,color:"#eb4b4b"})}else{setToast({msg:"You won $"+(r.payout||0).toLocaleString()+"!",color:"#4ade80"})}}}}else setToast({msg:r?.error||"Failed",color:"#eb4b4b"})}} style={{...S.btnBuckshot,background:"#7a0a0a",color:"#fff",fontWeight:700,padding:14}}>🔫 SHOOT OPPONENT</button>
               </div>}
               {/* Waiting for opponent */}
               {!buckshotState.winner&&buckshotState.turn!==account.username&&!buckshotState.isSpectator&&<div style={{background:"#141820",borderRadius:6,padding:10,textAlign:"center",color:"#888",fontSize:11,marginBottom:8}}>Waiting for {buckshotState.turn} to act...</div>}
@@ -1057,7 +1147,7 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
             {/* Conversation list from received messages */}
             {(()=>{const convos={};(dmInbox?.received||[]).forEach(m=>{if(!convos[m.from_user])convos[m.from_user]={user:m.from_user,lastMsg:m.msg,ago:m.ago,unread:!m.read,pfp:m.pfp||""}});(dmInbox?.sent||[]).forEach(m=>{if(!convos[m.to_user])convos[m.to_user]={user:m.to_user,lastMsg:m.msg,ago:m.ago,pfp:m.to_pfp||""}});(dmInbox?.sent||[]).forEach(m=>{if(!convos[m.to_user])convos[m.to_user]={user:m.to_user,lastMsg:"You: "+m.msg,ago:m.ago}});return Object.values(convos).map(c=><button key={c.user} onClick={()=>setDmTo(c.user)} style={{display:"flex",gap:6,alignItems:"center",padding:"8px 10px",background:dmTo===c.user?"#1e2430":"transparent",border:"none",borderBottom:"1px solid #0a0c10",cursor:"pointer",width:"100%",fontFamily:"inherit"}}>
               <div style={{width:28,height:28,borderRadius:"50%",background:"#1e2430",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,flexShrink:0,cursor:"pointer"}} onClick={e=>{e.stopPropagation();showProfile(c.user)}}>{c.pfp?<img src={c.pfp} style={{width:28,height:28,borderRadius:"50%",objectFit:"cover"}}/>:<MI n="person" s={12} c="#555"/>}</div>
-              <div style={{flex:1,overflow:"hidden",textAlign:"left"}}><div style={{fontWeight:c.unread?700:600,fontSize:"clamp(9px,2.2vw,11px)",color:c.unread?"#e2e8f0":"#888"}}>{c.user}</div><div style={{fontSize:8,color:"#555",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.lastMsg?.slice(0,25)}</div></div>
+              <div style={{flex:1,overflow:"hidden",textAlign:"left"}}><div style={{fontWeight:c.unread?700:600,fontSize:"clamp(9px,2.2vw,11px)",color:c.unread?"#e2e8f0":"#888",display:"flex",alignItems:"center",gap:4}}><StatusDot status={userStatusMap[c.user]||"offline"} size={7}/>{c.user}</div><div style={{fontSize:8,color:"#555",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{c.lastMsg?.slice(0,25)}</div></div>
               {c.unread&&<div style={{width:6,height:6,borderRadius:"50%",background:"#3b82f6",flexShrink:0}}/>}
             </button>)})()}
           </div>
@@ -1790,10 +1880,22 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
     </div>}
 
     {/* PROFILE VIEW MODAL */}
+    {showSoundModal&&<div style={S.overlay} onClick={()=>setShowSoundModal(false)}><div style={{...S.modal,maxWidth:380,padding:20}} onClick={e=>e.stopPropagation()}>
+      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:14}}><MI n="volume_up" s={24} c="#3b82f6"/><div style={{fontSize:17,fontWeight:800}}>Sound Settings</div></div>
+      {[{label:"SFX",vol:_SND.sfxVol,muted:_SND.sfxMuted,setVol:v=>{_SND.setSfxVol(v);setSoundVer(x=>x+1)},toggle:()=>{_SND.toggleSfx();setSoundVer(x=>x+1)}},{label:"Music",vol:_SND.musicVol,muted:_SND.musicMuted,setVol:v=>{_SND.setMusicVol(v);setSoundVer(x=>x+1)},toggle:()=>{_SND.toggleMusic();setSoundVer(x=>x+1)}}].map((s,i)=><div key={i} style={{marginBottom:14,padding:12,background:"#0d1117",borderRadius:8,border:"1px solid #1e2430"}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+          <div style={{fontSize:13,fontWeight:700,color:"#cbd5e1"}}>{s.label}</div>
+          <button onClick={s.toggle} style={{...S.btn,background:s.muted?"#eb4b4b22":"#4ade8022",color:s.muted?"#eb4b4b":"#4ade80",fontSize:11,padding:"4px 10px",border:"1px solid "+(s.muted?"#eb4b4b44":"#4ade8044")}}><MI n={s.muted?"volume_off":"volume_up"} s={12}/> {s.muted?"Muted":"On"}</button>
+        </div>
+        <input type="range" min="0" max="1" step="0.05" value={s.vol} onChange={e=>s.setVol(parseFloat(e.target.value))} disabled={s.muted} style={{width:"100%",accentColor:s.muted?"#666":"#3b82f6",opacity:s.muted?0.4:1}}/>
+        <div style={{display:"flex",justifyContent:"space-between",fontSize:9,color:"#666",marginTop:2}}><span>0%</span><span style={{color:s.muted?"#666":"#3b82f6",fontWeight:700}}>{Math.round(s.vol*100)}%</span><span>100%</span></div>
+      </div>)}
+      <button onClick={()=>setShowSoundModal(false)} style={{...S.btn,background:"#3b82f6",color:"#fff",width:"100%",fontWeight:700,padding:10}}>Done</button>
+    </div></div>}
     {viewProfile&&<div style={S.overlay} onClick={()=>setViewProfile(null)}><div style={{...S.modal,maxWidth:"clamp(300px,85vw,440px)"}} onClick={e=>e.stopPropagation()}>
       <div style={{width:56,height:56,borderRadius:"50%",background:"#1e2430",display:"flex",alignItems:"center",justifyContent:"center",fontSize:28,overflow:"hidden"}}>{viewProfile.pfp?<img src={viewProfile.pfp} style={{width:56,height:56,borderRadius:"50%",objectFit:"cover"}}/>:<MI n="person" s={12} c="#666"/>}</div>
-      <div style={{fontSize:"clamp(16px,4vw,22px)",fontWeight:700}}>{viewProfile.display_name||viewProfile.username}</div>
-      <div style={{color:"#888",fontSize:"clamp(9px,2.2vw,11px)"}}>@{viewProfile.username} · {viewProfile.role||"user"}</div>
+      <div style={{fontSize:"clamp(16px,4vw,22px)",fontWeight:700,display:"flex",alignItems:"center",gap:8,justifyContent:"center"}}><StatusDot status={userStatusMap[viewProfile.username]||"offline"} size={10}/>{viewProfile.display_name||viewProfile.username}</div>
+      <div style={{color:"#888",fontSize:"clamp(9px,2.2vw,11px)",display:"flex",alignItems:"center",gap:6,justifyContent:"center"}}>@{viewProfile.username} · {viewProfile.role||"user"} · <StatusDot status={userStatusMap[viewProfile.username]||"offline"} withLabel/></div>
       <div style={{color:"#555",fontSize:"clamp(8px,2vw,9px)",fontFamily:"monospace"}}>ID: {viewProfile.uid||"?"}</div>
       {viewProfile.bio&&viewProfile.privacy!=="private"&&<div style={{color:"#ccc",fontSize:"clamp(10px,2.5vw,12px)",fontStyle:"italic",textAlign:"center"}}>{viewProfile.bio}</div>}
       {/* Always-public stats */}
@@ -1937,6 +2039,10 @@ const S={
   hdrRight:{display:"flex",alignItems:"center",gap:"clamp(4px,1.5vw,8px)",flexWrap:"wrap"},
   chip:{display:"flex",flexDirection:"column",alignItems:"center",background:"#0d1117",border:"1px solid #151820",borderRadius:8,padding:"2px clamp(8px,2.5vw,14px)"},
   chipLbl:{color:"#777",fontSize:"clamp(7px,1.8vw,9px)",letterSpacing:1},
+  // Buckshot Roulette theme — Special Elite (typewriter) for body, Black Ops One for headers
+  buckshotPanel:{fontFamily:"'Special Elite',serif",background:"linear-gradient(180deg,#1a0808,#0a0404)",border:"2px solid #5a1a1a",borderRadius:6,padding:14,boxShadow:"inset 0 0 40px rgba(0,0,0,0.6)"},
+  buckshotTitle:{fontFamily:"'Black Ops One',sans-serif",fontSize:18,fontWeight:400,letterSpacing:3,color:"#eb4b4b",textTransform:"uppercase",textShadow:"0 0 8px #eb4b4b66"},
+  btnBuckshot:{fontFamily:"'Black Ops One',sans-serif",letterSpacing:2,textTransform:"uppercase",fontSize:13,padding:"10px 18px",borderRadius:4,border:"2px solid currentColor",cursor:"pointer",transition:"all .15s"},
   rentChip:{background:"#f59e0b0a",border:"1px solid #f59e0b1a",borderRadius:8,padding:"4px 10px",fontSize:"clamp(9px,2.2vw,11px)",color:"#f59e0b",fontWeight:600},
   nav:{display:"flex",overflowX:"auto",WebkitOverflowScrolling:"touch",scrollbarWidth:"none",gap:3,padding:"6px clamp(12px,3vw,20px)",borderBottom:"1px solid #151820",flexWrap:"wrap"},
   tab:{background:"#1a1f2e",border:"1px solid #2a3040",color:"#e2e8f0",padding:"6px 12px",fontSize:"clamp(10px,2.5vw,13px)",fontWeight:600,borderRadius:6,transition:"all .15s"},
