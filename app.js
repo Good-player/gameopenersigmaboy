@@ -184,10 +184,28 @@ const _SND={
       const el=new Audio("sound/"+name+".mp3");
       el.loop=loop!==false;
       el.volume=this.musicMuted?0:this.musicVol;
-      el.play().catch(()=>{/* autoplay blocked, will start on next user gesture */});
       this._musicEl=el;
       this._currentMusic=name;
-    }catch{}
+      const p=el.play();
+      if(p&&p.catch){
+        p.catch((err)=>{
+          console.warn("[music] autoplay blocked for",name,"-",err?.name||err);
+          // Queue: replay on next user gesture
+          this._pendingMusic=name;
+          const retry=()=>{
+            if(this._pendingMusic&&this._musicEl){
+              this._musicEl.play().then(()=>{this._pendingMusic=null;console.log("[music] resumed",name)}).catch(()=>{});
+            }
+            window.removeEventListener("click",retry);
+            window.removeEventListener("touchstart",retry);
+            window.removeEventListener("keydown",retry);
+          };
+          window.addEventListener("click",retry,{once:true});
+          window.addEventListener("touchstart",retry,{once:true});
+          window.addEventListener("keydown",retry,{once:true});
+        });
+      }
+    }catch(e){console.warn("[music] error",e)}
   },
   stopMusic(){
     if(this._musicEl){try{this._musicEl.pause();this._musicEl=null}catch{}}
@@ -1044,7 +1062,7 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
                 {(curLobby._players?.length||0)<2?"Waiting for opponent ("+(curLobby._players?.length||0)+"/2)...":"Both players ready. Host can start."}
               </div>
               <div style={{color:"#94a3b8",fontSize:10,textAlign:"center",marginBottom:8}}>Each player has 3 charges. Shells are loaded with a mix of live and blank rounds. Shoot yourself or your opponent. Last one standing wins ${(curLobby.pot||0).toLocaleString()}.</div>
-              {curLobby.host===account.username&&(curLobby._players?.length||0)===2&&<button onClick={async()=>{const r=await api("/buckshot/start",{lobbyId:curLobby.id,username:account.username});if(r?.ok){refreshLobby(curLobby.id)}else setToast({msg:r?.error||"Failed",color:"#eb4b4b"})}} style={{...S.btn,background:"#eb4b4b",color:"#fff",fontWeight:800,width:"100%",padding:10}}>START GAME 🔫</button>}
+              {curLobby.host===account.username&&(curLobby._players?.length||0)===2&&<button onClick={async()=>{_SND.playMusic("Generalrelease");const r=await api("/buckshot/start",{lobbyId:curLobby.id,username:account.username});if(r?.ok){refreshLobby(curLobby.id)}else setToast({msg:r?.error||"Failed",color:"#eb4b4b"})}} style={{...S.btn,background:"#eb4b4b",color:"#fff",fontWeight:800,width:"100%",padding:10}}>START GAME 🔫</button>}
               {curLobby.host===account.username&&<button onClick={async()=>{if(!confirm("Cancel lobby and refund all bets?"))return;const r=await api("/buckshot/cancel",{lobbyId:curLobby.id,username:account.username});if(r?.ok){if(r.refunded){setSt(p=>{const ns={...p,bal:p.bal+(curLobby.bet||0)};save(ns,drops);return ns});setToast({msg:"Refunded $"+(curLobby.bet||0).toLocaleString(),color:"#4ade80"})}setCurLobby(null);clearInterval(lobbyPollRef.current);refreshLobbies()}else setToast({msg:r?.error||"Failed",color:"#eb4b4b"})}} style={{...S.btn,background:"#eb4b4b22",color:"#eb4b4b",fontWeight:700,width:"100%",marginTop:6,fontSize:11}}>Cancel & Refund</button>}
             </div>}
             {curLobby.status==="playing"&&buckshotState&&(()=>{
