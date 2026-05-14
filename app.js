@@ -853,11 +853,11 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
     <div style={S.nav}>{[["shop",t("tab_shop")],["inv",`${t("tab_inv")} (${st.inv.length})`],["stats",t("tab_stats")],["loan",t("tab_loan")],["flip",t("tab_flip")],["pvp",t("tab_pvp")],["live",t("tab_live")],["lb",t("tab_lb")],["chat",t("tab_chat")],["dm",`${t("tab_dm")}${dmUnread>0?" ("+dmUnread+")":""}`],["me",t("tab_me")],["map",t("tab_map")],["horse",t("tab_horse")],["bj",t("tab_bj")],["btc",t("tab_btc")],["plinko",t("tab_plinko")],["roulette",t("tab_roulette")],["wheel",t("tab_wheel")],["school",t("tab_weather")]].map(([k,l])=>(<button key={k} onClick={()=>{if(!opening||scrollDone||k==="shop"){setPage(k);if(k!=="opening")setOpening(false);if(k==="map")getOnline().then(r=>{if(r)setOnlineData(r)});if(k==="pvp")refreshLobbies();if(k==="bj"&&account){api("/bj/buycard",{username:account.username,token:account.token}).then(r=>{if(r?.hasCard)setBjHasCard(true)})}if(k==="btc"){/* useEffect handles initial load */}if(k==="wheel"&&account){api("/wheel/status",{username:account.username}).then(r=>setWheelStatus(r))}if(k==="school"){if(!weatherData){api("/weather/today",{lat:59.4288,lon:17.9498}).then(r=>{setWeatherData(r)})}if(!smhiWarnings){api("/weather/warnings",{}).then(r=>{setSmhiWarnings(r||{warnings:[]})})}if(!pollenData){api("/weather/pollen",{}).then(r=>{setPollenData(r||{today:[]})})}if(!airData){api("/weather/air",{lat:59.4288,lon:17.9498}).then(r=>{setAirData(r)})}}if(k==="dm"&&account){api("/dm/inbox",{username:account.username,token:account.token}).then(r=>{if(r?.ok){setDmInbox(r);setDmUnread(0);const mx=Math.max(0,...(r.received||[]).map(m=>m.id||0),...(r.sent||[]).map(m=>m.id||0));if(mx>lastDmIdRef.current)lastDmIdRef.current=mx;api("/dm/read",{username:account.username,token:account.token})}}).catch(()=>{setTimeout(()=>{api("/dm/inbox",{username:account.username,token:account.token}).then(r2=>{if(r2?.ok){setDmInbox(r2);setDmUnread(0);const mx=Math.max(0,...(r2.received||[]).map(m=>m.id||0),...(r2.sent||[]).map(m=>m.id||0));if(mx>lastDmIdRef.current)lastDmIdRef.current=mx}})},2000)})}}}} style={{...S.tab,...(page===k||(page==="opening"&&k==="shop")?S.tabOn:{}),color:k==="dm"&&dmUnread>0?"#f59e0b":undefined}}>{l}</button>))}{account&&["admin","owner","mod"].includes(account.role)&&<button onClick={()=>{if(account.role==="owner")window.owner();else window.admin()}} style={{...S.tab,background:"#ff000022",color:"#ff4444",border:"1px solid #ff000044"}}>{account.role==="owner"?"Owner":"Admin"}</button>}<button onClick={()=>setConfirmReset(true)} style={{...S.tab,marginLeft:"auto",color:"#eb4b4b"}}>Reset</button></div>
 
     {/* SHOP */}
-    /* ═══════════ SHOP / case grid ═══════════ */
+    {/* ═══════════ SHOP / case grid ═══════════ */}
     {page==="shop"&&<div style={S.body}><div style={S.grid}>{CASES.map(c=>{const cP=saleDiscount>0?Math.floor(c.price*(1-saleDiscount/100)):c.price;const ok=st.bal>=cP;return(<div key={c.id} style={{...S.card,borderColor:c.color+"44",opacity:ok?1:.35}}><div style={{...S.cardIcon,background:c.color+"12",borderColor:c.color+"28"}}><span style={{fontSize:"clamp(26px,6.5vw,40px)"}}>{c.icon}</span></div><div style={S.cardName}>{c.name}</div><div style={{...S.cardPrice,color:c.color}}>{saleDiscount>0&&<span style={{textDecoration:"line-through",color:"#666",fontSize:"clamp(9px,2.5vw,12px)",marginRight:4}}>{money(c.price)}</span>}{money(saleDiscount>0?Math.floor(c.price*(1-saleDiscount/100)):c.price)}</div><div style={{display:"flex",flexDirection:"column",gap:3,width:"100%"}}><div style={{display:"flex",gap:3}}><button disabled={!ok} onClick={()=>doOpen(c)} style={{...S.btn,background:ok?c.color:"#333",color:"#fff",flex:2,padding:"clamp(5px,1.2vw,8px) 0",fontSize:"clamp(9px,2.3vw,12px)"}}>Open</button><button disabled={st.bal<cP*10||c.id==="epstein"} onClick={()=>{if(c.id==="epstein"){setToast({msg:"No bulk opening for this case",color:"#eb4b4b"});return}doMultiOpen(c,10)}} style={{...S.btn,background:st.bal>=cP*10?c.color+"aa":"#222",color:st.bal>=cP*10?"#fff":"#555",flex:1,padding:"clamp(5px,1.2vw,8px) 0",fontSize:"clamp(8px,2vw,10px)"}}>x10</button></div><button onClick={()=>{setInspecting(c);setPage("inspect")}} style={{...S.btn,background:"#ffffff06",color:"#666",padding:"3px 0",fontSize:"clamp(8px,2vw,10px)"}}>Inspect</button></div></div>)})}</div></div>}
 
     {/* OPENING */}
-    /* ═══════════ CASE OPENING animation ═══════════ */
+    {/* ═══════════ CASE OPENING animation ═══════════ */}
     {page==="opening"&&<div style={S.body}>
       <div style={{textAlign:"center",padding:"clamp(6px,1.5vw,10px) 0",color:"#555",fontSize:"clamp(10px,2.5vw,13px)"}}>{scrollDone?"":"Opening "+selCase?.name+"..."}</div>
       <div style={S.scrollOuter}><div style={S.marker}/><div style={S.scrollClip}><div ref={stripRef} style={S.strip}>{scrollItems.map((item,i)=>{const rar=R[item.rarity];const won=i===WIN_IDX&&scrollDone;return(<div key={i} style={{...S.sItem,borderBottomColor:rar.color,background:won?rar.bg:"#0c0e13",transform:won?"scale(1.08)":"none",transition:"all 0.3s ease",boxShadow:won?"0 0 12px "+rar.color+"66":"none",zIndex:won?2:0}}><div style={{fontSize:"clamp(16px,4vw,28px)",lineHeight:1}}>{item.rarity==="chroma"?<span style={{color:"#ffd700",textShadow:"0 0 8px #ffd70066"}}><MI n="star" s={24} c="#ffd700"/></span>:<span>{item.icon||"?"}</span>}</div><div style={{fontSize:"clamp(6px,1.6vw,9px)",color:rar.color,fontWeight:600,textAlign:"center",lineHeight:1.15,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",width:"100%"}}>{item.name}</div></div>)})}</div></div></div>
@@ -886,11 +886,11 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
     </div>}
 
     {/* INSPECT */}
-    /* ═══════════ INSPECT case ═══════════ */
+    {/* ═══════════ INSPECT case ═══════════ */}
     {page==="inspect"&&inspecting&&<div style={S.body}><button onClick={()=>setPage("shop")} style={{...S.btn,background:"#ffffff08",color:"#666",marginBottom:10}}>&larr; Back</button><div style={{fontSize:"clamp(15px,4vw,20px)",fontWeight:700,marginBottom:10}}>{inspecting.icon} {inspecting.name} &mdash; {money(inspecting.price)}</div><div style={S.iList}><div style={S.iHdr}><span>Item</span><span>Rarity</span><span>Value</span><span>Rate</span></div>{[...inspecting.items].sort((a,b)=>R[b.rarity].chance-R[a.rarity].chance).map((item,i)=>{const pool=inspecting.items.filter(x=>x.rarity===item.rarity).length;const p=((R[item.rarity].chance/pool)*100).toFixed(2);return(<div key={i} style={{...S.iRow,borderLeftColor:R[item.rarity].color}}><span style={{fontWeight:600}}>{item.icon} {item.name}</span><span style={{color:R[item.rarity].color,fontWeight:600}}>{R[item.rarity].label}</span><span style={{color:"#4ade80"}}>{money(item.value)}</span><span style={{color:"#666"}}>{p}%</span></div>)})}</div><div style={{marginTop:16}}><div style={{fontSize:"clamp(12px,3vw,14px)",fontWeight:600,marginBottom:8,color:"#777"}}>Drop Rates</div>{Object.entries(R).map(([k,v])=><div key={k} style={{display:"flex",alignItems:"center",gap:6,marginBottom:3}}><span style={{color:v.color,fontWeight:600,width:"clamp(60px,18vw,90px)",fontSize:"clamp(9px,2.5vw,12px)"}}>{v.label}</span><div style={{flex:1,height:5,background:"#1a1d24",borderRadius:3,overflow:"hidden"}}><div style={{height:"100%",borderRadius:3,background:v.color,width:`${Math.max(v.chance*200,1)}%`}}/></div><span style={{color:"#666",width:"clamp(32px,10vw,48px)",textAlign:"right",fontSize:"clamp(8px,2.2vw,11px)"}}>{(v.chance*100).toFixed(1)}%</span></div>)}</div></div>}
 
     {/* INVENTORY */}
-    /* ═══════════ INVENTORY ═══════════ */
+    {/* ═══════════ INVENTORY ═══════════ */}
     {page==="inv"&&<div style={S.body}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8,flexWrap:"wrap",gap:6}}><div style={{fontSize:"clamp(15px,4vw,20px)",fontWeight:700}}>Inventory ({st.inv.length})</div><div style={{color:"#888",fontSize:"clamp(9px,2.2vw,11px)"}}>Total: {money(invTotal)} | <MI n="star" s={11} c="#ffd700"/> {Object.keys(st.starred||{}).length}</div></div>
       <div style={{display:"flex",gap:4,marginBottom:10,flexWrap:"wrap",alignItems:"center"}}>
@@ -908,7 +908,7 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
     </div>}
 
     {/* STATS */}
-    /* ═══════════ STATS chart ═══════════ */
+    {/* ═══════════ STATS chart ═══════════ */}
     {page==="stats"&&(()=>{const hist=st.history||[{n:0,bal:DEFAULT_BAL}];const vals=hist.map(h=>h.bal);const minV=Math.min(...vals,0);const maxV=Math.max(...vals,DEFAULT_BAL);const range=maxV-minV||1;const W=800,H=320,PAD={t:30,r:20,b:40,l:60};const cw=W-PAD.l-PAD.r,ch=H-PAD.t-PAD.b;const x=i=>PAD.l+(hist.length<=1?cw/2:(i/(hist.length-1))*cw);const y=v=>PAD.t+ch-((v-minV)/range)*ch;const pts=hist.map((h,i)=>`${x(i)},${y(h.bal)}`).join(" ");const area=`M${x(0)},${y(hist[0].bal)} `+hist.map((h,i)=>`L${x(i)},${y(h.bal)}`).join(" ")+` L${x(hist.length-1)},${y(minV)} L${x(0)},${y(minV)} Z`;const tips=hist.map((h,i)=>h.label?{...h,i}:null).filter(Boolean);const gridLines=[];for(let g=0;g<=5;g++){const val=minV+(range*g)/5;gridLines.push({y:y(val),val})}const startY=y(DEFAULT_BAL);return(
       <div style={S.body}><div style={{fontSize:"clamp(15px,4vw,20px)",fontWeight:700,marginBottom:10}}>Stats</div>
         <div style={{background:"#0d1117",border:"1px solid #151820",borderRadius:10,padding:"clamp(10px,2.5vw,16px)",marginBottom:14,overflow:"hidden"}}><div style={{fontSize:"clamp(10px,2.5vw,13px)",fontWeight:700,color:"#888",marginBottom:8}}>Balance History</div>
@@ -930,7 +930,7 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
       </div>)})()}
 
     {/* LOAN */}
-    /* ═══════════ LOAN / credit ═══════════ */
+    {/* ═══════════ LOAN / credit ═══════════ */}
     {page==="loan"&&(()=>{
       const cs=st.creditScore||500;
       const tier=cs>=700?"Excellent":cs>=500?"Good":cs>=300?"Fair":cs>=150?"Poor":"Very Poor";
@@ -996,7 +996,7 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
     })()}
 
     {/* LIVE FEED */}
-    /* ═══════════ LIVE FEED ═══════════ */
+    {/* ═══════════ LIVE FEED ═══════════ */}
     {page==="live"&&<div style={S.body}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
         <div style={{fontSize:"clamp(15px,4vw,20px)",fontWeight:700}}><MI n="stream" s={20} c="#eb4b4b"/> Live Opens</div>
@@ -1021,7 +1021,7 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
     </div>}
 
     {/* LEADERBOARD */}
-    /* ═══════════ LEADERBOARD ═══════════ */
+    {/* ═══════════ LEADERBOARD ═══════════ */}
     {page==="lb"&&<div style={S.body}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
         <div style={{fontSize:"clamp(15px,4vw,20px)",fontWeight:700}}><MI n="leaderboard" s={20}/> Leaderboard</div>
@@ -1041,7 +1041,7 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
     </div>}
 
     {/* CHAT */}
-    /* ═══════════ GLOBAL CHAT ═══════════ */
+    {/* ═══════════ GLOBAL CHAT ═══════════ */}
     {page==="chat"&&<div style={S.body}>
       <div style={{fontSize:"clamp(15px,4vw,20px)",fontWeight:700,marginBottom:12}}><MI n="chat" s={20}/> Chat Room</div>
       <div style={{background:"#0d1117",border:"1px solid #151820",borderRadius:8,padding:10,height:"clamp(200px,50vh,400px)",overflowY:"auto",display:"flex",flexDirection:"column-reverse",gap:4,marginBottom:10}} id="__chatbox">
@@ -1061,7 +1061,7 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
     </div>}
 
     {/* COIN FLIP */}
-    /* ═══════════ COIN FLIP ═══════════ */
+    {/* ═══════════ COIN FLIP ═══════════ */}
     {page==="flip"&&<div style={S.body}>
       <div style={{fontSize:"clamp(15px,4vw,20px)",fontWeight:700,marginBottom:12}}><MI n="monetization_on" s={20}/> Coin Flip <span style={{color:"#888",fontSize:"clamp(9px,2.2vw,11px)",fontWeight:400}}>49% win rate</span></div>
       <div style={{background:"#0d1117",border:"1px solid #151820",borderRadius:12,padding:"clamp(16px,4vw,28px)",display:"flex",flexDirection:"column",alignItems:"center",gap:12}}>
@@ -1077,9 +1077,12 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
     </div>}
 
     {/* PVP LOBBY */}
-    /* ═══════════ PVP ARENA + BUCKSHOT ROULETTE ═══════════ */
+    {/* ═══════════ PVP ARENA + BUCKSHOT ROULETTE ═══════════ */}
     {page==="pvp"&&<div style={S.body}>
-      <div style={{fontSize:"clamp(15px,4vw,20px)",fontWeight:700,marginBottom:12}}><MI n="sports_kabaddi" s={20}/> PvP Arena</div>
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12,gap:8,flexWrap:"wrap"}}>
+        <div style={{fontSize:"clamp(15px,4vw,20px)",fontWeight:700}}><MI n="sports_kabaddi" s={20}/> PvP Arena</div>
+        {!curLobby&&account&&<button onClick={async()=>{const ok=await askConfirm({title:"Escape stuck lobby",message:"Use this if you can't create or join a lobby because of a previous broken game. Any unfinished bets will be refunded.",ok:"Clear & refund",color:"#fbbf24",icon:"emergency"});if(!ok)return;const r=await api("/lobby/force-leave",{username:account.username});if(r?.ok){if(r.refundedTotal>0){setToast({msg:"Cleared "+r.kickedFrom+" stale lobby, refunded "+money(r.refundedTotal),color:"#4ade80"});try{await silentCloudSync()}catch{}}else if(r.kickedFrom>0){setToast({msg:"Cleared "+r.kickedFrom+" stale lobby entries",color:"#4ade80"})}else{setToast({msg:"No stuck lobbies found",color:"#888"})}refreshLobbies&&refreshLobbies()}else{setToast({msg:r?.error||"Failed",color:"#eb4b4b"})}}} style={{...S.btn,background:"#fbbf2422",color:"#fbbf24",border:"1px solid #fbbf2444",fontSize:"clamp(9px,2vw,11px)",padding:"4px 10px"}} title="Use if you can't join/create a lobby">🛟 Escape stuck lobby</button>}
+      </div>
       {!account?<div style={{color:"#f59e0b",background:"#f59e0b11",padding:12,borderRadius:8,textAlign:"center"}}>Login required for PvP</div>:
       curLobby?<div>
         {/* IN-LOBBY VIEW */}
@@ -1258,7 +1261,22 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
             </div>
             <div style={{color:"#888",fontSize:9,marginTop:4}}>Money locked on join. Refunded only if lobby canceled before start. Once started: winner gets the pool, loser gets nothing.</div>
           </div>}
-          <button onClick={async()=>{const name=createLobbyName.trim()||account.username+"'s lobby";const bet=parseInt(createLobbyBet)||0;if(createLobbyMode==="buckshot"&&(bet<100||bet>st.bal)){setToast({msg:bet>st.bal?"Insufficient balance for bet":"Min bet $100",color:"#eb4b4b"});return}const r=await api("/lobby/create",{username:account.username,name,lobbyPassword:createLobbyPw,mode:createLobbyMode,bet,slot});if(r?.lobbyId){if(r.betLocked>0){setToast({msg:"Locked "+money(r.betLocked)+" in pot",color:"#f59e0b"});try{await silentCloudSync()}catch{}}setCreateLobbyName("");setCreateLobbyPw("");await refreshLobby(r.lobbyId)}else{setToast({msg:r?.error||"Failed",color:"#eb4b4b"})}}} style={{...S.btn,background:"#4ade80",color:"#000",fontWeight:700,width:"100%"}}>Create Lobby</button>
+          <button onClick={async()=>{
+            const name=createLobbyName.trim()||account.username+"'s lobby";
+            const bet=parseInt(createLobbyBet)||0;
+            if(createLobbyMode==="buckshot"&&(bet<100||bet>st.bal)){setToast({msg:bet>st.bal?"Insufficient balance for bet":"Min bet $100",color:"#eb4b4b"});return}
+            const tryCreate=async()=>api("/lobby/create",{username:account.username,name,lobbyPassword:createLobbyPw,mode:createLobbyMode,bet,slot});
+            let r=await tryCreate();
+            // If stuck in a ghost lobby, force-leave and retry once
+            if(!r?.lobbyId&&r?.error&&(r.error.indexOf("already")>=0||r.error.indexOf("Leave your current")>=0)){
+              const fl=await api("/lobby/force-leave",{username:account.username});
+              if(fl?.ok){
+                if(fl.refundedTotal>0){setToast({msg:"Cleared "+fl.kickedFrom+" stale lobby, refunded "+money(fl.refundedTotal),color:"#fbbf24"});try{await silentCloudSync()}catch{}}
+                r=await tryCreate();
+              }
+            }
+            if(r?.lobbyId){if(r.betLocked>0){setToast({msg:"Locked "+money(r.betLocked)+" in pot",color:"#f59e0b"});try{await silentCloudSync()}catch{}}setCreateLobbyName("");setCreateLobbyPw("");await refreshLobby(r.lobbyId)}else{setToast({msg:r?.error||"Failed",color:"#eb4b4b"})}
+          }} style={{...S.btn,background:"#4ade80",color:"#000",fontWeight:700,width:"100%"}}>Create Lobby</button>
         </div>
         {/* LOBBY LIST */}
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
@@ -1281,7 +1299,7 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
     </div>}
 
     {/* DMs - Discord-style */}
-    /* ═══════════ DIRECT MESSAGES ═══════════ */
+    {/* ═══════════ DIRECT MESSAGES ═══════════ */}
     {page==="dm"&&<div style={S.body}>
       <div style={{fontSize:"clamp(15px,4vw,20px)",fontWeight:700,marginBottom:12}}><MI n="mail" s={20}/> Messages</div>
       {!account?<div style={{color:"#f59e0b",padding:12,textAlign:"center"}}>Login required</div>:<div style={{display:"flex",gap:10,height:"clamp(300px,60vh,500px)"}}>
@@ -1325,7 +1343,7 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
     </div>}
 
     {/* PROFILE */}
-    /* ═══════════ ME / profile / settings ═══════════ */
+    {/* ═══════════ ME / profile / settings ═══════════ */}
     {page==="me"&&<div style={S.body}>
       <div style={{fontSize:"clamp(15px,4vw,20px)",fontWeight:700,marginBottom:12}}><MI n="person" s={20}/> My Profile</div>
       {!account?<div style={{color:"#f59e0b",padding:12,textAlign:"center"}}>Login required</div>:<>
@@ -1346,7 +1364,7 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
 
     
     {/* MULTI OPEN RESULTS */}
-    /* ═══════════ MULTI-OPEN results ═══════════ */
+    {/* ═══════════ MULTI-OPEN results ═══════════ */}
     {page==="multi"&&multiResults&&<div style={S.body}>
       <div style={{fontSize:"clamp(15px,4vw,20px)",fontWeight:700,marginBottom:8}}>x{multiResults.items.length} Opening Results</div>
       <div style={{display:"flex",gap:8,marginBottom:12,flexWrap:"wrap",justifyContent:"center"}}>
@@ -1370,7 +1388,7 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
     </div>}
 
         {/* PLINKO */}
-    /* ═══════════ PLINKO ═══════════ */
+    {/* ═══════════ PLINKO ═══════════ */}
     {page==="plinko"&&<div style={{...S.body,maxWidth:600,margin:"0 auto"}}>
       <div style={{fontSize:"clamp(16px,4vw,22px)",fontWeight:800,marginBottom:8}}>🎯 Plinko</div>
       <canvas ref={plinkoCanvasRef} style={{width:"100%",maxWidth:500,background:"#0d1117",border:"1px solid #1e2430",borderRadius:8,display:"block",margin:"0 auto"}}/>
@@ -1435,7 +1453,7 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
     </div>}
 
     {/* ROULETTE */}
-    /* ═══════════ ROULETTE ═══════════ */
+    {/* ═══════════ ROULETTE ═══════════ */}
     {page==="roulette"&&<div style={{...S.body,maxWidth:700,margin:"0 auto"}}>
       <div style={{fontSize:"clamp(16px,4vw,22px)",fontWeight:800,marginBottom:8}}>🎰 Roulette</div>
       <div style={{display:"flex",flexDirection:"column",alignItems:"center",gap:8}}>
@@ -1575,7 +1593,7 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
     </div>}
 
     {/* FAQ */}
-    /* ═══════════ FAQ ═══════════ */
+    {/* ═══════════ FAQ ═══════════ */}
     {page==="faq"&&<div style={{...S.body,maxWidth:720,margin:"0 auto"}}>
       <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:6}}>
         <button onClick={()=>setPage("shop")} style={{...S.btn,background:"#ffffff08",color:"#888",padding:"4px 10px",fontSize:11,display:"inline-flex",alignItems:"center",gap:3}}><MI n="arrow_back" s={14}/>{t("back")}</button>
@@ -1607,7 +1625,7 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
     </div>}
 
     {/* WEATHER */}
-    /* ═══════════ WEATHER ═══════════ */
+    {/* ═══════════ WEATHER ═══════════ */}
     {page==="school"&&(()=>{
       const wIcon=(s)=>{
         if(!s)return"cloud";
@@ -1815,7 +1833,7 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
     })()}
 
             {/* WHEEL OF FORTUNE */}
-    /* ═══════════ WHEEL OF FORTUNE ═══════════ */
+    {/* ═══════════ WHEEL OF FORTUNE ═══════════ */}
     {page==="wheel"&&<div style={{...S.body,maxWidth:520,margin:"0 auto"}}>
       <div style={{fontSize:"clamp(20px,5vw,28px)",fontWeight:800,marginBottom:6,display:"flex",alignItems:"center",gap:8,animation:"fadeUp .4s"}}><MI n="casino" s={28} c="#ffd700" f={{filter:"drop-shadow(0 0 8px #ffd70066)"}}/> {t("wheel_title")}</div>
       <div style={{color:"#94a3b8",fontSize:12,marginBottom:16,animation:"fadeUp .5s"}}>{t("wheel_subtitle")}</div>
@@ -1931,7 +1949,7 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
     </div>}
 
                 {/* BLACKJACK */}
-    /* ═══════════ BLACKJACK ═══════════ */
+    {/* ═══════════ BLACKJACK ═══════════ */}
     {page==="bj"&&<div style={{...S.body,maxWidth:650,margin:"0 auto"}}>
       <div style={{fontSize:"clamp(16px,4vw,22px)",fontWeight:800,marginBottom:8}}>♠ Blackjack</div>
       {bjTable?(()=>{
@@ -1982,7 +2000,7 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
     </div>}
 
     {/* BITCOIN */}
-    /* ═══════════ BITCOIN ═══════════ */
+    {/* ═══════════ BITCOIN ═══════════ */}
     {page==="btc"&&<div style={{...S.body,maxWidth:650,margin:"0 auto"}}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8,flexWrap:"wrap",gap:6}}>
         <div style={{fontSize:"clamp(16px,4vw,22px)",fontWeight:800}}>₿ Bitcoin Investment</div>
@@ -2016,7 +2034,7 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
     </div>}
 
     {/* HORSE RACING */}
-    /* ═══════════ HORSE RACING ═══════════ */
+    {/* ═══════════ HORSE RACING ═══════════ */}
     {page==="horse"&&<div style={{...S.body,maxWidth:600,margin:"0 auto"}}>
       <div style={{fontSize:"clamp(15px,4vw,20px)",fontWeight:700,marginBottom:12}}><MI n="emoji_nature" s={20}/> Horse Racing</div>
       {!horseRace?<div style={{display:"flex",flexDirection:"column",gap:12,alignItems:"center"}}>
@@ -2102,7 +2120,7 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
     </div></div>}
 
     {/* ONLINE MAP */}
-    /* ═══════════ WORLD MAP ═══════════ */
+    {/* ═══════════ WORLD MAP ═══════════ */}
     {page==="map"&&<div style={S.body}>
       <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12}}>
         <div style={{fontSize:"clamp(15px,4vw,20px)",fontWeight:700}}><MI n="public" s={20}/> Online Players</div>
