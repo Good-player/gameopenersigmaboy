@@ -167,6 +167,72 @@
       wheel_rules: "Prizes: $1K to $2M. Higher prizes are rarer.",
       wheel_login_required: "Log in to spin the wheel",
       
+      // Status
+      status_online: "Online",
+      status_away: "Away",
+      status_offline: "Offline",
+      
+      // Loan v2
+      loan_request: "Request Loan",
+      loan_repay: "Repay",
+      loan_credit_score: "Credit Score",
+      loan_amount: "How much do you want?",
+      loan_payback: "When will you pay it back?",
+      loan_minutes: "{n} min",
+      loan_max_online: "Max 10 online min",
+      loan_sign: "Sign & Borrow",
+      loan_deadline_pass: "Loan deadline missed! -50 credit",
+      loan_deadline_remaining: "Loan deadline: {n} online min remaining",
+      loan_owe: "You owe {amount}",
+      loan_receive: "You receive",
+      loan_interest: "Interest ({rate}%)",
+      loan_tier_excellent: "Excellent",
+      loan_tier_good: "Good",
+      loan_tier_fair: "Fair",
+      loan_tier_poor: "Poor",
+      loan_tier_very_poor: "Very Poor",
+      
+      // Common actions
+      sell: "Sell",
+      spin_again: "Spin Again",
+      open_again: "Open Again",
+      view: "View",
+      claim: "Claim",
+      report: "Report",
+      block: "Block",
+      unblock: "Unblock",
+      friend: "Friend",
+      unfriend: "Unfriend",
+      copy: "Copy",
+      copied: "Copied!",
+      
+      // Buckshot
+      buckshot_title: "Buckshot Roulette",
+      buckshot_pot: "Pot",
+      buckshot_charges: "{n}/3 charges",
+      buckshot_your_turn: "Your turn",
+      buckshot_opponent_turn: "Waiting for {name}...",
+      buckshot_shoot_self: "Shoot Self",
+      buckshot_shoot_opponent: "Shoot Opponent",
+      buckshot_shells_left: "{n} shells remaining",
+      buckshot_you_won: "You won!",
+      buckshot_you_lost: "You lost.",
+      buckshot_confirm_self: "Shoot yourself?",
+      buckshot_confirm_opp: "Shoot your opponent?",
+      buckshot_cancel: "Cancel & Refund",
+      buckshot_start: "START GAME",
+      buckshot_waiting: "Waiting for opponent...",
+      buckshot_locked: "Locked {amount} in pot",
+      buckshot_live: "LIVE",
+      buckshot_blank: "Blank",
+      
+      // Wheel
+      wheel_sell: "Sell for {amount}",
+      wheel_again: "Spin Again Tomorrow",
+      
+      // Header
+      slot_label: "Slot {n}",
+      
       // Language toggle
       lang_label: "Language",
       lang_english: "English",
@@ -337,6 +403,72 @@
       wheel_won: "Du vann ${amount}!",
       wheel_rules: "Priser: $1K till $2M. Större priser är sällsyntare.",
       wheel_login_required: "Logga in för att snurra hjulet",
+      
+      // Status
+      status_online: "Online",
+      status_away: "Borta",
+      status_offline: "Offline",
+      
+      // Loan v2
+      loan_request: "Begär lån",
+      loan_repay: "Återbetala",
+      loan_credit_score: "Kreditpoäng",
+      loan_amount: "Hur mycket vill du ha?",
+      loan_payback: "När ska du betala tillbaka?",
+      loan_minutes: "{n} min",
+      loan_max_online: "Max 10 online min",
+      loan_sign: "Skriv under & låna",
+      loan_deadline_pass: "Lånedeadline missad! -50 kredit",
+      loan_deadline_remaining: "Lånedeadline: {n} online min kvar",
+      loan_owe: "Du är skyldig {amount}",
+      loan_receive: "Du får",
+      loan_interest: "Ränta ({rate}%)",
+      loan_tier_excellent: "Utmärkt",
+      loan_tier_good: "Bra",
+      loan_tier_fair: "Okej",
+      loan_tier_poor: "Dålig",
+      loan_tier_very_poor: "Mycket dålig",
+      
+      // Common actions
+      sell: "Sälj",
+      spin_again: "Snurra igen",
+      open_again: "Öppna igen",
+      view: "Visa",
+      claim: "Hämta",
+      report: "Rapportera",
+      block: "Blockera",
+      unblock: "Avblockera",
+      friend: "Vän",
+      unfriend: "Ta bort vän",
+      copy: "Kopiera",
+      copied: "Kopierat!",
+      
+      // Buckshot
+      buckshot_title: "Buckshot Roulette",
+      buckshot_pot: "Pott",
+      buckshot_charges: "{n}/3 laddning",
+      buckshot_your_turn: "Din tur",
+      buckshot_opponent_turn: "Väntar på {name}...",
+      buckshot_shoot_self: "Skjut dig själv",
+      buckshot_shoot_opponent: "Skjut motståndaren",
+      buckshot_shells_left: "{n} skott kvar",
+      buckshot_you_won: "Du vann!",
+      buckshot_you_lost: "Du förlorade.",
+      buckshot_confirm_self: "Skjut dig själv?",
+      buckshot_confirm_opp: "Skjut motståndaren?",
+      buckshot_cancel: "Avbryt & återbetala",
+      buckshot_start: "STARTA SPEL",
+      buckshot_waiting: "Väntar på motståndare...",
+      buckshot_locked: "Låste {amount} i potten",
+      buckshot_live: "SKARP",
+      buckshot_blank: "Blank",
+      
+      // Wheel
+      wheel_sell: "Sälj för {amount}",
+      wheel_again: "Snurra igen imorgon",
+      
+      // Header
+      slot_label: "Plats {n}",
       
       // Language toggle
       lang_label: "Språk",

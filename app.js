@@ -93,7 +93,7 @@ const CASES=[
 ];
 
 const DEFAULT_BAL=1000,RENT_EVERY=5,BASE_RENT=200,MAX_LOAN=50000,LOAN_RATE=.2,SCROLL_COUNT=55,WIN_IDX=48;
-const INIT={bal:DEFAULT_BAL,inv:[],stats:{opened:0,spent:0,won:0,sold:0,best:null,bestVal:0},loan:0,creditScore:100,loansPaid:0,loansDefaulted:0,rentCtr:0,history:[{n:0,bal:DEFAULT_BAL,label:"Start"}],starred:{}};
+const INIT={bal:DEFAULT_BAL,inv:[],stats:{opened:0,spent:0,won:0,sold:0,best:null,bestVal:0},loan:0,creditScore:500,loansPaid:0,loansDefaulted:0,onlineMinutes:0,loanDeadline:0,loanRequestAt:0,loanTermMinutes:0,rentCtr:0,history:[{n:0,bal:DEFAULT_BAL,label:"Start"}],starred:{}};
 function roll(c){let r2=Math.random(),cum=0;for(const[k,v]of Object.entries(R)){cum+=v.chance;if(r2<=cum){const pool=c.items.filter(i=>i.rarity===k);if(pool.length)return pool[Math.floor(Math.random()*pool.length)]}}return c.items.filter(i=>i.rarity==="consumer")[0]}
 function money(n){return"$"+n.toLocaleString()}
 function genFloat(){return Math.random()}
@@ -154,7 +154,7 @@ function App(){
   useEffect(()=>{const h=(e)=>setLang(e.detail.lang);window.addEventListener('langchange',h);return()=>window.removeEventListener('langchange',h)},[]);
 
   const[appLoading,setAppLoading]=useState(true);const[offline,setOffline]=useState(false);const offlineRef=useRef(false);useEffect(()=>{window.__setOnline=(v)=>{if(!v&&!offlineRef.current){offlineRef.current=true;setOffline(true)}if(v&&offlineRef.current){offlineRef.current=false;setOffline(false)}};return()=>{window.__setOnline=null}},[]);const[loadProgress,setLoadProgress]=useState(0);const[loadMsg,setLoadMsg]=useState("Initializing...");const[slot,setSlot]=useState(0);const[slotMeta,setSlotMeta]=useState([null,null,null]);const[showSlots,setShowSlots]=useState(true);
-  const[st,setSt]=useState(INIT);const[page,setPage]=useState("shop");const[selCase,setSelCase]=useState(null);const[wonItem,setWonItem]=useState(null);const[wonFloat,setWonFloat]=useState(0);const[wonQuote,setWonQuote]=useState("");const[scrollItems,setScrollItems]=useState([]);const[scrollDone,setScrollDone]=useState(false);const[opening,setOpening]=useState(false);const[resetMsg,setResetMsg]=useState("");const[loanAmt,setLoanAmt]=useState("");const[rentPaid,setRentPaid]=useState(0);const[inspecting,setInspecting]=useState(null);const[confirmReset,setConfirmReset]=useState(false);const[drops,setDrops]=useState([]);
+  const[st,setSt]=useState(INIT);const[page,setPage]=useState("shop");const[selCase,setSelCase]=useState(null);const[wonItem,setWonItem]=useState(null);const[wonFloat,setWonFloat]=useState(0);const[wonQuote,setWonQuote]=useState("");const[scrollItems,setScrollItems]=useState([]);const[scrollDone,setScrollDone]=useState(false);const[opening,setOpening]=useState(false);const[resetMsg,setResetMsg]=useState("");const[loanAmt,setLoanAmt]=useState("");const[loanMinutes,setLoanMinutes]=useState("5");const[showLoanModal,setShowLoanModal]=useState(false);const[rentPaid,setRentPaid]=useState(0);const[inspecting,setInspecting]=useState(null);const[confirmReset,setConfirmReset]=useState(false);const[drops,setDrops]=useState([]);
   const[invSort,setInvSort]=useState("newest");const[invFilter,setInvFilter]=useState("all");const[invView,setInvView]=useState("grid");const[selItem,setSelItem]=useState(null);const[sellAmt,setSellAmt]=useState("");const[sellConfirm,setSellConfirm]=useState(null);const[lastWonId,setLastWonId]=useState(null);
   const[feed,setFeed]=useState([]);const[lb,setLb]=useState([]);const[chatLog,setChatLog]=useState([]);const pfpCache=useRef({});const lastChatIdRef=useRef(0);const lastDmIdRef=useRef(0);const[chatMsg,setChatMsg]=useState("");const[nickname,setNickname]=useState(getUserName());const[nameEditing,setNameEditing]=useState(false);const[chatCd,setChatCd]=useState(0);
   const[account,setAccount]=useState(getAccount());const[showAuth,setShowAuth]=useState(false);const[authTab,setAuthTab]=useState("login");const[authUser,setAuthUser]=useState("");const[authPass,setAuthPass]=useState("");const[authErr,setAuthErr]=useState("");const[authLoading,setAuthLoading]=useState(false);const[saveStatus,setSaveStatus]=useState("");const[consent,setConsent]=useState(hasConsent());const[onlineData,setOnlineData]=useState(null);
@@ -176,6 +176,37 @@ function App(){
 
   // Poll lobby while in one
   useEffect(()=>{if(!curLobby?.id)return;const id=setInterval(()=>refreshLobby(curLobby.id),3000);lobbyPollRef.current=id;return()=>clearInterval(id)},[curLobby?.id]);
+  // Online-minutes tracking: increment onlineMinutes once per minute as long as the tab is visible
+  useEffect(()=>{
+    let activeMs=0;
+    let lastTick=Date.now();
+    const tick=()=>{
+      if(document.visibilityState==="visible"){
+        const dt=Date.now()-lastTick;
+        activeMs+=dt;
+        while(activeMs>=60000){
+          activeMs-=60000;
+          setSt(p=>{
+            const newMins=(p.onlineMinutes||0)+1;
+            const ns={...p,onlineMinutes:newMins};
+            // Check loan deadline penalty
+            if(p.loan>0&&p.loanDeadline>0&&newMins>=p.loanDeadline){
+              // Penalty: -50 credit score, mark default, flag
+              const newCS=Math.max(0,(p.creditScore||500)-50);
+              ns.creditScore=newCS;
+              ns.loansDefaulted=(p.loansDefaulted||0)+1;
+              ns.loanDeadline=0; // reset so penalty only applies once
+              setToast({msg:"Loan deadline missed! -50 credit",color:"#eb4b4b"});
+            }
+            return ns;
+          });
+        }
+      }
+      lastTick=Date.now();
+    };
+    const id=setInterval(tick,5000);
+    return()=>clearInterval(id);
+  },[]);
   // Buckshot Roulette: poll game state every 1s while in a buckshot lobby
   useEffect(()=>{
     if(!curLobby?.id||curLobby.mode!=="buckshot")return;
@@ -277,7 +308,7 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
   const save=useCallback(async(s,d)=>{try{const lk=await _stGet("co-lock-"+slot);if(lk?.value&&lk.value!==TAB_ID)return;await _stSet("co-s"+slot,JSON.stringify({st:s,drops:d||[]}))}catch{}const inv=s.inv||[];const tv=inv.reduce((a,i)=>a+i.value,0);setSlotMeta(prev=>{const m=[...prev];m[slot]={bal:s.bal,items:inv.length,totalVal:tv,opened:s.stats?.opened||0};saveSlotMeta(m);return m})},[slot]);
   useEffect(()=>{if(showSlots)return;const id=setInterval(()=>{if(syncLockRef.current)return;setSt(cur=>{setDrops(dd=>{save(cur,dd);return dd});return cur})},5000);return()=>clearInterval(id)},[save,showSlots]);
 
-  function getCreditScore(s){return s.creditScore||100}
+  function getCreditScore(s){return s.creditScore||500}
   function getCreditLimit(cs){return cs>=800?50000:cs>=600?30000:cs>=400?15000:cs>=200?8000:3000}
   function checkReset(s){const cs=getCreditScore(s);if(cs<10){setResetMsg("Credit score too low! Account reset.");const fresh={...INIT,inv:[],stats:{...INIT.stats},history:[{n:0,bal:DEFAULT_BAL,label:"Fresh Start"}],starred:{},creditScore:50,loansPaid:0,loansDefaulted:(s.loansDefaulted||0)+1};setSt(fresh);setDrops([]);save(fresh,[]);setTimeout(()=>{setResetMsg("");setPage("shop")},3000);return true}const cheapest=Math.min(...CASES.map(c=>c.price));if(s.bal<cheapest&&s.loan>=getCreditLimit(cs)){setResetMsg("Bankrupt. Game reset. Credit score damaged!");const oldCS=Math.max(0,(s.creditScore||100)-150);const oldDefaults=(s.loansDefaulted||0)+1;const fresh={...INIT,inv:[],stats:{...INIT.stats},history:[{n:0,bal:DEFAULT_BAL,label:"Start"}],starred:{},creditScore:oldCS,loansPaid:s.loansPaid||0,loansDefaulted:oldDefaults};setSt(fresh);setDrops([]);save(fresh,[]);setTimeout(()=>{setResetMsg("");setPage("shop")},2500);return true}return false}
 
@@ -325,7 +356,24 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
     sndReveal(r.totalValue>c.price*count);setPage("multi");lockRef.current=false;
   }
   function openAgain(){setLastWonId(null);if(!selCase||st.bal<selCase.price){setPage("shop");setOpening(false);return}doOpen(selCase)}
-  function borrow(){const a=parseInt(loanAmt);if(!a||a<=0)return;const cs=st.creditScore||100;const maxByCredit=cs>=800?MAX_LOAN:cs>=600?30000:cs>=400?15000:cs>=200?8000:3000;const actual=Math.min(a,maxByCredit-st.loan);if(actual<=0)return;const rate=cs>=800?0.05:cs>=600?0.1:cs>=400?0.2:cs>=200?0.35:0.5;setSt(p=>{const ns={...p,bal:p.bal+actual,loan:p.loan+Math.round(actual*(1+rate)),creditScore:Math.max(0,p.creditScore||100)};save(ns,drops);return ns});setLoanAmt("")}
+  function borrow(){
+    const a=parseInt(loanAmt);
+    if(!a||a<=0){setToast({msg:"Enter amount",color:"#eb4b4b"});return}
+    const cs=st.creditScore||500;
+    const maxByCredit=cs>=700?MAX_LOAN:cs>=500?100000:cs>=300?30000:cs>=150?10000:3000;
+    const actual=Math.min(a,maxByCredit-st.loan);
+    if(actual<=0){setToast({msg:"Already at credit limit",color:"#eb4b4b"});return}
+    const minutes=parseInt(loanMinutes)||5;
+    if(minutes<1||minutes>10){setToast({msg:"Payback time: 1-10 minutes online",color:"#eb4b4b"});return}
+    const rate=cs>=700?0.05:cs>=500?0.1:cs>=300?0.2:cs>=150?0.35:0.5;
+    const owedAmount=Math.round(actual*(1+rate));
+    const deadlineOnlineMinutes=(st.onlineMinutes||0)+minutes;
+    setSt(p=>{const ns={...p,bal:p.bal+actual,loan:p.loan+owedAmount,creditScore:Math.max(0,p.creditScore||500),loanDeadline:deadlineOnlineMinutes,loanRequestAt:Date.now(),loanTermMinutes:minutes};save(ns,drops);return ns});
+    setLoanAmt("");
+    setLoanMinutes("5");
+    setShowLoanModal(false);
+    setToast({msg:"Borrowed "+money(actual)+" — owe "+money(owedAmount)+" by "+minutes+" online min",color:"#f59e0b"});
+  }
   function repay(){const a=parseInt(loanAmt);if(!a||a<=0)return;const actual=Math.min(a,st.loan,st.bal);if(actual<=0)return;setSt(p=>{const paid=(p.loansPaid||0)+actual;const fullPaid=p.loan-actual<=0;const csBoost=fullPaid?20:Math.floor(actual/1000)*2;const ns={...p,bal:p.bal-actual,loan:p.loan-actual,creditScore:Math.min(1000,(p.creditScore||100)+csBoost),loansPaid:paid};save(ns,drops);return ns});setLoanAmt("")}
   function doReset(){const fresh={...INIT,inv:[],stats:{...INIT.stats},history:[{n:0,bal:DEFAULT_BAL,label:"Start"}],starred:{}};setSt(fresh);setDrops([]);save(fresh,[]);setPage("shop");lockRef.current=false;setOpening(false);setConfirmReset(false)}
 
@@ -526,6 +574,10 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
             <div style={{display:"flex",alignItems:"center",gap:"clamp(8px,2vw,14px)"}}><span style={{fontSize:"clamp(20px,5vw,32px)"}}>{selCase?.icon}</span><div><div style={{color:rar.color,fontSize:"clamp(14px,3.8vw,22px)",fontWeight:700}}>{wonItem.name}</div><div style={{color:"#999",fontSize:"clamp(10px,2.5vw,13px)"}}>{cond}</div></div></div>
             <div style={{width:"clamp(180px,55vw,340px)",height:3,background:rar.color,borderRadius:2,opacity:.6}}/>
             <Starburst color={rar.color} spin={isChroma||isLegendary}><span style={{fontSize:"clamp(40px,12vw,72px)"}}>{wonItem.icon}</span></Starburst>
+            <div style={{display:"flex",gap:8,marginTop:6,width:"100%",justifyContent:"center",flexWrap:"wrap"}}>
+              {lastWonId&&<button onClick={sellLastWon} style={{...S.btn,background:"linear-gradient(135deg,#fbbf24,#f59e0b)",color:"#000",fontWeight:800,padding:"10px 20px",fontSize:"clamp(13px,3.2vw,16px)",boxShadow:"0 4px 16px #f59e0b44",animation:"pulse 1.5s infinite"}}><MI n="sell" s={16}/> Sell · {money(wonItem?.value||0)}</button>}
+              <button onClick={openAgain} style={{...S.btn,background:"linear-gradient(135deg,#4ade80,#16a34a)",color:"#000",fontWeight:800,padding:"10px 20px",fontSize:"clamp(13px,3.2vw,16px)",boxShadow:"0 4px 16px #4ade8044"}}><MI n="refresh" s={16}/> Spin Again · {money(selCase?.price||0)}</button>
+            </div>
             <div style={{color:"#ccc",fontSize:"clamp(11px,2.8vw,15px)",fontWeight:600,textAlign:"center",fontStyle:"italic"}}>{wonQuote}</div>
             <div style={{width:"clamp(200px,60vw,380px)"}}><div style={{display:"flex",justifyContent:"space-between",fontSize:"clamp(8px,2vw,10px)",color:"#888",marginBottom:3}}><span>MIN: 0.00</span><span>MAX: 1.00</span></div><div style={{position:"relative",height:6,borderRadius:4,overflow:"hidden",background:"linear-gradient(to right,#4ade80,#4ade80 7%,#a3e635 7%,#a3e635 15%,#fbbf24 15%,#fbbf24 38%,#f97316 38%,#f97316 45%,#ef4444 45%)"}}><div style={{position:"absolute",top:-2,bottom:-2,left:`${wonFloat*100}%`,width:2,background:"#fff",borderRadius:1,boxShadow:"0 0 4px #fff"}}/></div></div>
             <div style={{textAlign:"center"}}><span style={{color:"#999",fontSize:"clamp(10px,2.5vw,13px)"}}>Price: </span><span style={{color:wonItem.value>=selCase?.price?"#4ade80":"#eb4b4b",fontSize:"clamp(13px,3.5vw,18px)",fontWeight:800}}>{money(wonItem.value)}</span><span style={{color:"#666",fontSize:"clamp(9px,2.2vw,11px)"}}> | Float: {wonFloat.toFixed(4)}</span></div>
@@ -582,7 +634,69 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
       </div>)})()}
 
     {/* LOAN */}
-    {page==="loan"&&(()=>{const cs=st.creditScore||100;const tier=cs>=800?"Excellent":cs>=600?"Good":cs>=400?"Fair":cs>=200?"Poor":"Very Poor";const tierColor=cs>=800?"#4ade80":cs>=600?"#3b82f6":cs>=400?"#f59e0b":cs>=200?"#f97316":"#eb4b4b";const rate=cs>=800?5:cs>=600?10:cs>=400?20:cs>=200?35:50;const maxByCredit=cs>=800?MAX_LOAN:cs>=600?30000:cs>=400?15000:cs>=200?8000:3000;const avail=Math.max(0,maxByCredit-st.loan);return <div style={S.body}><div style={{fontSize:"clamp(15px,4vw,20px)",fontWeight:700,marginBottom:10}}>Loan</div><div style={S.loanBox}><div style={{background:"#080a0f",borderRadius:10,padding:"12px 16px",marginBottom:12,border:"1px solid "+tierColor+"33"}}><div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}><span style={{color:"#888",fontSize:11,fontWeight:600}}>CREDIT SCORE</span><span style={{color:tierColor,fontSize:12,fontWeight:700}}>{tier}</span></div><div style={{display:"flex",alignItems:"baseline",gap:6}}><span style={{color:tierColor,fontSize:"clamp(28px,7vw,40px)",fontWeight:800}}>{cs}</span><span style={{color:"#555",fontSize:10}}>/1000</span></div><div style={{background:"#1e2430",borderRadius:4,height:6,marginTop:6,overflow:"hidden"}}><div style={{height:"100%",background:"linear-gradient(90deg,#eb4b4b,#f59e0b,#4ade80)",width:(cs/10)+"%",borderRadius:4,transition:"width 0.5s"}}/></div><div style={{display:"flex",justifyContent:"space-between",marginTop:8,fontSize:9,color:"#666"}}><span>Rate: {rate}%</span><span>Limit: {money(maxByCredit)}</span><span>Paid: {money(st.loansPaid||0)}</span><span>Defaults: {st.loansDefaulted||0}</span></div></div><div style={{display:"flex",gap:12,flexWrap:"wrap",marginBottom:14}}>{[["DEBT",st.loan,st.loan>0?"#eb4b4b":"#4ade80"],["LIMIT",maxByCredit,tierColor],["AVAIL",avail,"#e2e8f0"]].map(([l,v,c])=><div key={l}><div style={{color:"#555",fontSize:"clamp(8px,2vw,10px)"}}>{l}</div><div style={{fontSize:"clamp(16px,4.5vw,22px)",fontWeight:700,color:c}}>{money(v)}</div></div>)}</div><div style={{color:"#888",fontSize:10,marginBottom:8,lineHeight:1.5}}>Better credit = lower rates + higher limits. Repay loans to build score. Going bankrupt drops it by 150.</div><div style={{display:"flex",gap:6,flexWrap:"wrap",alignItems:"center"}}><input type="number" placeholder="Amount" value={loanAmt} onChange={e=>setLoanAmt(e.target.value)} style={S.input}/><button onClick={borrow} disabled={avail<=0} style={{...S.btn,background:"#f59e0b",color:"#000"}}>Borrow ({rate}%)</button><button onClick={repay} disabled={st.loan<=0||st.bal<=0} style={{...S.btn,background:"#4ade80",color:"#000"}}>Repay</button></div><div style={{display:"flex",gap:4,marginTop:8,flexWrap:"wrap"}}>{[1000,5000,10000].map(a=><button key={a} onClick={()=>setLoanAmt(String(a))} style={{...S.btn,background:loanAmt===String(a)?"#ffffff18":"#ffffff08",color:"#aaa",padding:"3px 10px",fontSize:10}}>{money(a)}</button>)}<button onClick={()=>setLoanAmt(String(avail))} style={{...S.btn,background:"#f59e0b11",color:"#f59e0b",padding:"3px 10px",fontSize:10}}>Max</button>{st.loan>0&&<button onClick={()=>setLoanAmt(String(Math.min(st.loan,st.bal)))} style={{...S.btn,background:"#4ade8011",color:"#4ade80",padding:"3px 10px",fontSize:10}}>Pay All</button>}</div></div></div>})()}
+    {page==="loan"&&(()=>{
+      const cs=st.creditScore||500;
+      const tier=cs>=700?"Excellent":cs>=500?"Good":cs>=300?"Fair":cs>=150?"Poor":"Very Poor";
+      const tierColor=cs>=700?"#4ade80":cs>=500?"#3b82f6":cs>=300?"#f59e0b":cs>=150?"#f97316":"#eb4b4b";
+      const rate=cs>=700?5:cs>=500?10:cs>=300?20:cs>=150?35:50;
+      const maxByCredit=cs>=700?MAX_LOAN:cs>=500?100000:cs>=300?30000:cs>=150?10000:3000;
+      const avail=Math.max(0,maxByCredit-st.loan);
+      const remainingMins=st.loanDeadline>0?Math.max(0,st.loanDeadline-(st.onlineMinutes||0)):0;
+      return <div style={S.body}>
+        <div style={{fontSize:"clamp(15px,4vw,20px)",fontWeight:700,marginBottom:10}}>Loan</div>
+        <div style={S.loanBox}>
+          <div style={{background:"#080a0f",borderRadius:10,padding:"12px 16px",marginBottom:12,border:"1px solid "+tierColor+"33"}}>
+            <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:6}}><span style={{color:"#888",fontSize:11,fontWeight:600}}>CREDIT SCORE</span><span style={{color:tierColor,fontSize:12,fontWeight:700}}>{tier}</span></div>
+            <div style={{display:"flex",alignItems:"baseline",gap:6}}><span style={{color:tierColor,fontSize:"clamp(28px,7vw,40px)",fontWeight:800}}>{cs}</span><span style={{color:"#555",fontSize:10}}>/800</span></div>
+            <div style={{background:"#1e2430",borderRadius:4,height:6,marginTop:6,overflow:"hidden"}}><div style={{height:"100%",background:"linear-gradient(90deg,#eb4b4b,#f59e0b,#4ade80)",width:(cs/8)+"%",borderRadius:4,transition:"width 0.5s"}}/></div>
+            <div style={{display:"flex",justifyContent:"space-between",marginTop:8,fontSize:9,color:"#666"}}><span>Rate: {rate}%</span><span>Limit: {money(maxByCredit)}</span><span>Paid: {money(st.loansPaid||0)}</span><span>Defaults: {st.loansDefaulted||0}</span></div>
+          </div>
+          <div style={{display:"flex",gap:12,flexWrap:"wrap",marginBottom:14}}>{[["DEBT",st.loan,st.loan>0?"#eb4b4b":"#4ade80"],["LIMIT",maxByCredit,tierColor],["AVAIL",avail,"#e2e8f0"],["ONLINE",(st.onlineMinutes||0)+" min","#888"]].map(([l,v,c])=><div key={l}><div style={{color:"#555",fontSize:"clamp(8px,2vw,10px)"}}>{l}</div><div style={{fontSize:"clamp(14px,4vw,20px)",fontWeight:700,color:c}}>{typeof v==="number"?money(v):v}</div></div>)}</div>
+          {st.loan>0&&st.loanDeadline>0&&<div style={{background:remainingMins<=2?"#eb4b4b22":"#f59e0b22",border:"1px solid "+(remainingMins<=2?"#eb4b4b55":"#f59e0b55"),borderRadius:8,padding:"10px 12px",marginBottom:12}}>
+            <div style={{color:remainingMins<=2?"#eb4b4b":"#f59e0b",fontSize:12,fontWeight:800}}>{remainingMins>0?"⏰ Loan deadline: "+remainingMins+" online min remaining":"⚠ Deadline passed"}</div>
+            <div style={{color:"#94a3b8",fontSize:10,marginTop:2}}>Owe {money(st.loan)}. Miss the deadline and you lose 50 credit score.</div>
+          </div>}
+          <div style={{color:"#888",fontSize:10,marginBottom:8,lineHeight:1.5}}>Loans must be repaid before the deadline. Time counts only while the tab is active. Default = credit damage.</div>
+          <div style={{display:"flex",gap:6,flexWrap:"wrap"}}>
+            <button onClick={()=>{setLoanAmt("");setLoanMinutes("5");setShowLoanModal(true)}} disabled={avail<=0} style={{...S.btn,background:"#f59e0b",color:"#000",fontWeight:700,padding:"10px 20px",flex:1}}>Request Loan ({rate}%)</button>
+            <button onClick={()=>{setLoanAmt(String(Math.min(st.loan,st.bal)));repay()}} disabled={st.loan<=0||st.bal<=0} style={{...S.btn,background:"#4ade80",color:"#000",fontWeight:700,padding:"10px 20px"}}>Repay {money(Math.min(st.loan,st.bal))}</button>
+          </div>
+        </div>
+      </div>;
+    })()}
+    {/* LOAN REQUEST MODAL */}
+    {showLoanModal&&(()=>{
+      const cs=st.creditScore||500;
+      const rate=cs>=700?0.05:cs>=500?0.1:cs>=300?0.2:cs>=150?0.35:0.5;
+      const maxByCredit=cs>=700?MAX_LOAN:cs>=500?100000:cs>=300?30000:cs>=150?10000:3000;
+      const avail=Math.max(0,maxByCredit-st.loan);
+      const amt=parseInt(loanAmt)||0;
+      const minutes=parseInt(loanMinutes)||5;
+      const totalOwed=Math.round(amt*(1+rate));
+      return <div style={S.overlay} onClick={()=>setShowLoanModal(false)}><div style={{...S.modal,maxWidth:400,padding:20}} onClick={e=>e.stopPropagation()}>
+        <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:8}}><MI n="attach_money" s={24} c="#f59e0b"/><div style={{fontSize:18,fontWeight:800,color:"#f59e0b"}}>Request Loan</div></div>
+        <div style={{color:"#888",fontSize:11,marginBottom:14}}>Your credit: {cs}/800 · Rate: {(rate*100)}% · Max: {money(avail)}</div>
+        <div style={{marginBottom:12}}>
+          <div style={{color:"#888",fontSize:10,marginBottom:4,textTransform:"uppercase",letterSpacing:1,fontWeight:700}}>1. How much do you want?</div>
+          <input type="number" value={loanAmt} onChange={e=>setLoanAmt(e.target.value.replace(/[^0-9]/g,""))} placeholder="Amount $" style={{...S.input,width:"100%",fontSize:16,textAlign:"center"}} autoFocus/>
+          <div style={{display:"flex",gap:4,marginTop:6,flexWrap:"wrap"}}>{[1000,5000,10000,50000].filter(a=>a<=avail).map(a=><button key={a} onClick={()=>setLoanAmt(String(a))} style={{...S.btn,background:loanAmt===String(a)?"#f59e0b22":"#ffffff08",color:loanAmt===String(a)?"#f59e0b":"#888",padding:"3px 10px",fontSize:10}}>{money(a)}</button>)}<button onClick={()=>setLoanAmt(String(avail))} style={{...S.btn,background:"#f59e0b11",color:"#f59e0b",padding:"3px 10px",fontSize:10}}>Max</button></div>
+        </div>
+        <div style={{marginBottom:12}}>
+          <div style={{color:"#888",fontSize:10,marginBottom:4,textTransform:"uppercase",letterSpacing:1,fontWeight:700}}>2. When will you pay it back? (online time, max 10 min)</div>
+          <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>{[1,3,5,7,10].map(m=><button key={m} onClick={()=>setLoanMinutes(String(m))} style={{...S.btn,background:loanMinutes===String(m)?"#3b82f6":"#ffffff08",color:loanMinutes===String(m)?"#fff":"#888",padding:"6px 12px",fontSize:11,flex:1,fontWeight:700}}>{m} min</button>)}</div>
+        </div>
+        {amt>0&&minutes>0&&<div style={{background:"#080a0e",borderRadius:8,padding:10,marginBottom:12,fontSize:11}}>
+          <div style={{display:"flex",justifyContent:"space-between",color:"#cbd5e1"}}><span>You receive:</span><span style={{color:"#4ade80",fontWeight:700}}>+{money(amt)}</span></div>
+          <div style={{display:"flex",justifyContent:"space-between",color:"#cbd5e1",marginTop:4}}><span>Interest ({(rate*100)}%):</span><span style={{color:"#eb4b4b"}}>+{money(totalOwed-amt)}</span></div>
+          <div style={{borderTop:"1px solid #1e2430",margin:"6px 0 4px",paddingTop:4,display:"flex",justifyContent:"space-between"}}><span style={{color:"#cbd5e1",fontWeight:700}}>You owe:</span><span style={{color:"#eb4b4b",fontWeight:800}}>{money(totalOwed)}</span></div>
+          <div style={{color:"#94a3b8",fontSize:9,marginTop:4}}>Deadline: {minutes} online min from now ({(st.onlineMinutes||0)+minutes} total)</div>
+        </div>}
+        <div style={{display:"flex",gap:6}}>
+          <button onClick={()=>setShowLoanModal(false)} style={{...S.btn,background:"#ffffff08",color:"#888",flex:1,padding:10}}>Cancel</button>
+          <button onClick={borrow} disabled={!amt||amt<=0||amt>avail} style={{...S.btn,background:"#f59e0b",color:"#000",flex:2,fontWeight:800,padding:10}}>Sign & Borrow</button>
+        </div>
+      </div></div>;
+    })()}
 
     {/* LIVE FEED */}
     {page==="live"&&<div style={S.body}>
@@ -868,10 +982,6 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
           <div style={{display:"flex",gap:4,marginBottom:10}}><input value={editBio} onChange={e=>setEditBio(e.target.value.slice(0,200))} placeholder="Write something..." style={{...S.input,flex:1,width:"auto"}} maxLength={200}/><button onClick={async()=>{const r=await api("/profile/edit",{username:account.username,token:account.token,bio:editBio});if(r?.ok)setSaveStatus("Bio saved!")}} style={{...S.btn,background:"#4ade80",color:"#000"}}>Save</button></div>
           <div style={{fontSize:"clamp(10px,2.5vw,12px)",fontWeight:600,color:"#888",marginBottom:4}}>Privacy</div>
           <div style={{display:"flex",gap:4,marginBottom:10}}>{["public","private","friends"].map(p=><button key={p} onClick={async()=>{setEditPrivacy(p);await api("/profile/edit",{username:account.username,token:account.token,privacy:p});setSaveStatus("Privacy: "+p)}} style={{...S.btn,background:editPrivacy===p?"#3b82f6":"#ffffff08",color:editPrivacy===p?"#fff":"#888",flex:1,textTransform:"capitalize"}}>{p==="friends"?"Friends Only":p}</button>)}</div>
-          <div style={{fontSize:"clamp(10px,2.5vw,12px)",fontWeight:600,color:"#888",marginBottom:4}}>Report a Player</div>
-          <div style={{display:"flex",gap:4,flexWrap:"wrap"}}><input value={reportTarget} onChange={e=>setReportTarget(e.target.value.slice(0,16))} placeholder="Username" style={{...S.input,flex:1,minWidth:80}}/><input value={reportReason} onChange={e=>setReportReason(e.target.value.slice(0,200))} placeholder="Reason (max 200)" maxLength={200} style={{...S.input,flex:2,minWidth:100}}/><button onClick={async()=>{if(!reportTarget||!reportReason)return;const r=await api("/report",{username:account.username,token:account.token,target:reportTarget,reason:reportReason});setReportMsg(r?.ok?"Report submitted!":r?.error||"Failed");setReportTarget("");setReportReason("")}} style={{...S.btn,background:"#eb4b4b22",color:"#eb4b4b"}}>Report</button></div>
-          <button onClick={async()=>{const r=await api("/reports/mine",{username:account.username,token:account.token});if(r?.ok){const items=[...(r.sent||[]).map(x=>({...x,dir:"sent"})),...(r.received||[]).map(x=>({...x,dir:"received"}))].sort((a,b)=>b.created_at-a.created_at);setReportMsg(items.length?items.map(x=>(x.dir==="sent"?"→ "+x.target:"← "+x.reporter)+" ["+x.status+"] "+x.reason.slice(0,60)).join("\n"):"No reports")}}} style={{...S.btn,background:"#ffffff08",color:"#888",fontSize:10,marginTop:4}}>My Report History</button>
-          {reportMsg&&<div style={{color:reportMsg.includes("submitted")?"#4ade80":"#eb4b4b",fontSize:"clamp(8px,2vw,10px)",marginTop:4}}>{reportMsg}</div>}
         </div>
       </>}
     </div>}
