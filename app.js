@@ -296,7 +296,7 @@ function App(){
   const[events,setEvents]=useState([]);const[dismissedEvents,setDismissedEvents]=useState({});
   const[friendsList,setFriendsList]=useState([]);
   function showProfile(username){if(!username||username==="Anon"||username==="SYSTEM")return;api("/profile/full",{target:username.toLowerCase(),username:account?.username||""}).then(r=>{if(r?.profile)setViewProfile(r.profile)}).catch(()=>{})}
-  const[lobbies,setLobbies]=useState([]);const[curLobby,setCurLobby]=useState(null);const[lobbyChat,setLobbyChat]=useState([]);const[lobbyChatMsg,setLobbyChatMsg]=useState("");const[lobbyTimer,setLobbyTimer]=useState(0);const[createLobbyName,setCreateLobbyName]=useState("");const[createLobbyPw,setCreateLobbyPw]=useState("");const[createLobbyMode,setCreateLobbyMode]=useState("profit_race");const[createLobbyBet,setCreateLobbyBet]=useState("1000");const[buckshotState,setBuckshotState]=useState(null);
+  const[lobbies,setLobbies]=useState([]);const[curLobby,setCurLobby]=useState(null);const[lobbyChat,setLobbyChat]=useState([]);const[lobbyChatMsg,setLobbyChatMsg]=useState("");const[lobbyTimer,setLobbyTimer]=useState(0);const[createLobbyName,setCreateLobbyName]=useState("");const[createLobbyPw,setCreateLobbyPw]=useState("");const[createLobbyMode,setCreateLobbyMode]=useState("profit_race");const[createLobbyBet,setCreateLobbyBet]=useState("1000");const[buckshotState,setBuckshotState]=useState(null);const[buckshotNarration,setBuckshotNarration]=useState(null);const buckshotEventCursorRef=useRef(0);
   const stripRef=useRef(null);const lockRef=useRef(false);const lobbyPollRef=useRef(null);
 
   async function refreshLobbies(){const r=await api("/lobby/list",{});if(r?.lobbies)setLobbies(r.lobbies)}
@@ -366,17 +366,36 @@ function App(){
     const fetchState=()=>{api("/buckshot/state",{lobbyId:curLobby.id,username:account?.username||""}).then(r=>{if(r?.state)setBuckshotState(r.state)})};
     fetchState();
     const id=setInterval(fetchState,1000);
-    return()=>{clearInterval(id);_SND.stopMusic()};
+    return()=>{clearInterval(id);_SND.stopMusic();buckshotEventCursorRef.current=0;setBuckshotNarration(null)};
   },[curLobby?.id,curLobby?.mode]);
-  // Buckshot music tracks: count reloads from log to pick the right round
+  // Process narration events. Use event IDs to track what's been shown (server may trim old events).
+  useEffect(()=>{
+    if(!buckshotState||!buckshotState.events||!buckshotState.events.length)return;
+    // Find events with id > cursor
+    const unseen=buckshotState.events.filter(e=>e&&e.id&&e.id>buckshotEventCursorRef.current);
+    if(unseen.length===0)return;
+    let cancelled=false;
+    (async()=>{
+      for(const ev of unseen){
+        if(cancelled)return;
+        setBuckshotNarration(ev);
+        if(ev.t==="live")_SND.sfx("shot",1.5);
+        else if(ev.t==="blank")_SND.sfx("emptyshot",1.2);
+        await new Promise(r=>setTimeout(r,ev.ms||1200));
+        buckshotEventCursorRef.current=ev.id;
+      }
+      if(!cancelled)setBuckshotNarration(null);
+    })();
+    return()=>{cancelled=true};
+  },[buckshotState?.events?.map?.(e=>e?.id).join(",")]);
+  // Buckshot music tracks: based on current round (1/2/3)
   useEffect(()=>{
     if(curLobby?.mode!=="buckshot"||curLobby?.status!=="playing"||!buckshotState)return;
-    const reloads=(buckshotState.log||[]).filter(l=>l&&l.startsWith&&l.startsWith("RELOAD")).length;
-    const round=Math.min(reloads,2); // 0,1,2 -> general/before-every-load/socket-calibration
-    const tracks=["general-release","before-every-load","socket-calibration"];
-    const want=tracks[round];
+    const round=buckshotState.round||1;
+    const tracks=["Generalrelease","Beforeeveryload","Socketcalibration"];
+    const want=tracks[Math.min(round-1,2)];
     if(_SND._currentMusic!==want&&!_SND.musicMuted)_SND.playMusic(want);
-  },[curLobby?.status,curLobby?.mode,buckshotState?.shellIdx]);
+  },[curLobby?.status,curLobby?.mode,buckshotState?.round]);
   // Force user to stay on PvP tab during active buckshot game
   useEffect(()=>{
     if(curLobby?.mode==="buckshot"&&curLobby?.status==="playing"&&page!=="pvp"){
@@ -1015,7 +1034,7 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
             </div>)}
           </div>
           {/* BUCKSHOT ROULETTE GAME */}
-          {curLobby.mode==="buckshot"&&<div style={{...S.buckshotPanel,marginBottom:10}}>
+          {curLobby.mode==="buckshot"&&<div style={{...S.buckshotPanel,marginBottom:10,minHeight:curLobby.status==="playing"?"calc(100vh - 200px)":"auto",maxWidth:curLobby.status==="playing"?"none":undefined}}>
             <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:10}}>
               <div style={{...S.buckshotTitle,display:"flex",alignItems:"center",gap:8}}><MI n="local_fire_department" s={22} c="#eb4b4b"/> BUCKSHOT ROULETTE</div>
               <div style={{fontFamily:"'Black Ops One',sans-serif",color:"#ffd700",fontSize:16,letterSpacing:2,textShadow:"0 0 6px #ffd70044"}}>POT: {money(curLobby.pot||0)}</div>
@@ -1028,52 +1047,86 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
               {curLobby.host===account.username&&(curLobby._players?.length||0)===2&&<button onClick={async()=>{const r=await api("/buckshot/start",{lobbyId:curLobby.id,username:account.username});if(r?.ok){refreshLobby(curLobby.id)}else setToast({msg:r?.error||"Failed",color:"#eb4b4b"})}} style={{...S.btn,background:"#eb4b4b",color:"#fff",fontWeight:800,width:"100%",padding:10}}>START GAME 🔫</button>}
               {curLobby.host===account.username&&<button onClick={async()=>{if(!confirm("Cancel lobby and refund all bets?"))return;const r=await api("/buckshot/cancel",{lobbyId:curLobby.id,username:account.username});if(r?.ok){if(r.refunded){setSt(p=>{const ns={...p,bal:p.bal+(curLobby.bet||0)};save(ns,drops);return ns});setToast({msg:"Refunded $"+(curLobby.bet||0).toLocaleString(),color:"#4ade80"})}setCurLobby(null);clearInterval(lobbyPollRef.current);refreshLobbies()}else setToast({msg:r?.error||"Failed",color:"#eb4b4b"})}} style={{...S.btn,background:"#eb4b4b22",color:"#eb4b4b",fontWeight:700,width:"100%",marginTop:6,fontSize:11}}>Cancel & Refund</button>}
             </div>}
-            {curLobby.status==="playing"&&buckshotState&&<div>
-              {/* Player charge displays */}
-              <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:10}}>
-                {[buckshotState.p1,buckshotState.p2].map(pn=>{
-                  const isYou=pn===account.username;
+            {curLobby.status==="playing"&&buckshotState&&(()=>{
+              const isYou=u=>u===account.username;
+              const yourItems=(buckshotState.items&&buckshotState.items[account.username])||[];
+              const oppName=buckshotState.p1===account.username?buckshotState.p2:buckshotState.p1;
+              const oppItemCount=buckshotState.oppItemCount||0;
+              const knownShells=buckshotState.knownShells||{};
+              const nextShellIdx=buckshotState.shellIdx||0;
+              const youKnowNext=knownShells[nextShellIdx];
+              const itemIcons={cigarette:"🚬",beer:"🍺",magnifier:"🔍",handsaw:"🪚",handcuffs:"🔗"};
+              const itemNames={cigarette:"Cigarette",beer:"Beer",magnifier:"Magnifier",handsaw:"Handsaw",handcuffs:"Handcuffs"};
+              const itemDesc={cigarette:"+1 charge",beer:"Eject next shell",magnifier:"Peek at next shell",handsaw:"Next live = 2 damage",handcuffs:"Skip opponent's turn"};
+              const renderCharges=(uname)=>{
+                const c=buckshotState.charges?.[uname]||0;
+                const max=buckshotState.maxCharges||2;
+                const bars=[];
+                for(let i=0;i<max;i++)bars.push(<div key={i} style={{flex:1,height:14,background:i<c?"#eb4b4b":"#1a0a0a",border:"1px solid "+(i<c?"#7a1818":"#3a1818"),borderRadius:2,boxShadow:i<c?"inset 0 -2px 4px rgba(0,0,0,0.4),0 0 4px #eb4b4b66":"inset 0 -1px 2px rgba(0,0,0,0.6)"}}/>);
+                return <div style={{display:"flex",gap:2,marginTop:6}}>{bars}</div>;
+              };
+              const renderItemSlot=(item,idx,canUse)=>{
+                const filled=!!item;
+                return <button key={idx} disabled={!filled||!canUse} onClick={async()=>{if(!item)return;const r=await api("/buckshot/useitem",{lobbyId:curLobby.id,username:account.username,item});if(r?.ok){if(item==="magnifier"&&r.revealedShell){setToast({msg:"Peeked: "+r.revealedShell.toUpperCase()+" shell",color:r.revealedShell==="live"?"#eb4b4b":"#3b82f6"})}else setToast({msg:itemNames[item]+" used",color:"#4ade80"})}else setToast({msg:r?.error||"Failed",color:"#eb4b4b"})}} style={{aspectRatio:"1",background:filled?"#1a0808":"#0a0404",border:"2px solid "+(filled?"#5a1a1a":"#2a0808"),borderRadius:4,fontSize:filled?22:0,cursor:filled&&canUse?"pointer":"default",opacity:filled?1:0.5,padding:0,fontFamily:"inherit",color:"#fff",transition:"all .1s"}} title={filled?itemNames[item]+" - "+itemDesc[item]:"empty"}>{filled?itemIcons[item]:""}</button>;
+              };
+              const winnerUI=buckshotState.winner&&<div style={{textAlign:"center",padding:20,background:buckshotState.winner===account.username?"linear-gradient(135deg,#0a3010,#1a5020)":"linear-gradient(135deg,#3a0a0a,#5a1a1a)",border:"2px solid "+(buckshotState.winner===account.username?"#4ade80":"#eb4b4b"),borderRadius:6,marginTop:14}}>
+                <div style={{fontFamily:"'Black Ops One',sans-serif",fontSize:24,letterSpacing:3,color:buckshotState.winner===account.username?"#4ade80":"#eb4b4b",textShadow:"0 0 12px currentColor"}}>{buckshotState.winner===account.username?"VICTORY":"DEFEAT"}</div>
+                <div style={{fontFamily:"'Special Elite',serif",fontSize:13,color:"#cbd5e1",marginTop:6}}>{buckshotState.winner}  -  Pot: {money(curLobby.pot||0)}</div>
+                <div style={{fontFamily:"'Special Elite',serif",fontSize:11,color:"#94a3b8",marginTop:4}}>Round wins: {buckshotState.p1} {buckshotState.roundWins?.[buckshotState.p1]||0}  -  {buckshotState.roundWins?.[buckshotState.p2]||0} {buckshotState.p2}</div>
+              </div>;
+              return <div style={{position:"relative"}}>
+                {/* Narration banner */}
+                {buckshotNarration&&<div style={{position:"absolute",top:-2,left:0,right:0,background:buckshotNarration.t==="live"?"linear-gradient(180deg,#7a0a0a,#3a0404)":buckshotNarration.t==="blank"?"linear-gradient(180deg,#1a3a6a,#0a1a3a)":buckshotNarration.t==="round"||buckshotNarration.t==="win"?"linear-gradient(180deg,#6a4a0a,#3a2a04)":buckshotNarration.t==="item"?"linear-gradient(180deg,#3a1a4a,#1a0a2a)":"linear-gradient(180deg,#1a1a1a,#0a0a0a)",border:"2px solid "+(buckshotNarration.t==="live"?"#eb4b4b":buckshotNarration.t==="blank"?"#3b82f6":buckshotNarration.t==="win"?"#ffd700":"#666"),padding:"14px 12px",textAlign:"center",zIndex:10,animation:"fadeUp .25s ease-out",boxShadow:"0 6px 16px rgba(0,0,0,0.6)",borderRadius:4}}>
+                  <div style={{fontFamily:"'Black Ops One',sans-serif",fontSize:22,letterSpacing:3,color:buckshotNarration.t==="live"?"#fff":buckshotNarration.t==="blank"?"#fff":"#fff",textShadow:"0 0 10px currentColor"}}>{buckshotNarration.text}</div>
+                </div>}
+                {/* Round + roundwins header */}
+                <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:12,fontFamily:"'Black Ops One',sans-serif",letterSpacing:2}}>
+                  <div style={{color:"#eb4b4b",fontSize:15}}>ROUND {buckshotState.round||1}/3</div>
+                  <div style={{color:"#ffd700",fontSize:13}}>{buckshotState.p1}: {buckshotState.roundWins?.[buckshotState.p1]||0}  |  {buckshotState.p2}: {buckshotState.roundWins?.[buckshotState.p2]||0}</div>
+                </div>
+                {/* Player panels: opponent on top, you on bottom */}
+                {[oppName,account.username].filter(Boolean).map(pn=>{
+                  const isMe=pn===account.username;
                   const isTurn=buckshotState.turn===pn;
                   const charges=buckshotState.charges?.[pn]||0;
-                  return <div key={pn} style={{background:isTurn?"#f59e0b22":"#141820",border:"1px solid "+(isTurn?"#f59e0b":"#1e2430"),borderRadius:8,padding:8,textAlign:"center"}}>
-                    <div style={{color:isYou?"#4ade80":"#cbd5e1",fontWeight:700,fontSize:12}}>{pn}{isYou&&" (you)"}</div>
-                    <div style={{display:"flex",justifyContent:"center",gap:3,marginTop:6,height:18}}>
-                      {[0,1,2].map(i=><div key={i} style={{width:14,height:14,borderRadius:"50%",background:i<charges?"#eb4b4b":"#333",boxShadow:i<charges?"0 0 4px #eb4b4b88":"none"}}/>)}
+                  const max=buckshotState.maxCharges||2;
+                  return <div key={pn} style={{background:isTurn?"linear-gradient(90deg,#2a0a0a,#1a0404)":"#0d0606",border:"2px solid "+(isTurn?"#eb4b4b":"#3a1818"),borderRadius:4,padding:10,marginBottom:8,boxShadow:isTurn?"0 0 12px rgba(235,75,75,0.3)":"none"}}>
+                    <div style={{display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                      <div style={{fontFamily:"'Black Ops One',sans-serif",letterSpacing:2,color:isMe?"#4ade80":"#cbd5e1",fontSize:14}}>{pn.toUpperCase()}{isMe&&"  (YOU)"}</div>
+                      <div style={{fontFamily:"'Special Elite',serif",color:"#888",fontSize:11}}>{charges}/{max} CHARGES</div>
                     </div>
-                    <div style={{color:"#888",fontSize:10,marginTop:4}}>{charges}/3 charges</div>
-                    {buckshotState.cuffs?.[pn]&&<div style={{color:"#a855f7",fontSize:9,marginTop:2}}>🔗 cuffed</div>}
-                    {isTurn&&!buckshotState.winner&&<div style={{color:"#f59e0b",fontSize:10,marginTop:2,fontWeight:700}}>► TURN</div>}
+                    {renderCharges(pn)}
+                    {buckshotState.cuffs?.[pn]&&<div style={{marginTop:6,fontFamily:"'Special Elite',serif",color:"#a855f7",fontSize:11}}>🔗 HANDCUFFED</div>}
+                    {isTurn&&!buckshotState.winner&&<div style={{marginTop:4,fontFamily:"'Black Ops One',sans-serif",color:"#eb4b4b",fontSize:11,letterSpacing:2}}>► ACTIVE</div>}
+                    {/* Items grid - 8 slots */}
+                    <div style={{display:"grid",gridTemplateColumns:"repeat(8,1fr)",gap:3,marginTop:8}}>
+                      {isMe?
+                        Array.from({length:8}).map((_,i)=>renderItemSlot(yourItems[i],i,buckshotState.turn===account.username&&!buckshotState.winner))
+                        :Array.from({length:8}).map((_,i)=><div key={i} style={{aspectRatio:"1",background:i<oppItemCount?"#1a0808":"#0a0404",border:"2px solid "+(i<oppItemCount?"#3a1818":"#2a0808"),borderRadius:4,display:"flex",alignItems:"center",justifyContent:"center",fontSize:18,opacity:i<oppItemCount?0.7:0.3}}>{i<oppItemCount?"?":""}</div>)
+                      }
+                    </div>
                   </div>;
                 })}
-              </div>
-              {/* Shells visualization */}
-              <div style={{background:"#141820",borderRadius:6,padding:8,marginBottom:8,textAlign:"center"}}>
-                <div style={{color:"#888",fontSize:10,marginBottom:4}}>Shells loaded ({buckshotState.shellsRemaining} remaining)</div>
-                <div style={{display:"flex",justifyContent:"center",gap:8}}>
-                  <span style={{color:"#eb4b4b",fontWeight:700}}>🔴 {buckshotState.liveRemaining} LIVE</span>
-                  <span style={{color:"#3b82f6",fontWeight:700}}>🔵 {buckshotState.blankRemaining} BLANK</span>
+                {/* Shells visualization with peek-info */}
+                <div style={{background:"#0a0404",border:"2px solid #3a1818",borderRadius:4,padding:10,marginBottom:8,textAlign:"center"}}>
+                  <div style={{fontFamily:"'Special Elite',serif",color:"#888",fontSize:11,marginBottom:6}}>SHELLS LOADED  -  {buckshotState.shellsRemaining||0} REMAINING</div>
+                  <div style={{display:"flex",justifyContent:"center",gap:12,fontFamily:"'Black Ops One',sans-serif"}}>
+                    <span style={{color:"#eb4b4b",fontSize:14,letterSpacing:2}}>🔴 {buckshotState.liveRemaining||0} LIVE</span>
+                    <span style={{color:"#3b82f6",fontSize:14,letterSpacing:2}}>🔵 {buckshotState.blankRemaining||0} BLANK</span>
+                  </div>
+                  {buckshotState.sawNext&&<div style={{marginTop:6,fontFamily:"'Black Ops One',sans-serif",color:"#fb923c",fontSize:11,letterSpacing:2}}>🪚 HANDSAW ACTIVE  -  NEXT LIVE = -2</div>}
+                  {youKnowNext&&<div style={{marginTop:6,fontFamily:"'Black Ops One',sans-serif",color:youKnowNext==="live"?"#eb4b4b":"#3b82f6",fontSize:11,letterSpacing:2}}>👁 YOU SAW: NEXT SHELL = {youKnowNext.toUpperCase()}</div>}
                 </div>
-              </div>
-              {/* Action buttons - only for the player whose turn it is */}
-              {!buckshotState.winner&&buckshotState.turn===account.username&&!buckshotState.isSpectator&&<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:6,marginBottom:8}}>
-                <button onClick={async()=>{if(!confirm("Shoot yourself?"))return;const r=await api("/buckshot/shoot",{lobbyId:curLobby.id,username:account.username,target:"self"});if(r?.ok){if(r.shellType==="live"){_SND.sfx("live-shell",1.5);document.body.classList.add("shakeHard");setTimeout(()=>document.body.classList.remove("shakeHard"),400);setToast({msg:"LIVE — "+r.damage+" damage to yourself!",color:"#eb4b4b"})}else{_SND.sfx("empty-shell",1.2);setToast({msg:"Blank! You're safe — keep turn.",color:"#3b82f6"})}if(r.winner){_SND.stopMusic();if(r.forceSync){await silentCloudSync()}if(r.winner===account.username){if(r.payoutError){setToast({msg:"Won but payout failed: "+r.payoutError,color:"#eb4b4b"})}else{setToast({msg:"You won $"+(r.payout||0).toLocaleString()+"!",color:"#4ade80"})}}}}else setToast({msg:r?.error||"Failed",color:"#eb4b4b"})}} style={{...S.btnBuckshot,background:"#3a0a0a",color:"#eb4b4b",border:"2px solid #6b1818",fontWeight:700,padding:14}}>🔫 SHOOT SELF</button>
-                <button onClick={async()=>{if(!confirm("Shoot your opponent?"))return;const r=await api("/buckshot/shoot",{lobbyId:curLobby.id,username:account.username,target:"opponent"});if(r?.ok){if(r.shellType==="live"){_SND.sfx("live-shell",1.5);document.body.classList.add("shakeHard");setTimeout(()=>document.body.classList.remove("shakeHard"),400);setToast({msg:"LIVE — "+r.damage+" damage to opponent!",color:"#4ade80"})}else{_SND.sfx("empty-shell",1.2);setToast({msg:"Blank...",color:"#3b82f6"})}if(r.winner){_SND.stopMusic();if(r.forceSync){await silentCloudSync()}if(r.winner===account.username){if(r.payoutError){setToast({msg:"Won but payout failed: "+r.payoutError,color:"#eb4b4b"})}else{setToast({msg:"You won $"+(r.payout||0).toLocaleString()+"!",color:"#4ade80"})}}}}else setToast({msg:r?.error||"Failed",color:"#eb4b4b"})}} style={{...S.btnBuckshot,background:"#7a0a0a",color:"#fff",fontWeight:700,padding:14}}>🔫 SHOOT OPPONENT</button>
-              </div>}
-              {/* Waiting for opponent */}
-              {!buckshotState.winner&&buckshotState.turn!==account.username&&!buckshotState.isSpectator&&<div style={{background:"#141820",borderRadius:6,padding:10,textAlign:"center",color:"#888",fontSize:11,marginBottom:8}}>Waiting for {buckshotState.turn} to act...</div>}
-              {/* Spectator notice */}
-              {buckshotState.isSpectator&&!buckshotState.winner&&<div style={{background:"#3b82f622",borderRadius:6,padding:6,textAlign:"center",color:"#3b82f6",fontSize:10,marginBottom:8}}>👁 Spectating · {buckshotState.turn}'s turn</div>}
-              {/* Winner */}
-              {buckshotState.winner&&<div style={{background:buckshotState.winner===account.username?"#4ade8022":"#eb4b4b22",border:"1px solid "+(buckshotState.winner===account.username?"#4ade8055":"#eb4b4b55"),borderRadius:8,padding:12,textAlign:"center"}}>
-                <div style={{color:buckshotState.winner===account.username?"#4ade80":"#eb4b4b",fontWeight:800,fontSize:18}}>{buckshotState.winner===account.username?"🏆 YOU WON!":buckshotState.winner+" wins"}</div>
-                <div style={{color:"#cbd5e1",fontSize:12,marginTop:4}}>Pot: ${(curLobby.pot||0).toLocaleString()}{buckshotState.winner===account.username&&" added to your balance"}</div>
-              </div>}
-              {/* Game log */}
-              <div style={{background:"#080a0e",borderRadius:6,padding:6,maxHeight:120,overflowY:"auto",fontSize:10}}>
-                <div style={{color:"#666",fontSize:9,marginBottom:4}}>GAME LOG</div>
-                {(buckshotState.log||[]).slice().reverse().map((l,i)=><div key={i} style={{color:"#cbd5e1",padding:"1px 0"}}>{l}</div>)}
-              </div>
-            </div>}
+                {/* Action buttons */}
+                {!buckshotState.winner&&buckshotState.turn===account.username&&!buckshotState.isSpectator&&<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
+                  <button onClick={async()=>{if(!confirm("Shoot yourself?"))return;const r=await api("/buckshot/shoot",{lobbyId:curLobby.id,username:account.username,target:"self"});if(r?.ok){if(r.winner){_SND.stopMusic();if(r.forceSync){await silentCloudSync()}if(r.winner===account.username){setToast({msg:"You won $"+(r.payout||0).toLocaleString()+"!",color:"#4ade80"})}}}else setToast({msg:r?.error||"Failed",color:"#eb4b4b"})}} style={{...S.btnBuckshot,background:"#3a0a0a",color:"#eb4b4b",border:"2px solid #6b1818",padding:16}}>🔫 SHOOT SELF</button>
+                  <button onClick={async()=>{if(!confirm("Shoot your opponent?"))return;const r=await api("/buckshot/shoot",{lobbyId:curLobby.id,username:account.username,target:"opponent"});if(r?.ok){if(r.winner){_SND.stopMusic();if(r.forceSync){await silentCloudSync()}if(r.winner===account.username){setToast({msg:"You won $"+(r.payout||0).toLocaleString()+"!",color:"#4ade80"})}}}else setToast({msg:r?.error||"Failed",color:"#eb4b4b"})}} style={{...S.btnBuckshot,background:"#7a0a0a",color:"#fff",border:"2px solid #aa2828",padding:16}}>🔫 SHOOT OPPONENT</button>
+                </div>}
+                {!buckshotState.winner&&buckshotState.turn!==account.username&&!buckshotState.isSpectator&&<div style={{background:"#0a0404",border:"2px solid #3a1818",borderRadius:4,padding:14,textAlign:"center",fontFamily:"'Special Elite',serif",color:"#888",fontSize:13,marginBottom:8}}>WAITING FOR {buckshotState.turn.toUpperCase()}...</div>}
+                {buckshotState.isSpectator&&!buckshotState.winner&&<div style={{background:"#0a0a3a",borderRadius:4,padding:8,textAlign:"center",fontFamily:"'Special Elite',serif",color:"#3b82f6",fontSize:11,marginBottom:8}}>👁 SPECTATING  -  {buckshotState.turn?.toUpperCase()}'S TURN</div>}
+                {winnerUI}
+              </div>;
+            })()}
           </div>}
           {/* Lobby opening (during game) */}
           {curLobby.status==="playing"&&!curLobby._spectating&&curLobby.mode!=="buckshot"&&<div style={{marginBottom:10}}>
