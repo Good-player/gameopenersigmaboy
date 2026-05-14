@@ -321,8 +321,29 @@ function App(){
   const stripRef=useRef(null);const lockRef=useRef(false);const lobbyPollRef=useRef(null);
 
   async function refreshLobbies(){const r=await api("/lobby/list",{});if(r?.lobbies)setLobbies(r.lobbies)}
-  async function refreshLobby(id){const r=await api("/lobby/info",{lobbyId:id||curLobby?.id});if(r?.lobby){setCurLobby(r.lobby);if(r.chat)setLobbyChat(r.chat);if(r.players)setCurLobby(prev=>({...prev,...r.lobby,_players:r.players}))}}
-  async function joinLobby(id,pw){const r=await api("/lobby/join",{username:account?.username,lobbyId:id,lobbyPassword:pw||"",slot});if(r?.ok){if(r.betLocked>0){setSt(p=>{const ns={...p,bal:p.bal-r.betLocked};save(ns,drops);return ns});setToast({msg:"Locked $"+r.betLocked.toLocaleString()+" — game ON!",color:"#f59e0b"})}await refreshLobby(id);return true}else{setToast({msg:r?.error||"Failed",color:"#eb4b4b"});return false}}
+  async function refreshLobby(id){
+    const targetId=id||curLobby?.id;
+    if(!targetId)return;
+    const r=await api("/lobby/info",{lobbyId:targetId});
+    if(r?.lobby){
+      setCurLobby(r.lobby);
+      if(r.chat)setLobbyChat(r.chat);
+      if(r.players)setCurLobby(prev=>({...prev,...r.lobby,_players:r.players}));
+    }else if(r&&(r.error==="Lobby not found"||r.error==="Not found")){
+      // Lobby deleted (cancelled, ended, cleaned up). Bounce out.
+      if(curLobby?.id===targetId){
+        clearInterval(lobbyPollRef.current);
+        setCurLobby(null);
+        setLobbyChat([]);
+        // Don't toast if we're in buckshot — the buckshot poll already handled it
+        if(curLobby?.mode!=="buckshot"){
+          setToast({msg:"Lobby ended",color:"#f59e0b"});
+          try{await silentCloudSync()}catch{}
+        }
+      }
+    }
+  }
+  async function joinLobby(id,pw){const r=await api("/lobby/join",{username:account?.username,lobbyId:id,lobbyPassword:pw||"",slot});if(r?.ok){if(r.betLocked>0){setToast({msg:"Locked "+money(r.betLocked)+" — game ON!",color:"#f59e0b"});try{await silentCloudSync()}catch{}}await refreshLobby(id);return true}else{setToast({msg:r?.error||"Failed",color:"#eb4b4b"});return false}}
   async function leaveLobby(){if(curLobby){setPvpEliminated(false);setPvpWinModal(null);await api("/lobby/leave",{username:account?.username,lobbyId:curLobby.id});setCurLobby(null);setLobbyChat([]);clearInterval(lobbyPollRef.current);refreshLobbies()}}
   async function deleteLobby(){if(curLobby){setPvpEliminated(false);setPvpWinModal(null);await api("/lobby/end",{lobbyId:curLobby.id,username:account?.username});setCurLobby(null);setLobbyChat([]);clearInterval(lobbyPollRef.current);refreshLobbies()}}
 
@@ -384,10 +405,31 @@ function App(){
   // Buckshot Roulette: poll game state every 1s while in a buckshot lobby
   useEffect(()=>{
     if(!curLobby?.id||curLobby.mode!=="buckshot")return;
-    const fetchState=()=>{api("/buckshot/state",{lobbyId:curLobby.id,username:account?.username||""}).then(r=>{if(r?.state)setBuckshotState(r.state)})};
+    let dead=false;
+    const fetchState=async()=>{
+      if(dead)return;
+      try{
+        const r=await api("/buckshot/state",{lobbyId:curLobby.id,username:account?.username||""});
+        if(r?.state){setBuckshotState(r.state);return}
+        // Lobby gone (cancelled, deleted, or never existed). Bounce out cleanly.
+        if(r&&(r.error==="Lobby not found"||r.error==="Not found")){
+          dead=true;
+          clearInterval(id);
+          _SND.stopMusic();
+          buckshotEventCursorRef.current=0;
+          setBuckshotNarration(null);
+          setBuckshotState(null);
+          setCurLobby(null);
+          setToast({msg:"Lobby was cancelled by host. Bets refunded.",color:"#f59e0b"});
+          // Pull fresh balance (server has refunded us)
+          try{await silentCloudSync()}catch{}
+          refreshLobbies&&refreshLobbies();
+        }
+      }catch{}
+    };
     fetchState();
     const id=setInterval(fetchState,1000);
-    return()=>{clearInterval(id);_SND.stopMusic();buckshotEventCursorRef.current=0;setBuckshotNarration(null)};
+    return()=>{dead=true;clearInterval(id);_SND.stopMusic();buckshotEventCursorRef.current=0;setBuckshotNarration(null)};
   },[curLobby?.id,curLobby?.mode]);
   // Process narration events. Use event IDs to track what's been shown (server may trim old events).
   useEffect(()=>{
@@ -1077,7 +1119,7 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
               </div>
               <div style={{color:"#94a3b8",fontSize:10,textAlign:"center",marginBottom:8}}>Each player has 3 charges. Shells are loaded with a mix of live and blank rounds. Shoot yourself or your opponent. Last one standing wins ${(curLobby.pot||0).toLocaleString()}.</div>
               {curLobby.host===account.username&&(curLobby._players?.length||0)===2&&<button onClick={async()=>{_SND.playMusic("Generalrelease");const r=await api("/buckshot/start",{lobbyId:curLobby.id,username:account.username});if(r?.ok){refreshLobby(curLobby.id)}else setToast({msg:r?.error||"Failed",color:"#eb4b4b"})}} style={{...S.btn,background:"#eb4b4b",color:"#fff",fontWeight:800,width:"100%",padding:10}}>START GAME 🔫</button>}
-              {curLobby.host===account.username&&<button onClick={async()=>{const ok=await askConfirm({title:"Cancel lobby",message:"All bets will be refunded to players.",ok:"Cancel & Refund",color:"#eb4b4b",icon:"cancel"});if(!ok)return;const r=await api("/buckshot/cancel",{lobbyId:curLobby.id,username:account.username});if(r?.ok){if(r.refunded){setSt(p=>{const ns={...p,bal:p.bal+(curLobby.bet||0)};save(ns,drops);return ns});setToast({msg:"Refunded $"+(curLobby.bet||0).toLocaleString(),color:"#4ade80"})}setCurLobby(null);clearInterval(lobbyPollRef.current);refreshLobbies()}else setToast({msg:r?.error||"Failed",color:"#eb4b4b"})}} style={{...S.btn,background:"#eb4b4b22",color:"#eb4b4b",fontWeight:700,width:"100%",marginTop:6,fontSize:11}}>Cancel & Refund</button>}
+              {curLobby.host===account.username&&<button onClick={async()=>{const ok=await askConfirm({title:"Cancel lobby",message:"All bets will be refunded to players.",ok:"Cancel & Refund",color:"#eb4b4b",icon:"cancel"});if(!ok)return;const r=await api("/buckshot/cancel",{lobbyId:curLobby.id,username:account.username});if(r?.ok){if(r.refunded){setToast({msg:"Refunded "+money(curLobby.bet||0)+" (will sync)",color:"#4ade80"});await silentCloudSync()}setCurLobby(null);clearInterval(lobbyPollRef.current);refreshLobbies()}else setToast({msg:r?.error||"Failed",color:"#eb4b4b"})}} style={{...S.btn,background:"#eb4b4b22",color:"#eb4b4b",fontWeight:700,width:"100%",marginTop:6,fontSize:11}}>Cancel & Refund</button>}
             </div>}
             {curLobby.status==="playing"&&buckshotState&&(()=>{
               const isYou=u=>u===account.username;
@@ -1216,7 +1258,7 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
             </div>
             <div style={{color:"#888",fontSize:9,marginTop:4}}>Money locked on join. Refunded only if lobby canceled before start. Once started: winner gets the pool, loser gets nothing.</div>
           </div>}
-          <button onClick={async()=>{const name=createLobbyName.trim()||account.username+"'s lobby";const bet=parseInt(createLobbyBet)||0;if(createLobbyMode==="buckshot"&&(bet<100||bet>st.bal)){setToast({msg:bet>st.bal?"Insufficient balance for bet":"Min bet $100",color:"#eb4b4b"});return}const r=await api("/lobby/create",{username:account.username,name,lobbyPassword:createLobbyPw,mode:createLobbyMode,bet,slot});if(r?.lobbyId){if(r.betLocked>0){setSt(p=>{const ns={...p,bal:p.bal-r.betLocked};save(ns,drops);return ns});setToast({msg:"Locked $"+r.betLocked.toLocaleString()+" in pot",color:"#f59e0b"})}setCreateLobbyName("");setCreateLobbyPw("");await refreshLobby(r.lobbyId)}else{setToast({msg:r?.error||"Failed",color:"#eb4b4b"})}}} style={{...S.btn,background:"#4ade80",color:"#000",fontWeight:700,width:"100%"}}>Create Lobby</button>
+          <button onClick={async()=>{const name=createLobbyName.trim()||account.username+"'s lobby";const bet=parseInt(createLobbyBet)||0;if(createLobbyMode==="buckshot"&&(bet<100||bet>st.bal)){setToast({msg:bet>st.bal?"Insufficient balance for bet":"Min bet $100",color:"#eb4b4b"});return}const r=await api("/lobby/create",{username:account.username,name,lobbyPassword:createLobbyPw,mode:createLobbyMode,bet,slot});if(r?.lobbyId){if(r.betLocked>0){setToast({msg:"Locked "+money(r.betLocked)+" in pot",color:"#f59e0b"});try{await silentCloudSync()}catch{}}setCreateLobbyName("");setCreateLobbyPw("");await refreshLobby(r.lobbyId)}else{setToast({msg:r?.error||"Failed",color:"#eb4b4b"})}}} style={{...S.btn,background:"#4ade80",color:"#000",fontWeight:700,width:"100%"}}>Create Lobby</button>
         </div>
         {/* LOBBY LIST */}
         <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
