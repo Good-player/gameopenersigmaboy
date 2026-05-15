@@ -253,6 +253,7 @@ function StatusDot({status,size,withLabel}){
 // Wrap a username with <UserName name={u}>display</UserName> and right-click → menu.
 function UserName({name,children,style,onClick,as}){
   const Tag=as||"span";
+  const longPressedRef=useRef(false);
   const handler=(e)=>{
     if(!name)return;
     e.preventDefault();
@@ -260,9 +261,13 @@ function UserName({name,children,style,onClick,as}){
     window.__showUserMenu&&window.__showUserMenu(name,e.clientX,e.clientY);
   };
   let touchTimer=null;
-  const touchStart=(e)=>{if(!name)return;touchTimer=setTimeout(()=>{const t=e.touches?.[0];if(t)window.__showUserMenu&&window.__showUserMenu(name,t.clientX,t.clientY)},500)};
+  const touchStart=(e)=>{if(!name)return;longPressedRef.current=false;touchTimer=setTimeout(()=>{longPressedRef.current=true;const t=e.touches?.[0];if(t)window.__showUserMenu&&window.__showUserMenu(name,t.clientX,t.clientY)},500)};
   const touchEnd=()=>{if(touchTimer){clearTimeout(touchTimer);touchTimer=null}};
-  return <Tag data-username={name} onContextMenu={handler} onTouchStart={touchStart} onTouchEnd={touchEnd} onTouchMove={touchEnd} onClick={onClick} style={style}>{children}</Tag>;
+  const clickGuard=(e)=>{
+    if(longPressedRef.current){longPressedRef.current=false;e.preventDefault();e.stopPropagation();return}
+    onClick&&onClick(e);
+  };
+  return <Tag data-username={name} onContextMenu={handler} onTouchStart={touchStart} onTouchEnd={touchEnd} onTouchMove={touchEnd} onClick={clickGuard} style={style}>{children}</Tag>;
 }
 
 function BalanceTicker({value,color,fontSize}){
@@ -1039,12 +1044,20 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
       </div>
       <div style={{display:"flex",flexDirection:"column",gap:3}}>
         {lb.length===0?<div style={{color:"#555",textAlign:"center",padding:20}}>No players yet.</div>:
-        lb.map((p,i)=>{const medal=null;return(
-          <UserName key={i} name={p.uname} as="div" style={{display:"grid",gridTemplateColumns:"28px 1fr 80px 65px",alignItems:"center",gap:8,padding:"8px 12px",background:i<3?"#ffd70008":"#0d1117",border:i<3?"1px solid #ffd70022":"1px solid #151820",borderRadius:6,fontSize:"clamp(9px,2.2vw,12px)",cursor:"pointer"}} onClick={()=>showProfile(p.uname)}>
-            <span style={{fontWeight:800,color:i<3?"#ffd700":"#888",textAlign:"center"}}>{i<3?<MI n={["emoji_events","military_tech","workspace_premium"][i]} s={16} c={["#ffd700","#c0c0c0","#cd7f32"][i]}/>:`#${i+1}`}</span>{p.banned?<span style={{color:"#eb4b4b",fontSize:8,marginLeft:2}}>BAN</span>:null}{p.deleted?<span style={{color:"#666",fontSize:8,marginLeft:2}}>DEL</span>:null}
-            <span style={{fontWeight:600,color:"#e2e8f0",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",display:"flex",alignItems:"center",gap:5}}><StatusDot status={userStatusMap[p.uname]||"offline"}/>{dName(p)} <span style={{color:"#666",fontSize:"clamp(7px,1.8vw,9px)"}}>Lv{p.level||1}</span></span>
-            <span style={{color:"#4ade80",fontWeight:600,textAlign:"right"}}>{money(p.totalWon||0)}</span>
-            <span style={{color:"#888",textAlign:"right"}}>{p.opens||0} opens</span>
+        lb.map((p,i)=>{
+          const rankIcon = i<3 ? <MI n={["emoji_events","military_tech","workspace_premium"][i]} s={16} c={["#ffd700","#c0c0c0","#cd7f32"][i]}/> : null;
+          return (
+          <UserName key={p.uname||i} name={p.uname} as="div" style={{display:"grid",gridTemplateColumns:"34px minmax(0,1fr) auto auto",alignItems:"center",gap:"clamp(4px,1.5vw,10px)",padding:"8px clamp(8px,2vw,12px)",background:i<3?"#ffd70008":"#0d1117",border:i<3?"1px solid #ffd70022":"1px solid #151820",borderRadius:6,fontSize:"clamp(9px,2.2vw,12px)",cursor:"pointer"}} onClick={()=>showProfile(p.uname)}>
+            <span style={{fontWeight:800,color:i<3?"#ffd700":"#888",textAlign:"center",display:"flex",alignItems:"center",justifyContent:"center"}}>{rankIcon||`#${i+1}`}</span>
+            <span style={{fontWeight:600,color:"#e2e8f0",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",display:"flex",alignItems:"center",gap:5,minWidth:0}}>
+              <StatusDot status={userStatusMap[p.uname]||"offline"}/>
+              <span style={{overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{dName(p)}</span>
+              <span style={{color:"#666",fontSize:"clamp(7px,1.8vw,9px)",flexShrink:0}}>Lv{p.level||1}</span>
+              {p.banned&&<span style={{color:"#eb4b4b",fontSize:8,background:"#eb4b4b22",padding:"0 4px",borderRadius:3,flexShrink:0}}>BAN</span>}
+              {p.deleted&&<span style={{color:"#666",fontSize:8,background:"#33333355",padding:"0 4px",borderRadius:3,flexShrink:0}}>DEL</span>}
+            </span>
+            <span style={{color:"#4ade80",fontWeight:600,textAlign:"right",whiteSpace:"nowrap"}}>{money(p.totalWon||0)}</span>
+            <span style={{color:"#888",textAlign:"right",whiteSpace:"nowrap",fontSize:"clamp(8px,2vw,10px)"}}>{(p.opens||0).toLocaleString()} opens</span>
           </UserName>
         )})}
       </div>
@@ -2113,15 +2126,16 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
       <button onClick={()=>setShowSoundModal(false)} style={{...S.btn,background:"#3b82f6",color:"#fff",width:"100%",fontWeight:700,padding:10}}>Done</button>
     </div></div>}
     {viewProfile&&<div style={S.overlay} onClick={()=>setViewProfile(null)}><div style={{...S.modal,maxWidth:"clamp(300px,85vw,440px)"}} onClick={e=>e.stopPropagation()}>
-      <div style={{width:56,height:56,borderRadius:"50%",background:"#1e2430",display:"flex",alignItems:"center",justifyContent:"center",fontSize:28,overflow:"hidden"}}>{viewProfile.pfp?<img src={viewProfile.pfp} style={{width:56,height:56,borderRadius:"50%",objectFit:"cover"}}/>:<MI n="person" s={12} c="#666"/>}</div>
-      <div style={{fontSize:"clamp(16px,4vw,22px)",fontWeight:700,display:"flex",alignItems:"center",gap:8,justifyContent:"center"}}><StatusDot status={userStatusMap[viewProfile.username]||"offline"} size={10}/>{viewProfile.display_name||viewProfile.username}</div>
-      <div style={{color:"#888",fontSize:"clamp(9px,2.2vw,11px)",display:"flex",alignItems:"center",gap:6,justifyContent:"center"}}>@{viewProfile.username} · {viewProfile.role||"user"} · <StatusDot status={userStatusMap[viewProfile.username]||"offline"} withLabel/></div>
-      <div style={{color:"#555",fontSize:"clamp(8px,2vw,9px)",fontFamily:"monospace"}}>ID: {viewProfile.uid||"?"}</div>
-      {viewProfile.bio&&viewProfile.privacy!=="private"&&<div style={{color:"#ccc",fontSize:"clamp(10px,2.5vw,12px)",fontStyle:"italic",textAlign:"center"}}>{viewProfile.bio}</div>}
+      <div style={{width:64,height:64,borderRadius:"50%",background:"#1e2430",display:"flex",alignItems:"center",justifyContent:"center",fontSize:28,overflow:"hidden",margin:"0 auto"}}>{viewProfile.pfp?<img src={viewProfile.pfp} style={{width:64,height:64,borderRadius:"50%",objectFit:"cover"}}/>:<MI n="person" s={32} c="#5a6478"/>}</div>
+      <div style={{fontSize:"clamp(16px,4vw,22px)",fontWeight:700,display:"flex",alignItems:"center",gap:8,justifyContent:"center",flexWrap:"wrap"}}><StatusDot status={userStatusMap[viewProfile.username]||"offline"} size={10}/>{viewProfile.display_name||viewProfile.username||"Unknown"}</div>
+      <div style={{color:"#888",fontSize:"clamp(9px,2.2vw,11px)",display:"flex",alignItems:"center",gap:6,justifyContent:"center",flexWrap:"wrap"}}>@{viewProfile.username||"?"} · {viewProfile.role||"user"} · <StatusDot status={userStatusMap[viewProfile.username]||"offline"} withLabel/></div>
+      {viewProfile.uid&&<div style={{color:"#555",fontSize:"clamp(8px,2vw,9px)",fontFamily:"monospace",textAlign:"center"}}>ID: {viewProfile.uid}</div>}
+      {viewProfile.bio&&viewProfile.privacy!=="private"&&<div style={{color:"#ccc",fontSize:"clamp(10px,2.5vw,12px)",fontStyle:"italic",textAlign:"center",padding:"4px 8px",wordBreak:"break-word"}}>{viewProfile.bio}</div>}
       {/* Always-public stats */}
-      <div style={{display:"grid",gridTemplateColumns:"1fr 1fr 1fr",gap:4,width:"100%",fontSize:"clamp(8px,2vw,10px)"}}>
-        {[["Level",viewProfile.level||1],["Wins",viewProfile.wins||0],["Losses",viewProfile.losses||0],["Win Rate",(viewProfile.win_rate||"0.0")+"%"],["Streak",viewProfile.win_streak||0],["Best",viewProfile.best_streak||0],["Opened",viewProfile.total_opened||0],["Earned",viewProfile.total_earned!==undefined?money(viewProfile.total_earned||0):"?"],["Joined",viewProfile.created_at?new Date(viewProfile.created_at).toLocaleDateString():"?"]].map(([l,v])=><div key={l} style={{background:"#080a0e",padding:"4px 6px",borderRadius:4,textAlign:"center"}}><div style={{color:"#555",fontSize:7,textTransform:"uppercase"}}>{l}</div><div style={{fontWeight:600,color:l==="Win Rate"&&parseFloat(v)>50?"#4ade80":l==="Win Rate"&&parseFloat(v)<50?"#eb4b4b":"#e2e8f0"}}>{v}</div></div>)}</div>
-      {viewProfile.privacy==="private"&&<div style={{color:"#888",fontSize:10}}>Some details hidden (private profile)</div>}{viewProfile.warned>0&&<div style={{color:"#f59e0b",background:"#f59e0b11",padding:"4px 8px",borderRadius:6,fontSize:10,textAlign:"center"}}><MI n="warning" s={12} c="#f59e0b"/> Warned: {viewProfile.warn_reason}</div>}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(3,1fr)",gap:4,width:"100%",fontSize:"clamp(8px,2vw,10px)"}}>
+        {[["Level",viewProfile.level||1],["Wins",viewProfile.wins||0],["Losses",viewProfile.losses||0],["Win Rate",(viewProfile.win_rate||"0.0")+"%"],["Streak",viewProfile.win_streak||0],["Best",viewProfile.best_streak||0],["Opened",(viewProfile.total_opened||0).toLocaleString()],["Earned",viewProfile.total_earned!==undefined?money(viewProfile.total_earned||0):"?"],["Joined",viewProfile.created_at?new Date(viewProfile.created_at).toLocaleDateString():"?"]].map(([l,v])=><div key={l} style={{background:"#080a0e",padding:"4px 6px",borderRadius:4,textAlign:"center",overflow:"hidden"}}><div style={{color:"#555",fontSize:7,textTransform:"uppercase"}}>{l}</div><div style={{fontWeight:600,color:l==="Win Rate"&&parseFloat(v)>50?"#4ade80":l==="Win Rate"&&parseFloat(v)<50?"#eb4b4b":"#e2e8f0",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{v}</div></div>)}</div>
+      {viewProfile.privacy==="private"&&<div style={{color:"#888",fontSize:10,textAlign:"center"}}>Some details hidden (private profile)</div>}
+      {viewProfile.warned>0&&<div style={{color:"#f59e0b",background:"#f59e0b11",padding:"4px 8px",borderRadius:6,fontSize:10,textAlign:"center"}}><MI n="warning" s={12} c="#f59e0b"/> Warned: {viewProfile.warn_reason}</div>}
       <div style={{display:"flex",gap:4,width:"100%",flexWrap:"wrap"}}>
         {account&&viewProfile.username!==account.username&&<button onClick={async()=>{const r=await api("/friends/add",{username:account.username,token:account.token,target:viewProfile.username});if(r?.ok)setToast({msg:r.action==="accepted"?"Friend accepted!":"Friend request sent!",color:"#4ade80"});else setToast({msg:r?.error||"Failed",color:"#eb4b4b"})}} style={{...S.btn,background:viewProfile.friendStatus==="friends"?"#4ade8022":"#3b82f622",color:viewProfile.friendStatus==="friends"?"#4ade80":"#3b82f6",flex:1,border:"1px solid "+(viewProfile.friendStatus==="friends"?"#4ade8033":"#3b82f633")}}>{viewProfile.friendStatus==="friends"?"Friends ✓":viewProfile.friendStatus==="sent"?"Pending...":viewProfile.friendStatus==="received"?"Accept ✓":"+ Add Friend"}</button>}
         <button onClick={()=>{setDmTo(viewProfile.username);setViewProfile(null);setPage("dm")}} style={{...S.btn,background:"#8b5cf622",color:"#8b5cf6",flex:1}}>DM</button>
@@ -2216,7 +2230,7 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
       const isMe=account&&u===account.username;
       const status=userStatusMap[u]||"offline";
       const closeMenu=()=>setUserMenu(null);
-      return <div data-user-menu="1" style={{position:"fixed",top:userMenu.y,left:userMenu.x,background:"#0d1117",border:"1px solid #2a3040",borderRadius:8,boxShadow:"0 8px 24px rgba(0,0,0,0.5)",zIndex:99998,minWidth:180,padding:6,animation:"fadeUp .15s ease-out"}}>
+      return <div data-user-menu="1" style={{position:"fixed",top:Math.min(userMenu.y,window.innerHeight-260),left:Math.min(userMenu.x,window.innerWidth-220),background:"#0d1117",border:"1px solid #2a3040",borderRadius:8,boxShadow:"0 8px 24px rgba(0,0,0,0.5)",zIndex:99998,minWidth:180,maxWidth:240,padding:6,animation:"fadeUp .15s ease-out"}}>
         <div style={{padding:"8px 10px",borderBottom:"1px solid #1e2430",marginBottom:4,display:"flex",alignItems:"center",gap:6}}>
           <StatusDot status={status}/>
           <div style={{flex:1,fontSize:13,fontWeight:700,color:"#e2e8f0",overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{u}</div>
