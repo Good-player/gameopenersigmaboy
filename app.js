@@ -590,7 +590,14 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
     setWonItem({...winner,id:uid()});setWonFloat(fl);setWonQuote(quotes[Math.floor(Math.random()*quotes.length)]);
     const items=[];for(let i=0;i<SCROLL_COUNT;i++)items.push(i===WIN_IDX?winner:c.items[Math.floor(Math.random()*c.items.length)]);
     setScrollItems(items);setPage("opening");
-    setSt(p=>{const ns={...p,bal:p.bal-cPrice,stats:{...p.stats,spent:p.stats.spent+cPrice,opened:p.stats.opened+1}};save(ns,drops);return ns});
+    // Persist debit + the won item NOW (don't wait for 5s animation to finish).
+    // If user closes the tab during the scroll animation, server already has the item; local must match.
+    const itemId=uid();setLastWonId(itemId);
+    setSt(p=>{
+      const serverBal=(rollResp.result?.serverBal!==null&&rollResp.result?.serverBal!==undefined)?rollResp.result.serverBal:(p.bal-cPrice+winner.value);
+      const ns={...p,bal:serverBal,inv:[...p.inv,{...winner,id:itemId,from:c.id,t:Date.now(),float:fl}],stats:{...p.stats,spent:p.stats.spent+cPrice,opened:p.stats.opened+1,won:p.stats.won+winner.value,best:winner.value>p.stats.bestVal?winner.name:p.stats.best,bestVal:Math.max(p.stats.bestVal,winner.value)}};
+      save(ns,drops);return ns;
+    });
     requestAnimationFrame(()=>{requestAnimationFrame(()=>{if(!stripRef.current)return;const el=stripRef.current,parent=el.parentElement;el.style.transition="none";el.style.transform="translateX(0)";requestAnimationFrame(()=>{if(!stripRef.current)return;const firstItem=el.children[0];if(!firstItem)return;const itemW=firstItem.offsetWidth,center=parent.offsetWidth/2,pad=itemW*.1,off=WIN_IDX*itemW+pad+(Math.random()*(itemW-pad*2))-center;el.style.transition="transform 5s cubic-bezier(0.15,0.85,0.20,1.01)";el.style.transform=`translateX(-${off}px)`;
       // Tick sound on each item boundary crossing the marker
       // Initialize lastIdx to the starting position so first crossing fires a tick
@@ -633,7 +640,21 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
       document.body.appendChild(flash);
       setTimeout(()=>flash.remove(),500);
     }
-    sndReveal(winner.value>=c.price,winner.rarity);let rp=0;setSt(prev=>{let rc=prev.rentCtr+1;if(rc>=RENT_EVERY){rp=RENT_AMT;rc=0}setRentPaid(rp);const newBal=prev.bal-rp;const isBig=winner.value>=c.price*3;const he={n:prev.stats.opened,bal:newBal};if(isBig)he.label=winner.name+" "+money(winner.value);const itemId=uid();setLastWonId(itemId);const ns={...prev,bal:newBal,inv:[...prev.inv,{...winner,id:itemId,from:c.id,t:Date.now(),float:fl}],stats:{...prev.stats,won:prev.stats.won+winner.value,best:winner.value>prev.stats.bestVal?winner.name:prev.stats.best,bestVal:Math.max(prev.stats.bestVal,winner.value)},loan:prev.loan,rentCtr:rc,history:[...(prev.history||[]),he].slice(-200),starred:prev.starred||{}};const nd={name:winner.name,rarity:winner.rarity,value:winner.value,cond:getCondition(fl),icon:winner.icon};setDrops(dd=>{const r=[nd,...dd].slice(0,20);save(ns,r);return r});setTimeout(()=>{checkReset(ns);lockRef.current=false},400);return ns})},5400);
+    sndReveal(winner.value>=c.price,winner.rarity);
+    let rp=0;
+    setSt(prev=>{
+      let rc=prev.rentCtr+1;if(rc>=RENT_EVERY){rp=RENT_AMT;rc=0}
+      setRentPaid(rp);
+      const newBal=prev.bal-rp;
+      const isBig=winner.value>=c.price*3;
+      const he={n:prev.stats.opened,bal:newBal};
+      if(isBig)he.label=winner.name+" "+money(winner.value);
+      const ns={...prev,bal:newBal,loan:prev.loan,rentCtr:rc,history:[...(prev.history||[]),he].slice(-200),starred:prev.starred||{}};
+      const nd={name:winner.name,rarity:winner.rarity,value:winner.value,cond:getCondition(fl),icon:winner.icon};
+      setDrops(dd=>{const r=[nd,...dd].slice(0,20);save(ns,r);return r});
+      setTimeout(()=>{checkReset(ns);lockRef.current=false},400);
+      return ns;
+    })},5400);
   }
 
   async function doMultiOpen(c,count){
@@ -1220,6 +1241,13 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
                   {buckshotState.sawNext&&<div style={{marginTop:6,fontFamily:"'Black Ops One',sans-serif",color:"#fb923c",fontSize:11,letterSpacing:2}}>🪚 HANDSAW ACTIVE  -  NEXT LIVE = -2</div>}
                   {youKnowNext&&<div style={{marginTop:6,fontFamily:"'Black Ops One',sans-serif",color:youKnowNext==="live"?"#eb4b4b":"#3b82f6",fontSize:11,letterSpacing:2}}>👁 YOU SAW: NEXT SHELL = {youKnowNext.toUpperCase()}</div>}
                 </div>
+                {/* Disconnect countdown — appears when opponent hasn't pinged in a while */}
+                {!buckshotState.winner&&!buckshotState.isSpectator&&buckshotState.oppLastSeen&&buckshotState.serverNow&&(()=>{
+                  const idle=buckshotState.serverNow-buckshotState.oppLastSeen;
+                  if(idle<5000)return null;
+                  const dcRemaining=Math.max(0,Math.ceil((15000-idle)/1000));
+                  return <div style={{textAlign:"center",marginBottom:6,padding:"4px 8px",background:"#7a0a0a55",border:"1px solid #eb4b4b",borderRadius:4,fontFamily:"'Special Elite',serif",fontSize:11,color:"#eb4b4b"}}>⚠ OPPONENT NOT RESPONDING - AUTO-WIN IN {dcRemaining}s</div>;
+                })()}
                 {/* Turn timer */}
                 {!buckshotState.winner&&!buckshotState.isSpectator&&buckshotState.turnStartedAt&&(()=>{
                   const elapsed=Date.now()-buckshotState.turnStartedAt;
@@ -1228,6 +1256,10 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
                   const isYou=buckshotState.turn===account.username;
                   return <div style={{textAlign:"center",marginBottom:8,fontFamily:"'Black Ops One',sans-serif",letterSpacing:2,fontSize:13,color:warn?"#eb4b4b":"#888"}} className={warn?"timerWarn":""}>⏱ {isYou?"YOUR":"OPPONENT"} TURN TIMER: {remaining}s{remaining===0?"  -  FORFEIT IMMINENT":""}</div>;
                 })()}
+                {/* Forfeit button: explicit honest exit */}
+                {!buckshotState.winner&&!buckshotState.isSpectator&&<div style={{textAlign:"center",marginBottom:6}}>
+                  <button onClick={async()=>{const ok=await askConfirm({title:"Forfeit & leave",message:"You will lose your bet and your opponent gets the pot. Continue?",ok:"Forfeit",color:"#eb4b4b",icon:"flag"});if(!ok)return;const r=await api("/lobby/force-leave",{username:account.username});if(r?.ok){setToast({msg:"Forfeited",color:"#eb4b4b"});try{await silentCloudSync()}catch{}}}} style={{...S.btn,background:"#3a0a0a",color:"#eb4b4b",border:"1px solid #6b1818",fontSize:10,padding:"3px 10px"}}>FORFEIT & LEAVE</button>
+                </div>}
                 {/* Action buttons */}
                 {!buckshotState.winner&&buckshotState.turn===account.username&&!buckshotState.isSpectator&&<div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:8,marginBottom:8}}>
                   <button onClick={()=>setBuckshotConfirm({target:"self",title:"SHOOT YOURSELF",desc:"You will fire the chambered shell at yourself. If it's a LIVE shell, you take damage."})} style={{...S.btnBuckshot,background:"#3a0a0a",color:"#eb4b4b",border:"2px solid #6b1818",padding:16}}>🔫 SHOOT SELF</button>
