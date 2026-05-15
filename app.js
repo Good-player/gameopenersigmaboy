@@ -345,7 +345,17 @@ function App(){
   }
   async function joinLobby(id,pw){const r=await api("/lobby/join",{username:account?.username,lobbyId:id,lobbyPassword:pw||"",slot});if(r?.ok){if(r.betLocked>0){setToast({msg:"Locked "+money(r.betLocked)+" — game ON!",color:"#f59e0b"});try{await silentCloudSync()}catch{}}await refreshLobby(id);return true}else{setToast({msg:r?.error||"Failed",color:"#eb4b4b"});return false}}
   async function leaveLobby(){if(curLobby){setPvpEliminated(false);setPvpWinModal(null);await api("/lobby/leave",{username:account?.username,lobbyId:curLobby.id});setCurLobby(null);setLobbyChat([]);clearInterval(lobbyPollRef.current);refreshLobbies()}}
-  async function deleteLobby(){if(curLobby){setPvpEliminated(false);setPvpWinModal(null);await api("/lobby/end",{lobbyId:curLobby.id,username:account?.username});setCurLobby(null);setLobbyChat([]);clearInterval(lobbyPollRef.current);refreshLobbies()}}
+  async function deleteLobby(){
+    if(!curLobby)return;
+    setPvpEliminated(false);setPvpWinModal(null);
+    const r=await api("/lobby/end",{lobbyId:curLobby.id,username:account?.username});
+    if(r?.refunded&&r.refunds&&r.refunds.length>0){
+      const myRefund=r.refunds.find(x=>x.username===account?.username);
+      if(myRefund)setToast({msg:"Refunded "+money(myRefund.amount),color:"#fbbf24"});
+      try{await silentCloudSync()}catch{}
+    }
+    setCurLobby(null);setLobbyChat([]);clearInterval(lobbyPollRef.current);refreshLobbies();
+  }
 
   // Poll lobby while in one
   useEffect(()=>{if(!curLobby?.id)return;const id=setInterval(()=>refreshLobby(curLobby.id),3000);lobbyPollRef.current=id;return()=>clearInterval(id)},[curLobby?.id]);
@@ -1098,15 +1108,17 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
           </div>
           {/* Timer */}
           {curLobby.status==="playing"&&curLobby.mode!=="buckshot"&&<div style={{background:"#141820",borderRadius:8,padding:"8px 14px",marginBottom:8,textAlign:"center"}}><div style={{color:"#f59e0b",fontWeight:800,fontSize:"clamp(20px,6vw,32px)"}}>{Math.floor(lobbyTimer/60000)}:{String(Math.floor((lobbyTimer%60000)/1000)).padStart(2,"0")}</div><div style={{color:"#888",fontSize:"clamp(8px,2vw,10px)"}}>Time remaining · $10,000 start · No loan</div></div>}
-          {curLobby.status==="finished"&&<div style={{background:"#4ade8011",border:"1px solid #4ade8033",borderRadius:8,padding:10,marginBottom:8,textAlign:"center"}}><div style={{color:"#4ade80",fontWeight:800,fontSize:"clamp(14px,3.5vw,18px)"}}>Game Over!</div>{pvpWinModal&&<div style={{marginTop:6}}><div style={{color:"#4ade80",fontWeight:700}}>{pvpWinModal.winner===account?.username?<><MI n="celebration" s={16}/> YOU WON!</>:pvpWinModal.winner+" wins!"}</div>{(pvpWinModal.results||[]).map((p,i)=><div key={p.username} style={{display:"flex",justifyContent:"center",gap:8,fontSize:11,padding:2,color:i===0?"#ffd700":p.eliminated?"#eb4b4b88":"#ccc"}}><span>#{i+1}</span><span>{p.username}</span><span style={{color:p.profit>=0?"#4ade80":"#eb4b4b"}}>{p.profit>=0?"+":""}${(p.profit||0).toLocaleString()}</span>{p.eliminated&&<span style={{color:"#eb4b4b",fontSize:8}}>OUT</span>}</div>)}</div>}</div>}
+          {curLobby.status==="finished"&&<div style={{background:"#4ade8011",border:"1px solid #4ade8033",borderRadius:8,padding:10,marginBottom:8,textAlign:"center"}}><div style={{color:"#4ade80",fontWeight:800,fontSize:"clamp(14px,3.5vw,18px)"}}>Game Over!</div>{pvpWinModal&&<div style={{marginTop:6}}><div style={{color:"#4ade80",fontWeight:700}}>{pvpWinModal.winner===account?.username?<><MI n="celebration" s={16}/> YOU WON {curLobby.mode==="buckshot"?money(curLobby.pot||0):""}!</>:pvpWinModal.winner+" wins!"}</div>{(pvpWinModal.results||[]).map((p,i)=>{const isBuckshot=curLobby.mode==="buckshot";const isWinner=p.username===pvpWinModal.winner;const amt=isBuckshot?(isWinner?(curLobby.pot||0):-(curLobby.bet||0)):(p.profit||0);return <div key={p.username} style={{display:"flex",justifyContent:"center",gap:8,fontSize:11,padding:2,color:i===0?"#ffd700":p.eliminated?"#eb4b4b88":"#ccc"}}><span>#{i+1}</span><span>{p.username}</span><span style={{color:amt>=0?"#4ade80":"#eb4b4b"}}>{amt>=0?"+":""}{money(amt)}</span>{p.eliminated&&<span style={{color:"#eb4b4b",fontSize:8}}>OUT</span>}</div>})}</div>}</div>}
           {/* Players */}
           <div style={{fontSize:"clamp(10px,2.5vw,12px)",fontWeight:600,color:"#888",marginBottom:4}}>Players ({curLobby._players?.length||0}/{curLobby.mode==="buckshot"?2:5})</div>
           <div style={{display:"flex",flexDirection:"column",gap:2,marginBottom:10}}>
             {(curLobby._players||[]).map((p,i)=><div key={p.username} style={{display:"flex",alignItems:"center",gap:8,padding:"6px 10px",background:i===0&&curLobby.status==="finished"?"#4ade8011":"#141820",borderRadius:6,borderLeft:"3px solid "+(p.username===curLobby.host?"#f59e0b":"#333")}}>
               <span style={{color:i===0&&curLobby.status==="finished"?"#ffd700":"#888",fontWeight:700,width:20}}>{curLobby.status==="finished"?"#"+(i+1):""}</span>
               <UserName name={p.username} style={{fontWeight:700,color:"#e2e8f0",flex:1,cursor:"pointer",display:"inline-flex",alignItems:"center",gap:5}} onClick={()=>{api("/profile/full",{target:p.username,username:account?.username}).then(r=>{if(r?.profile)setViewProfile(r.profile)})}}><StatusDot status={userStatusMap[p.username]||"offline"} size={7}/>{p.username}</UserName>
-              {curLobby.status!=="waiting"&&<span style={{color:p.profit>=0?"#4ade80":"#eb4b4b",fontWeight:700,fontSize:"clamp(10px,2.5vw,13px)"}}>{p.profit>=0?"+":""}${(p.profit||0).toLocaleString()}</span>}
-              {curLobby.status!=="waiting"&&<span style={{color:"#888",fontSize:"clamp(8px,2vw,10px)"}}>{p.opens||0} opens</span>}{p.eliminated&&<span style={{color:"#eb4b4b",background:"#eb4b4b22",padding:"1px 4px",borderRadius:3,fontSize:8,fontWeight:700}}>OUT</span>}
+              {curLobby.status!=="waiting"&&curLobby.mode!=="buckshot"&&<span style={{color:p.profit>=0?"#4ade80":"#eb4b4b",fontWeight:700,fontSize:"clamp(10px,2.5vw,13px)"}}>{p.profit>=0?"+":""}${(p.profit||0).toLocaleString()}</span>}
+              {curLobby.status!=="waiting"&&curLobby.mode!=="buckshot"&&<span style={{color:"#888",fontSize:"clamp(8px,2vw,10px)"}}>{p.opens||0} opens</span>}
+              {curLobby.status==="finished"&&curLobby.mode==="buckshot"&&buckshotState?.winner&&<span style={{color:p.username===buckshotState.winner?"#4ade80":"#eb4b4b",fontWeight:700,fontSize:"clamp(10px,2.5vw,13px)"}}>{p.username===buckshotState.winner?"+"+money(curLobby.pot||0):"-"+money(curLobby.bet||0)}</span>}
+              {p.eliminated&&<span style={{color:"#eb4b4b",background:"#eb4b4b22",padding:"1px 4px",borderRadius:3,fontSize:8,fontWeight:700}}>OUT</span>}
               {curLobby.status==="waiting"&&curLobby.host===account.username&&p.username!==account.username&&!["admin","owner","mod"].includes(p.role)&&<button onClick={async()=>{await api("/lobby/kick",{username:account.username,target:p.username,lobbyId:curLobby.id});refreshLobby(curLobby.id)}} style={{background:"#eb4b4b22",color:"#eb4b4b",border:"none",padding:"2px 6px",borderRadius:3,cursor:"pointer",fontSize:9}}>Kick</button>}
             </div>)}
           </div>
