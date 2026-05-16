@@ -1309,13 +1309,6 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
                   {buckshotState.sawNext&&<div style={{marginTop:6,fontFamily:"'Black Ops One',sans-serif",color:"#fb923c",fontSize:11,letterSpacing:2}}>🪚 HANDSAW ACTIVE  -  NEXT LIVE = -2</div>}
                   {youKnowNext&&<div style={{marginTop:6,fontFamily:"'Black Ops One',sans-serif",color:youKnowNext==="live"?"#eb4b4b":"#3b82f6",fontSize:11,letterSpacing:2}}>👁 YOU SAW: NEXT SHELL = {youKnowNext.toUpperCase()}</div>}
                 </div>
-                {/* Disconnect countdown — appears when opponent hasn't pinged in a while */}
-                {!buckshotState.winner&&!buckshotState.isSpectator&&buckshotState.oppLastSeen&&buckshotState.serverNow&&(()=>{
-                  const idle=buckshotState.serverNow-buckshotState.oppLastSeen;
-                  if(idle<5000)return null;
-                  const dcRemaining=Math.max(0,Math.ceil((15000-idle)/1000));
-                  return <div style={{textAlign:"center",marginBottom:6,padding:"4px 8px",background:"#7a0a0a55",border:"1px solid #eb4b4b",borderRadius:4,fontFamily:"'Special Elite',serif",fontSize:11,color:"#eb4b4b"}}>⚠ OPPONENT NOT RESPONDING - AUTO-WIN IN {dcRemaining}s</div>;
-                })()}
                 {/* Turn timer */}
                 {!buckshotState.winner&&!buckshotState.isSpectator&&buckshotState.turnStartedAt&&(()=>{
                   const elapsed=Date.now()-buckshotState.turnStartedAt;
