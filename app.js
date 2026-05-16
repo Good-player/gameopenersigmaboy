@@ -430,6 +430,47 @@ function App(){
     const id=setInterval(fetchState,1000);
     return()=>{dead=true;clearInterval(id);_SND.stopMusic();buckshotEventCursorRef.current=0;setBuckshotNarration(null)};
   },[curLobby?.id,curLobby?.mode]);
+  // Disconnect-on-leave: when user navigates away from PvP page or closes tab during a playing buckshot game,
+  // tell the server. Gives the user 15s grace to reconnect before pot goes to opponent.
+  useEffect(()=>{
+    if(!account||curLobby?.mode!=="buckshot"||curLobby?.status!=="playing"||buckshotState?.winner)return;
+    const send=()=>{
+      try{
+        const url=API_BASE+"/buckshot/disconnect";
+        const body=JSON.stringify({lobbyId:curLobby.id,username:account.username});
+        // Use sendBeacon if available — guarantees delivery even on tab close
+        if(navigator.sendBeacon){navigator.sendBeacon(url,new Blob([body],{type:"application/json"}))}
+        else{fetch(url,{method:"POST",body,keepalive:true}).catch(()=>{})}
+      }catch{}
+    };
+    const onUnload=()=>send();
+    window.addEventListener("pagehide",onUnload);
+    window.addEventListener("beforeunload",onUnload);
+    return()=>{
+      window.removeEventListener("pagehide",onUnload);
+      window.removeEventListener("beforeunload",onUnload);
+      // Also send disconnect when navigating away from PvP page (page change in SPA)
+      if(page!=="pvp")send();
+    };
+  },[account?.username,curLobby?.id,curLobby?.status,curLobby?.mode,buckshotState?.winner,page]);
+  // On PvP page load, check for an active playing buckshot game (in case user closed tab and is coming back)
+  const[rejoinPrompt,setRejoinPrompt]=useState(null);
+  useEffect(()=>{
+    if(!account||page!=="pvp"||curLobby)return;
+    let dead=false;
+    (async()=>{
+      try{
+        const r=await api("/buckshot/my-active",{username:account.username});
+        if(dead)return;
+        if(r?.active&&!r.active.expired){
+          setRejoinPrompt(r.active);
+          // Tell server we reconnected (clears grace flag)
+          try{await api("/buckshot/reconnect",{lobbyId:r.active.lobbyId,username:account.username})}catch{}
+        }
+      }catch{}
+    })();
+    return()=>{dead=true};
+  },[account?.username,page,curLobby?.id]);
   // Process narration events. Use event IDs to track what's been shown (server may trim old events).
   useEffect(()=>{
     if(!buckshotState||!buckshotState.events||!buckshotState.events.length)return;
@@ -1195,6 +1236,23 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
         <div style={{fontSize:"clamp(15px,4vw,20px)",fontWeight:700}}><MI n="sports_kabaddi" s={20}/> PvP Arena</div>
         {!curLobby&&account&&<button onClick={async()=>{const ok=await askConfirm({title:"Escape stuck lobby",message:"Use this if you can't create or join a lobby because of a previous broken game. Any unfinished bets will be refunded.",ok:"Clear & refund",color:"#fbbf24",icon:"emergency"});if(!ok)return;const r=await api("/lobby/force-leave",{username:account.username});if(r?.ok){if(r.refundedTotal>0){setToast({msg:"Cleared "+r.kickedFrom+" stale lobby, refunded "+money(r.refundedTotal),color:"#4ade80"});try{await silentCloudSync()}catch{}}else if(r.kickedFrom>0){setToast({msg:"Cleared "+r.kickedFrom+" stale lobby entries",color:"#4ade80"})}else{setToast({msg:"No stuck lobbies found",color:"#888"})}refreshLobbies&&refreshLobbies()}else{setToast({msg:r?.error||"Failed",color:"#eb4b4b"})}}} style={{...S.btn,background:"#fbbf2422",color:"#fbbf24",border:"1px solid #fbbf2444",fontSize:"clamp(9px,2vw,11px)",padding:"4px 10px"}} title="Use if you can't join/create a lobby">🛟 Escape stuck lobby</button>}
       </div>
+      {/* REJOIN ACTIVE MATCH banner — appears when user has a playing buckshot game they're not currently in */}
+      {rejoinPrompt&&!curLobby&&account&&<div style={{background:"linear-gradient(135deg,#3a0a0a,#7a0a0a)",border:"2px solid #eb4b4b",borderRadius:8,padding:14,marginBottom:14,animation:"bounceIn .4s ease-out"}}>
+        <div style={{display:"flex",alignItems:"center",gap:10,justifyContent:"space-between",flexWrap:"wrap"}}>
+          <div style={{minWidth:0,flex:1}}>
+            <div style={{fontWeight:800,fontSize:"clamp(13px,3.5vw,16px)",color:"#fff",fontFamily:"'Black Ops One',sans-serif",letterSpacing:1.5}}>🔫 ACTIVE BUCKSHOT MATCH</div>
+            <div style={{color:"#cbd5e1",fontSize:"clamp(10px,2.5vw,12px)",marginTop:4,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{rejoinPrompt.name} · Pot: {money(rejoinPrompt.pot||0)}</div>
+            <div style={{color:"#fbbf24",fontSize:"clamp(9px,2.2vw,11px)",marginTop:4}}>Your turn timer or grace period is still running — rejoin now or you'll forfeit the pot.</div>
+          </div>
+          <button onClick={async()=>{
+            const lid=rejoinPrompt.lobbyId;
+            try{await api("/buckshot/reconnect",{lobbyId:lid,username:account.username})}catch{}
+            const r=await api("/lobby/get",{lobbyId:lid});
+            if(r?.lobby){setCurLobby(r.lobby);setRejoinPrompt(null)}
+            else{setToast({msg:"Match no longer exists",color:"#eb4b4b"});setRejoinPrompt(null)}
+          }} style={{...S.btn,background:"#eb4b4b",color:"#fff",fontWeight:800,padding:"10px 24px",fontSize:"clamp(11px,2.8vw,14px)",letterSpacing:1}}>REJOIN MATCH</button>
+        </div>
+      </div>}
       {!account?<div style={{color:"#f59e0b",background:"#f59e0b11",padding:12,borderRadius:8,textAlign:"center"}}>Login required for PvP</div>:
       curLobby?<div>
         {/* IN-LOBBY VIEW */}
@@ -1309,6 +1367,12 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
                   {buckshotState.sawNext&&<div style={{marginTop:6,fontFamily:"'Black Ops One',sans-serif",color:"#fb923c",fontSize:11,letterSpacing:2}}>🪚 HANDSAW ACTIVE  -  NEXT LIVE = -2</div>}
                   {youKnowNext&&<div style={{marginTop:6,fontFamily:"'Black Ops One',sans-serif",color:youKnowNext==="live"?"#eb4b4b":"#3b82f6",fontSize:11,letterSpacing:2}}>👁 YOU SAW: NEXT SHELL = {youKnowNext.toUpperCase()}</div>}
                 </div>
+                {/* Opponent disconnected: countdown to auto-win. Only triggers on explicit disconnect (tab close / leave), NOT poll silence. */}
+                {!buckshotState.winner&&!buckshotState.isSpectator&&buckshotState.oppDisconnectedAt>0&&buckshotState.serverNow&&(()=>{
+                  const elapsed=buckshotState.serverNow-buckshotState.oppDisconnectedAt;
+                  const remaining=Math.max(0,Math.ceil((15000-elapsed)/1000));
+                  return <div style={{textAlign:"center",marginBottom:6,padding:"6px 10px",background:"linear-gradient(90deg,#7a0a0a,#3a0a0a,#7a0a0a)",border:"1px solid #eb4b4b",borderRadius:4,fontFamily:"'Special Elite',serif",fontSize:12,color:"#eb4b4b",fontWeight:700,letterSpacing:1}}>⚠ OPPONENT LEFT - AUTO-WIN IN {remaining}s</div>;
+                })()}
                 {/* Turn timer */}
                 {!buckshotState.winner&&!buckshotState.isSpectator&&buckshotState.turnStartedAt&&(()=>{
                   const elapsed=Date.now()-buckshotState.turnStartedAt;
