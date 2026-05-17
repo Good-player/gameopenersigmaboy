@@ -50,7 +50,12 @@
       tab_btc: "BTC",
       tab_plinko: "Plinko",
       tab_roulette: "Roulette",
+      tab_wheel: "Wheel",
       tab_weather: "Weather",
+      tab_faq: "FAQ",
+      cat_games: "Games",
+      cat_social: "Social",
+      cat_more: "More",
       
       // Weather
       weather_title: "Weather",
@@ -287,7 +292,12 @@
       tab_btc: "BTC",
       tab_plinko: "Plinko",
       tab_roulette: "Roulett",
+      tab_wheel: "Hjul",
       tab_weather: "Väder",
+      tab_faq: "FAQ",
+      cat_games: "Spel",
+      cat_social: "Social",
+      cat_more: "Mer",
       
       // Weather
       weather_title: "Väder",
@@ -485,6 +495,103 @@
     return"en";
   }
 
+  // Item-name translations. English is the canonical key (matches server). Add Swedish names here as needed.
+  // Items not in this map fall back to the English name on display.
+  const ITEM_NAMES = {
+    sv: {
+      // Common scrap/worn/militia items
+      "Rust Bucket": "Rosthink",
+      "Tin Foil": "Tennfolie",
+      "Bent Nail": "Böjd spik",
+      "Duct Tape": "Silvertejp",
+      "Scrap Metal": "Skrotmetall",
+      "Copper Tube": "Kopparrör",
+      "Old Spring": "Gammal fjäder",
+      "Silver Screw": "Silverskruv",
+      "Brass Fitting": "Mässingsbeslag",
+      "Gold Wire": "Guldtråd",
+      "Platinum Shard": "Platinaflisa",
+      "Sand Dune": "Sanddyn",
+      "Storm": "Storm",
+      "Mudder": "Lerdjur",
+      "Scorched": "Bränd",
+      "Predator": "Rovdjur",
+      "Blue Spruce": "Blågran",
+      "Abyss": "Avgrund",
+      "Oxide Blaze": "Oxidlåga",
+      "Crimson Kimono": "Karmosin kimono",
+      "Night Stripe": "Nattrand",
+      "Slate": "Skiffer",
+      "Dry Season": "Torrperiod",
+      "Buckshot": "Hagel",
+      "Warbird": "Krigsfågel",
+      "Copperhead": "Kopparhuvud",
+      "Mako": "Mako",
+      "Jackal": "Schakal",
+      "Rattler": "Skallerorm",
+      "Torque": "Vridmoment",
+      "Basilisk": "Basilisk",
+      "Nightfall": "Skymning",
+      "Venom Strike": "Giftattack",
+      // Frost
+      "Icicle": "Istapp",
+      "Permafrost": "Tjäle",
+      "Glacier": "Glaciär",
+      "Avalanche": "Lavin",
+      "Tundra": "Tundra",
+      "Frostbite": "Förfrysning",
+      "Ice Queen": "Isdrottningen",
+      "Blizzard": "Snöstorm",
+      "Absolute Zero": "Absoluta nollpunkten",
+      "Sub-Zero": "Under noll",
+      // Hazard
+      "Reactor": "Reaktor",
+      "Fallout": "Nedfall",
+      "Toxin": "Toxin",
+      "Meltdown": "Härdsmälta",
+      "Corroded": "Korroderad",
+      "Radiant": "Strålande",
+      "Isotope": "Isotop",
+      "Biohazard": "Biofara",
+      "Chernobyl": "Tjernobyl",
+      "Plutonium": "Plutonium",
+      // Rail (Swedish railway theme — already Swedish)
+      "Spårhalt Sign": "Spårhaltskylt",
+      "Pendeltåg Schedule": "Pendeltågstidtabell",
+      "Spår 1 Bell": "Spår 1-klocka",
+      "Conductor Whistle": "Konduktörsvissla",
+      "ATC Module": "ATC-modul",
+      "Signal Box Key": "Ställverksnyckel",
+      "X60 Door Panel": "X60-dörrpanel",
+      "Stationmaster Cap": "Stationsmästarmössa",
+      "Trafikverket Manual": "Trafikverkets handbok",
+      "Stockholm C Master Key": "Stockholm C-huvudnyckel",
+      "Gröna Tåget Prototype": "Gröna Tåget-prototyp",
+      // Royal
+      "Crown Jewel": "Kronjuvel",
+      "Regal Scepter": "Kunglig spira",
+      "Golden Throne": "Gyllene tron",
+      "Royal Guard": "Kungliga vakten",
+      "King Cobra": "Kungskobra",
+      "Imperial Eagle": "Kejserlig örn",
+      "Coronation": "Kröning",
+      "Sovereign Will": "Suverän vilja",
+      "Dynasty": "Dynasti",
+      "Emperor": "Kejsare",
+      // Cursed
+      "Cracked Mirror": "Sprucken spegel",
+      "Old Doll Hand": "Gammal dockhand",
+      "Bloodied Letter": "Blodigt brev",
+      "Whispering Ring": "Viskande ring",
+      "Withered Rose": "Vissen ros",
+      "Possessed Music Box": "Besatt speldosa",
+      "Bound Tome": "Inbunden lunta",
+      "Soul Lantern": "Själslykta",
+      "Black Veil": "Svart slöja",
+      "Necronomicon Page": "Necronomicon-sida"
+    }
+  };
+
   const state = { lang: getDefaultLang() };
 
   // Translate function with optional {var} substitution
@@ -499,6 +606,14 @@
     return s;
   }
 
+  // Translate item name. Falls back to the input if no translation is set.
+  function tItem(name){
+    if(!name)return name;
+    const dict = ITEM_NAMES[state.lang];
+    if(dict && dict[name])return dict[name];
+    return name;
+  }
+
   function setLang(lang){
     if(!STRINGS[lang])return;
     state.lang = lang;
@@ -511,5 +626,5 @@
   function getAvailableLangs(){return Object.keys(STRINGS)}
 
   // Expose globally
-  window.I18N = { t, setLang, getLang, getAvailableLangs, STRINGS };
+  window.I18N = { t, tItem, setLang, getLang, getAvailableLangs, STRINGS };
 })();

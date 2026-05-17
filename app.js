@@ -104,13 +104,17 @@ function playTone(freq,dur,type="sine",vol=0.15){try{const c=actx(),o=c.createOs
 function sndOpen(){playTone(440,.08,"square",.1);setTimeout(()=>playTone(660,.08,"square",.1),60)}
 // Case-select tick (CS-style click as items pass marker)
 // Uses Web Audio API: load mp3 once into a buffer, play instances at consistent volume.
-let _tickBuf=null,_tickCtx=null,_tickLoading=null;
+let _tickBuf=null,_tickCtx=null,_tickGain=null,_tickLoading=null,_lastTickAt=0;
 async function _ensureTick(){
-  if(_tickBuf)return _tickBuf;
+  if(_tickBuf&&_tickCtx)return _tickBuf;
   if(_tickLoading)return _tickLoading;
   _tickLoading=(async()=>{
     try{
+      // Defer to next gesture if AudioContext blocked. Browsers allow creation but suspend until interaction.
       _tickCtx=_tickCtx||new (window.AudioContext||window.webkitAudioContext)();
+      _tickGain=_tickCtx.createGain();
+      _tickGain.gain.value=0.35;
+      _tickGain.connect(_tickCtx.destination);
       const r=await fetch("sound/caseselect.mp3");
       const ab=await r.arrayBuffer();
       _tickBuf=await _tickCtx.decodeAudioData(ab);
@@ -119,8 +123,24 @@ async function _ensureTick(){
   })();
   return _tickLoading;
 }
-// Preload at module load so first ticks fire instantly
-_ensureTick();
+// On the FIRST user gesture, resume the context (handles autoplay-blocked state).
+// Without this, the context starts suspended and the first ticks during case-open are silent.
+function _unlockTickAudio(){
+  if(_tickCtx&&_tickCtx.state==="suspended")_tickCtx.resume().catch(()=>{});
+  if(!_tickBuf)_ensureTick();
+}
+if(typeof window!=="undefined"){
+  const unlock=()=>{_unlockTickAudio();
+    window.removeEventListener("pointerdown",unlock);
+    window.removeEventListener("keydown",unlock);
+    window.removeEventListener("touchstart",unlock);
+  };
+  window.addEventListener("pointerdown",unlock,{once:false});
+  window.addEventListener("keydown",unlock,{once:false});
+  window.addEventListener("touchstart",unlock,{once:false});
+  // Also kick off the preload so by the time the user clicks Open, the buffer is ready
+  setTimeout(()=>_ensureTick(),50);
+}
 
 // ============================================================
 // Sound manager: SFX + Music with separate volumes + mute toggles
@@ -203,14 +223,17 @@ const _SND={
 _SND.load();
 window._SND=_SND;
 function sndTick(){
-  if(!_tickBuf||!_tickCtx)return;
+  if(!_tickBuf||!_tickCtx||!_tickGain)return;
+  // Throttle: ticks fire on every item-boundary crossing during the case-open scroll, which can be many per second
+  // toward the end of the animation when speeds are still rapid. Cap to one tick per 35ms.
+  const now=performance.now();
+  if(now-_lastTickAt<35)return;
+  _lastTickAt=now;
   try{
-    if(_tickCtx.state==="suspended")_tickCtx.resume();
+    if(_tickCtx.state==="suspended")_tickCtx.resume().catch(()=>{});
     const src=_tickCtx.createBufferSource();
     src.buffer=_tickBuf;
-    const g=_tickCtx.createGain();
-    g.gain.value=0.35;
-    src.connect(g);g.connect(_tickCtx.destination);
+    src.connect(_tickGain);
     src.start();
   }catch{}
 }
@@ -289,6 +312,7 @@ function App(){
   // i18n hook - re-render on language change
   const[lang,setLang]=useState(typeof window!=='undefined'&&window.I18N?window.I18N.getLang():'en');
   const t=(k,vars)=>typeof window!=='undefined'&&window.I18N?window.I18N.t(k,vars):k;
+  const tItem=(n)=>typeof window!=='undefined'&&window.I18N&&window.I18N.tItem?window.I18N.tItem(n):n;
   useEffect(()=>{const h=(e)=>setLang(e.detail.lang);window.addEventListener('langchange',h);return()=>window.removeEventListener('langchange',h)},[]);
 
   const[appLoading,setAppLoading]=useState(true);const[offline,setOffline]=useState(false);const offlineRef=useRef(false);useEffect(()=>{window.__setOnline=(v)=>{if(!v&&!offlineRef.current){offlineRef.current=true;setOffline(true)}if(v&&offlineRef.current){offlineRef.current=false;setOffline(false)}};return()=>{window.__setOnline=null}},[]);const[loadProgress,setLoadProgress]=useState(0);const[loadMsg,setLoadMsg]=useState("Initializing...");const[slot,setSlot]=useState(0);const[slotMeta,setSlotMeta]=useState([null,null,null]);const[showSlots,setShowSlots]=useState(true);
@@ -1093,7 +1117,7 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
     {/* ═══════════ CASE OPENING animation ═══════════ */}
     {page==="opening"&&<div className="pageBody" style={S.body}>
       <div style={{textAlign:"center",padding:"clamp(6px,1.5vw,10px) 0",color:"#555",fontSize:"clamp(10px,2.5vw,13px)"}}>{scrollDone?"":"Opening "+selCase?.name+"..."}</div>
-      <div style={S.scrollOuter}><div style={S.marker}/><div style={S.scrollClip}><div ref={stripRef} style={S.strip}>{scrollItems.map((item,i)=>{const rar=R[item.rarity];const won=i===WIN_IDX&&scrollDone;return(<div key={i} style={{...S.sItem,borderBottomColor:rar.color,background:won?rar.bg:"#0c0e13",transform:won?"scale(1.08)":"none",transition:"all 0.3s ease",boxShadow:won?"0 0 12px "+rar.color+"66":"none",zIndex:won?2:0}}><div style={{fontSize:"clamp(16px,4vw,28px)",lineHeight:1}}>{item.rarity==="chroma"?<span style={{color:"#ffd700",textShadow:"0 0 8px #ffd70066"}}><MI n="star" s={24} c="#ffd700"/></span>:<span>{item.icon||"?"}</span>}</div><div style={{fontSize:"clamp(6px,1.6vw,9px)",color:rar.color,fontWeight:600,textAlign:"center",lineHeight:1.15,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",width:"100%"}}>{item.name}</div></div>)})}</div></div></div>
+      <div style={S.scrollOuter}><div style={S.marker}/><div style={S.scrollClip}><div ref={stripRef} style={S.strip}>{scrollItems.map((item,i)=>{const rar=R[item.rarity];const won=i===WIN_IDX&&scrollDone;return(<div key={i} style={{...S.sItem,borderBottomColor:rar.color,background:won?rar.bg:"#0c0e13",transform:won?"scale(1.08)":"none",transition:"all 0.3s ease",boxShadow:won?"0 0 12px "+rar.color+"66":"none",zIndex:won?2:0}}><div style={{fontSize:"clamp(16px,4vw,28px)",lineHeight:1}}>{item.rarity==="chroma"?<span style={{color:"#ffd700",textShadow:"0 0 8px #ffd70066"}}><MI n="star" s={24} c="#ffd700"/></span>:<span>{item.icon||"?"}</span>}</div><div style={{fontSize:"clamp(6px,1.6vw,9px)",color:rar.color,fontWeight:600,textAlign:"center",lineHeight:1.15,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap",width:"100%"}}>{tItem(item.name)}</div></div>)})}</div></div></div>
       {scrollDone&&wonItem&&(()=>{const rar=R[wonItem.rarity];const isEpic=["covert","chroma","legendary"].includes(wonItem.rarity);const isChroma=wonItem.rarity==="chroma";const isLegendary=wonItem.rarity==="legendary";const cs=caseStats(selCase?.id);const pp=cs.spent===0?"0.00":((cs.earned/cs.spent-1)*100).toFixed(2);const cond=getCondition(wonFloat);return(
         <div className="fadeUp" style={{display:"flex",flexDirection:"column",gap:"clamp(10px,2.5vw,16px)"}}>
           <div style={{background:"#141820",border:"1px solid #1e2430",borderRadius:"clamp(6px,1.5vw,10px)",padding:"clamp(16px,4vw,28px)",display:"flex",flexDirection:"column",alignItems:"center",gap:"clamp(6px,1.5vw,10px)"}}>
@@ -1120,7 +1144,7 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
 
     {/* INSPECT */}
     {/* ═══════════ INSPECT case ═══════════ */}
-    {page==="inspect"&&inspecting&&<div className="pageBody" style={S.body}><button onClick={()=>setPage("shop")} style={{...S.btn,background:"#ffffff08",color:"#666",marginBottom:10}}>&larr; Back</button><div style={{fontSize:"clamp(15px,4vw,20px)",fontWeight:700,marginBottom:10}}>{inspecting.icon} {inspecting.name} &mdash; {money(inspecting.price)}</div><div style={S.iList}><div style={S.iHdr}><span>Item</span><span>Rarity</span><span>Value</span><span>Rate</span></div>{[...inspecting.items].sort((a,b)=>R[b.rarity].chance-R[a.rarity].chance).map((item,i)=>{const pool=inspecting.items.filter(x=>x.rarity===item.rarity).length;const p=((R[item.rarity].chance/pool)*100).toFixed(2);return(<div key={i} style={{...S.iRow,borderLeftColor:R[item.rarity].color}}><span style={{fontWeight:600}}>{item.icon} {item.name}</span><span style={{color:R[item.rarity].color,fontWeight:600}}>{R[item.rarity].label}</span><span style={{color:"#4ade80"}}>{money(item.value)}</span><span style={{color:"#666"}}>{p}%</span></div>)})}</div><div style={{marginTop:16}}><div style={{fontSize:"clamp(12px,3vw,14px)",fontWeight:600,marginBottom:8,color:"#777"}}>Drop Rates</div>{Object.entries(R).map(([k,v])=><div key={k} style={{display:"flex",alignItems:"center",gap:6,marginBottom:3}}><span style={{color:v.color,fontWeight:600,width:"clamp(60px,18vw,90px)",fontSize:"clamp(9px,2.5vw,12px)"}}>{v.label}</span><div style={{flex:1,height:5,background:"#1a1d24",borderRadius:3,overflow:"hidden"}}><div style={{height:"100%",borderRadius:3,background:v.color,width:`${Math.max(v.chance*200,1)}%`}}/></div><span style={{color:"#666",width:"clamp(32px,10vw,48px)",textAlign:"right",fontSize:"clamp(8px,2.2vw,11px)"}}>{(v.chance*100).toFixed(1)}%</span></div>)}</div></div>}
+    {page==="inspect"&&inspecting&&<div className="pageBody" style={S.body}><button onClick={()=>setPage("shop")} style={{...S.btn,background:"#ffffff08",color:"#666",marginBottom:10}}>&larr; Back</button><div style={{fontSize:"clamp(15px,4vw,20px)",fontWeight:700,marginBottom:10}}>{inspecting.icon} {inspecting.name} &mdash; {money(inspecting.price)}</div><div style={S.iList}><div style={S.iHdr}><span>Item</span><span>Rarity</span><span>Value</span><span>Rate</span></div>{[...inspecting.items].sort((a,b)=>R[b.rarity].chance-R[a.rarity].chance).map((item,i)=>{const pool=inspecting.items.filter(x=>x.rarity===item.rarity).length;const p=((R[item.rarity].chance/pool)*100).toFixed(2);return(<div key={i} style={{...S.iRow,borderLeftColor:R[item.rarity].color}}><span style={{fontWeight:600}}>{item.icon} {tItem(item.name)}</span><span style={{color:R[item.rarity].color,fontWeight:600}}>{R[item.rarity].label}</span><span style={{color:"#4ade80"}}>{money(item.value)}</span><span style={{color:"#666"}}>{p}%</span></div>)})}</div><div style={{marginTop:16}}><div style={{fontSize:"clamp(12px,3vw,14px)",fontWeight:600,marginBottom:8,color:"#777"}}>Drop Rates</div>{Object.entries(R).map(([k,v])=><div key={k} style={{display:"flex",alignItems:"center",gap:6,marginBottom:3}}><span style={{color:v.color,fontWeight:600,width:"clamp(60px,18vw,90px)",fontSize:"clamp(9px,2.5vw,12px)"}}>{v.label}</span><div style={{flex:1,height:5,background:"#1a1d24",borderRadius:3,overflow:"hidden"}}><div style={{height:"100%",borderRadius:3,background:v.color,width:`${Math.max(v.chance*200,1)}%`}}/></div><span style={{color:"#666",width:"clamp(32px,10vw,48px)",textAlign:"right",fontSize:"clamp(8px,2.2vw,11px)"}}>{(v.chance*100).toFixed(1)}%</span></div>)}</div></div>}
 
     {/* INVENTORY */}
     {/* ═══════════ INVENTORY ═══════════ */}
@@ -1136,8 +1160,8 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
         <button onClick={()=>setSellConfirm("all")} disabled={unstarredCount===0} style={{...S.btn,background:"#eb4b4b22",color:"#eb4b4b",padding:"5px 8px"}}>Sell all</button>
       </div>
       {filteredInv.length===0?<div style={{color:"#555",padding:20,textAlign:"center"}}>No items match.</div>:
-        invView==="grid"?<div style={S.invG}>{filteredInv.map((item,i)=>{const starred=st.starred?.[item.id];return(<div key={item.id||i} className="invItem" onClick={()=>setSelItem(item)} style={{...S.invI,borderLeftColor:R[item.rarity]?.color||"#555",cursor:"pointer",position:"relative",background:starred?"#ffd70008":"#0d1117"}}>{starred&&<div style={{position:"absolute",top:4,right:6,color:"#ffd700",fontSize:"clamp(10px,2.5vw,14px)"}}>{"\u2605"}</div>}<div style={{fontWeight:600,fontSize:"clamp(10px,2.8vw,13px)"}}>{item.icon} {item.name}</div><div style={{display:"flex",justifyContent:"space-between"}}><span style={{color:R[item.rarity]?.color,fontSize:"clamp(8px,2.2vw,10px)"}}>{R[item.rarity]?.label}</span><span style={{color:"#4ade80",fontSize:"clamp(9px,2.5vw,12px)",fontWeight:600}}>{money(item.value)}</span></div>{item.float!==undefined&&<div style={{color:"#666",fontSize:"clamp(7px,1.8vw,9px)"}}>{getCondition(item.float)}</div>}</div>)})}</div>:
-        <div style={{display:"flex",flexDirection:"column",gap:2}}>{filteredInv.map((item,i)=>{const starred=st.starred?.[item.id];return(<div key={item.id||i} onClick={()=>setSelItem(item)} style={{display:"grid",gridTemplateColumns:"24px 1fr 80px 70px 24px",alignItems:"center",gap:6,padding:"5px 8px",background:starred?"#ffd70008":"#0d1117",borderLeft:`2px solid ${R[item.rarity]?.color}`,borderRadius:3,cursor:"pointer",fontSize:"clamp(8px,2.2vw,11px)"}}><span>{item.icon}</span><span style={{fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{item.name}</span><span style={{color:R[item.rarity]?.color,fontWeight:600}}>{R[item.rarity]?.label}</span><span style={{color:"#4ade80",fontWeight:600}}>{money(item.value)}</span><span style={{color:starred?"#ffd700":"#333"}}>{starred?<MI n="star" s={12} c="#ffd700"/>:<MI n="star_outline" s={12} c="#333"/>}</span></div>)})}</div>}
+        invView==="grid"?<div style={S.invG}>{filteredInv.map((item,i)=>{const starred=st.starred?.[item.id];return(<div key={item.id||i} className="invItem" onClick={()=>setSelItem(item)} style={{...S.invI,borderLeftColor:R[item.rarity]?.color||"#555",cursor:"pointer",position:"relative",background:starred?"#ffd70008":"#0d1117"}}>{starred&&<div style={{position:"absolute",top:4,right:6,color:"#ffd700",fontSize:"clamp(10px,2.5vw,14px)"}}>{"\u2605"}</div>}<div style={{fontWeight:600,fontSize:"clamp(10px,2.8vw,13px)"}}>{item.icon} {tItem(item.name)}</div><div style={{display:"flex",justifyContent:"space-between"}}><span style={{color:R[item.rarity]?.color,fontSize:"clamp(8px,2.2vw,10px)"}}>{R[item.rarity]?.label}</span><span style={{color:"#4ade80",fontSize:"clamp(9px,2.5vw,12px)",fontWeight:600}}>{money(item.value)}</span></div>{item.float!==undefined&&<div style={{color:"#666",fontSize:"clamp(7px,1.8vw,9px)"}}>{getCondition(item.float)}</div>}</div>)})}</div>:
+        <div style={{display:"flex",flexDirection:"column",gap:2}}>{filteredInv.map((item,i)=>{const starred=st.starred?.[item.id];return(<div key={item.id||i} onClick={()=>setSelItem(item)} style={{display:"grid",gridTemplateColumns:"24px 1fr 80px 70px 24px",alignItems:"center",gap:6,padding:"5px 8px",background:starred?"#ffd70008":"#0d1117",borderLeft:`2px solid ${R[item.rarity]?.color}`,borderRadius:3,cursor:"pointer",fontSize:"clamp(8px,2.2vw,11px)"}}><span>{item.icon}</span><span style={{fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{tItem(item.name)}</span><span style={{color:R[item.rarity]?.color,fontWeight:600}}>{R[item.rarity]?.label}</span><span style={{color:"#4ade80",fontWeight:600}}>{money(item.value)}</span><span style={{color:starred?"#ffd700":"#333"}}>{starred?<MI n="star" s={12} c="#ffd700"/>:<MI n="star_outline" s={12} c="#333"/>}</span></div>)})}</div>}
     </div>}
 
     {/* STATS */}
@@ -2397,7 +2421,7 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
     {superWin&&<div style={{position:"fixed",inset:0,background:"rgba(0,0,0,0.85)",backdropFilter:"blur(8px)",zIndex:99997,display:"flex",alignItems:"center",justifyContent:"center",animation:"fadeUp .3s ease-out"}} onClick={()=>setSuperWin(null)}>
       <div onClick={e=>e.stopPropagation()} className={superWin.rarity==="legendary"?"legendaryPulse":"chromaSpin"} style={{position:"relative",padding:"clamp(20px,5vw,40px) clamp(24px,6vw,60px)",borderRadius:20,background:superWin.rarity==="legendary"?"linear-gradient(135deg,#1a1300,#0a0800,#1a1300)":"linear-gradient(135deg,#1a0a1a,#0a0a1a,#0a1a1a)",border:`3px solid ${superWin.rarity==="legendary"?"#ffd700":"#a855f7"}`,boxShadow:superWin.rarity==="legendary"?"0 0 60px #ffd70066, 0 0 120px #fbbf2444":"0 0 60px #a855f766, 0 0 120px #06b6d444",textAlign:"center",maxWidth:"92vw",animation:"bounceIn .6s ease-out"}}>
         <div style={{fontSize:"clamp(11px,2.8vw,14px)",letterSpacing:4,color:superWin.rarity==="legendary"?"#ffd700":"#a855f7",fontWeight:800,marginBottom:8,textTransform:"uppercase"}} className={superWin.rarity==="legendary"?"glow":"rainbowGlow"}>{superWin.rarity==="legendary"?"⭐ LEGENDARY DROP ⭐":"✨ CHROMA UNLOCKED ✨"}</div>
-        <div style={{fontSize:"clamp(24px,8vw,52px)",fontWeight:900,letterSpacing:1,marginBottom:6,color:"#fff",textShadow:superWin.rarity==="legendary"?"0 0 30px #ffd700":"0 0 30px #a855f7"}}>{superWin.icon} {superWin.name}</div>
+        <div style={{fontSize:"clamp(24px,8vw,52px)",fontWeight:900,letterSpacing:1,marginBottom:6,color:"#fff",textShadow:superWin.rarity==="legendary"?"0 0 30px #ffd700":"0 0 30px #a855f7"}}>{superWin.icon} {tItem(superWin.name)}</div>
         <div style={{fontSize:"clamp(20px,5vw,36px)",fontWeight:800,color:"#4ade80",marginBottom:4,textShadow:"0 0 16px #4ade8088"}}>+{money(superWin.value)}</div>
         <div style={{fontSize:"clamp(9px,2.2vw,11px)",color:"#888",marginBottom:18}}>from {superWin.caseName}</div>
         <button onClick={()=>setSuperWin(null)} style={{...S.btn,background:superWin.rarity==="legendary"?"linear-gradient(135deg,#ffd700,#fbbf24)":"linear-gradient(135deg,#a855f7,#06b6d4)",color:"#000",fontWeight:800,padding:"10px 30px",fontSize:"clamp(11px,2.8vw,14px)",letterSpacing:2}}>AWESOME!</button>
