@@ -313,6 +313,17 @@ function App(){
   const[lang,setLang]=useState(typeof window!=='undefined'&&window.I18N?window.I18N.getLang():'en');
   const t=(k,vars)=>typeof window!=='undefined'&&window.I18N?window.I18N.t(k,vars):k;
   const tItem=(n)=>typeof window!=='undefined'&&window.I18N&&window.I18N.tItem?window.I18N.tItem(n):n;
+  // Resolve an item's icon. Server-side roll doesn't include icon, so items coming from cloud sync may have no icon.
+  // Fall back to a lookup against CASES (client-side data).
+  const iconFor=(item)=>{
+    if(item?.icon)return item.icon;
+    if(!item?.name||!CASES)return "❓";
+    for(const c of CASES){
+      const m=c.items?.find(i=>i.name===item.name);
+      if(m&&m.icon)return m.icon;
+    }
+    return "❓";
+  };
   useEffect(()=>{const h=(e)=>setLang(e.detail.lang);window.addEventListener('langchange',h);return()=>window.removeEventListener('langchange',h)},[]);
 
   const[appLoading,setAppLoading]=useState(true);const[offline,setOffline]=useState(false);const offlineRef=useRef(false);useEffect(()=>{window.__setOnline=(v)=>{if(!v&&!offlineRef.current){offlineRef.current=true;setOffline(true)}if(v&&offlineRef.current){offlineRef.current=false;setOffline(false)}};return()=>{window.__setOnline=null}},[]);const[loadProgress,setLoadProgress]=useState(0);const[loadMsg,setLoadMsg]=useState("Initializing...");const[slot,setSlot]=useState(0);const[slotMeta,setSlotMeta]=useState([null,null,null]);const[showSlots,setShowSlots]=useState(true);
@@ -800,12 +811,17 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
 
   async function doMultiOpen(c,count){
     const sd=events.find(e=>e.type==="sale"&&e.discount>0);const cPrice=sd?Math.floor(c.price*(1-sd.discount/100)):c.price;if(lockRef.current||st.bal<cPrice*count)return;lockRef.current=true;
-    setSt(p=>({...p,bal:p.bal-cPrice*count}));
-    const r=await api("/roll/multi",{caseId:c.id,count,username:account?.username||"",token:account?.token||""});
-    if(!r?.ok||!r.results){lockRef.current=false;setSt(p=>({...p,bal:p.bal+cPrice*count}));setToast({msg:"Failed",color:"#eb4b4b"});return}
-    const items=r.results.map(rr=>({...rr,id:uid(),icon:c.items.find(i=>i.name===rr.name)?.icon||"?",from:c.id,t:Date.now()}));
-    setMultiResults({items,case:c,totalValue:r.totalValue,totalCost:c.price*count});
-    setSt(p=>{const ns={...p,inv:[...p.inv,...items],stats:{...p.stats,spent:p.stats.spent+cPrice*count,won:p.stats.won+r.totalValue,opened:p.stats.opened+count}};save(ns,drops);return ns});
+    const r=await api("/roll/multi",{caseId:c.id,count,username:account?.username||"",token:account?.token||"",slot});
+    if(!r?.ok||!r.results){lockRef.current=false;setToast({msg:r?.error||"Failed",color:"#eb4b4b"});return}
+    // Use server-issued item IDs so cloud sync doesn't replace them with different IDs and orphan local actions.
+    const items=r.results.map(rr=>({...rr,id:rr.serverItemId||uid(),icon:c.items.find(i=>i.name===rr.name)?.icon||"?",from:c.id,t:Date.now()}));
+    setMultiResults({items,case:c,totalValue:r.totalValue,totalCost:cPrice*count});
+    lastServerActionRef.current=Date.now();
+    setSt(p=>{
+      const newBal=(r.serverBal!==null&&r.serverBal!==undefined)?r.serverBal:(p.bal-cPrice*count+r.totalValue);
+      const ns={...p,bal:newBal,inv:[...p.inv,...items],stats:{...p.stats,spent:p.stats.spent+cPrice*count,won:p.stats.won+r.totalValue,opened:p.stats.opened+count}};
+      save(ns,drops);return ns;
+    });
     sndReveal(r.totalValue>c.price*count);setPage("multi");lockRef.current=false;
   }
   function openAgain(){setLastWonId(null);if(!selCase||st.bal<selCase.price){setPage("shop");setOpening(false);return}doOpen(selCase)}
@@ -946,8 +962,16 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
 
   function sellItem(item){sndSell();setSt(p=>{const idx=p.inv.findIndex(i=>i.id===item.id);if(idx===-1)return p;const ni=[...p.inv];ni.splice(idx,1);const starred={...p.starred};delete starred[item.id];const ns={...p,bal:p.bal+item.value,inv:ni,stats:{...p.stats,sold:(p.stats.sold||0)+item.value},starred};save(ns,drops);return ns});setSelItem(null)}
   function sellLastWon(){if(!lastWonId||!wonItem)return;sndSell();setSt(p=>{const idx=p.inv.findIndex(i=>i.id===lastWonId);if(idx===-1)return p;const item=p.inv[idx];const ni=[...p.inv];ni.splice(idx,1);const starred={...p.starred};delete starred[lastWonId];const ns={...p,bal:p.bal+item.value,inv:ni,stats:{...p.stats,sold:(p.stats.sold||0)+item.value},starred};save(ns,drops);return ns});setLastWonId(null)}
-  function sellMultiple(count){sndSell();setSt(p=>{let sorted=getFilteredSorted(p.inv,p.starred);sorted=sorted.filter(i=>!p.starred[i.id]);const toSell=sorted.slice(0,count);if(!toSell.length)return p;const ids=new Set(toSell.map(i=>i.id));const total=toSell.reduce((s,i)=>s+i.value,0);const ni=p.inv.filter(i=>!ids.has(i.id));const ns={...p,bal:p.bal+total,inv:ni,stats:{...p.stats,sold:(p.stats.sold||0)+total}};save(ns,drops);return ns})}
-  function sellAllUnstarred(){sndSell();setSt(p=>{const unstarred=p.inv.filter(i=>!p.starred[i.id]);if(!unstarred.length)return p;const total=unstarred.reduce((s,i)=>s+i.value,0);const starred=p.inv.filter(i=>p.starred[i.id]);const ns={...p,bal:p.bal+total,inv:starred,stats:{...p.stats,sold:(p.stats.sold||0)+total}};save(ns,drops);return ns});setSellConfirm(null)}
+  function sellMultiple(count){sndSell();setSt(p=>{let sorted=getFilteredSorted(p.inv,p.starred);sorted=sorted.filter(i=>!p.starred[i.id]&&i.rarity!=="legendary"&&i.rarity!=="chroma");const toSell=sorted.slice(0,count);if(!toSell.length)return p;const ids=new Set(toSell.map(i=>i.id));const total=toSell.reduce((s,i)=>s+i.value,0);const ni=p.inv.filter(i=>!ids.has(i.id));const ns={...p,bal:p.bal+total,inv:ni,stats:{...p.stats,sold:(p.stats.sold||0)+total}};save(ns,drops);return ns})}
+  function sellAllUnstarred(){sndSell();setSt(p=>{
+    // ALWAYS protect legendary + chroma items from bulk-sell, even if not starred. The rarest items should never be lost to a misclick.
+    const unstarred=p.inv.filter(i=>!p.starred[i.id]&&i.rarity!=="legendary"&&i.rarity!=="chroma");
+    if(!unstarred.length)return p;
+    const total=unstarred.reduce((s,i)=>s+i.value,0);
+    const keep=p.inv.filter(i=>p.starred[i.id]||i.rarity==="legendary"||i.rarity==="chroma");
+    const ns={...p,bal:p.bal+total,inv:keep,stats:{...p.stats,sold:(p.stats.sold||0)+total}};
+    save(ns,drops);return ns;
+  });setSellConfirm(null)}
   function toggleStar(id){setSt(p=>{const s={...p.starred};if(s[id])delete s[id];else s[id]=true;const ns={...p,starred:s};save(ns,drops);return ns})}
 
   function getFilteredSorted(inv,starred){let items=[...inv];if(invFilter==="starred")items=items.filter(i=>starred[i.id]);else if(invFilter!=="all")items=items.filter(i=>i.rarity===invFilter);if(invSort==="newest")items.reverse();else if(invSort==="value-high")items.sort((a,b)=>b.value-a.value);else if(invSort==="value-low")items.sort((a,b)=>a.value-b.value);else if(invSort==="rarity")items.sort((a,b)=>RKEYS.indexOf(b.rarity)-RKEYS.indexOf(a.rarity));else if(invSort==="name")items.sort((a,b)=>a.name.localeCompare(b.name));return items}
@@ -1018,7 +1042,12 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
   },[page]);
   const activeSale=events.find(e=>e.type==="sale"&&e.discount>0);const saleDiscount=activeSale?activeSale.discount:0;
   const activeEffect=events.find(e=>!dismissedEvents[e.id]&&e.style&&(()=>{try{const s=JSON.parse(e.style);return s.effect}catch{return false}})());const bodyEffect=activeEffect?(()=>{try{const s=JSON.parse(activeEffect.style);return s.effect}catch{return""}})():"";
-  const RENT_AMT=st.bal>=1000000000?Math.floor(st.bal*0.02):st.bal>=1000000?Math.floor(st.bal*0.01):BASE_RENT;
+  // Rent scales: $200 base for small balances. Above $1M, scales mildly as 0.3% of balance.
+  // Above $1B, caps at 0.5% (was 2% which drained billionaire accounts in ~250 opens).
+  // Cap at $50M per rent so it never feels punishing.
+  const RENT_AMT = st.bal >= 1_000_000_000 ? Math.min(50_000_000, Math.floor(st.bal * 0.005))
+                  : st.bal >= 1_000_000   ? Math.min(50_000_000, Math.floor(st.bal * 0.003))
+                  : BASE_RENT;
   const rentIn=RENT_EVERY-st.rentCtr,invTotal=st.inv.reduce((s,i)=>s+i.value,0),profit=(st.stats.sold||0)+invTotal-st.stats.spent,unstarredCount=st.inv.filter(i=>!st.starred?.[i.id]).length,unstarredVal=st.inv.filter(i=>!st.starred?.[i.id]).reduce((s,i)=>s+i.value,0);
   function caseStats(cId){const items=st.inv.filter(i=>i.from===cId);const sp=items.length*(CASES.find(c=>c.id===cId)?.price||0);const ea=items.reduce((s,i)=>s+i.value,0);const counts={};RKEYS.forEach(k=>{counts[k]=items.filter(i=>i.rarity===k).length});return{opened:items.length,spent:sp,earned:ea,counts}}
   const filteredInv=getFilteredSorted(st.inv,st.starred||{});
@@ -1144,7 +1173,7 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
 
     {/* INSPECT */}
     {/* ═══════════ INSPECT case ═══════════ */}
-    {page==="inspect"&&inspecting&&<div className="pageBody" style={S.body}><button onClick={()=>setPage("shop")} style={{...S.btn,background:"#ffffff08",color:"#666",marginBottom:10}}>&larr; Back</button><div style={{fontSize:"clamp(15px,4vw,20px)",fontWeight:700,marginBottom:10}}>{inspecting.icon} {inspecting.name} &mdash; {money(inspecting.price)}</div><div style={S.iList}><div style={S.iHdr}><span>Item</span><span>Rarity</span><span>Value</span><span>Rate</span></div>{[...inspecting.items].sort((a,b)=>R[b.rarity].chance-R[a.rarity].chance).map((item,i)=>{const pool=inspecting.items.filter(x=>x.rarity===item.rarity).length;const p=((R[item.rarity].chance/pool)*100).toFixed(2);return(<div key={i} style={{...S.iRow,borderLeftColor:R[item.rarity].color}}><span style={{fontWeight:600}}>{item.icon} {tItem(item.name)}</span><span style={{color:R[item.rarity].color,fontWeight:600}}>{R[item.rarity].label}</span><span style={{color:"#4ade80"}}>{money(item.value)}</span><span style={{color:"#666"}}>{p}%</span></div>)})}</div><div style={{marginTop:16}}><div style={{fontSize:"clamp(12px,3vw,14px)",fontWeight:600,marginBottom:8,color:"#777"}}>Drop Rates</div>{Object.entries(R).map(([k,v])=><div key={k} style={{display:"flex",alignItems:"center",gap:6,marginBottom:3}}><span style={{color:v.color,fontWeight:600,width:"clamp(60px,18vw,90px)",fontSize:"clamp(9px,2.5vw,12px)"}}>{v.label}</span><div style={{flex:1,height:5,background:"#1a1d24",borderRadius:3,overflow:"hidden"}}><div style={{height:"100%",borderRadius:3,background:v.color,width:`${Math.max(v.chance*200,1)}%`}}/></div><span style={{color:"#666",width:"clamp(32px,10vw,48px)",textAlign:"right",fontSize:"clamp(8px,2.2vw,11px)"}}>{(v.chance*100).toFixed(1)}%</span></div>)}</div></div>}
+    {page==="inspect"&&inspecting&&<div className="pageBody" style={S.body}><button onClick={()=>setPage("shop")} style={{...S.btn,background:"#ffffff08",color:"#666",marginBottom:10}}>&larr; Back</button><div style={{fontSize:"clamp(15px,4vw,20px)",fontWeight:700,marginBottom:10}}>{inspecting.icon} {inspecting.name} &mdash; {money(inspecting.price)}</div><div style={S.iList}><div style={S.iHdr}><span>Item</span><span>Rarity</span><span>Value</span><span>Rate</span></div>{[...inspecting.items].sort((a,b)=>R[b.rarity].chance-R[a.rarity].chance).map((item,i)=>{const pool=inspecting.items.filter(x=>x.rarity===item.rarity).length;const p=((R[item.rarity].chance/pool)*100).toFixed(2);return(<div key={i} style={{...S.iRow,borderLeftColor:R[item.rarity].color}}><span style={{fontWeight:600}}>{iconFor(item)} {tItem(item.name)}</span><span style={{color:R[item.rarity].color,fontWeight:600}}>{R[item.rarity].label}</span><span style={{color:"#4ade80"}}>{money(item.value)}</span><span style={{color:"#666"}}>{p}%</span></div>)})}</div><div style={{marginTop:16}}><div style={{fontSize:"clamp(12px,3vw,14px)",fontWeight:600,marginBottom:8,color:"#777"}}>Drop Rates</div>{Object.entries(R).map(([k,v])=><div key={k} style={{display:"flex",alignItems:"center",gap:6,marginBottom:3}}><span style={{color:v.color,fontWeight:600,width:"clamp(60px,18vw,90px)",fontSize:"clamp(9px,2.5vw,12px)"}}>{v.label}</span><div style={{flex:1,height:5,background:"#1a1d24",borderRadius:3,overflow:"hidden"}}><div style={{height:"100%",borderRadius:3,background:v.color,width:`${Math.max(v.chance*200,1)}%`}}/></div><span style={{color:"#666",width:"clamp(32px,10vw,48px)",textAlign:"right",fontSize:"clamp(8px,2.2vw,11px)"}}>{(v.chance*100).toFixed(1)}%</span></div>)}</div></div>}
 
     {/* INVENTORY */}
     {/* ═══════════ INVENTORY ═══════════ */}
@@ -1160,8 +1189,8 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
         <button onClick={()=>setSellConfirm("all")} disabled={unstarredCount===0} style={{...S.btn,background:"#eb4b4b22",color:"#eb4b4b",padding:"5px 8px"}}>Sell all</button>
       </div>
       {filteredInv.length===0?<div style={{color:"#555",padding:20,textAlign:"center"}}>No items match.</div>:
-        invView==="grid"?<div style={S.invG}>{filteredInv.map((item,i)=>{const starred=st.starred?.[item.id];return(<div key={item.id||i} className="invItem" onClick={()=>setSelItem(item)} style={{...S.invI,borderLeftColor:R[item.rarity]?.color||"#555",cursor:"pointer",position:"relative",background:starred?"#ffd70008":"#0d1117"}}>{starred&&<div style={{position:"absolute",top:4,right:6,color:"#ffd700",fontSize:"clamp(10px,2.5vw,14px)"}}>{"\u2605"}</div>}<div style={{fontWeight:600,fontSize:"clamp(10px,2.8vw,13px)"}}>{item.icon} {tItem(item.name)}</div><div style={{display:"flex",justifyContent:"space-between"}}><span style={{color:R[item.rarity]?.color,fontSize:"clamp(8px,2.2vw,10px)"}}>{R[item.rarity]?.label}</span><span style={{color:"#4ade80",fontSize:"clamp(9px,2.5vw,12px)",fontWeight:600}}>{money(item.value)}</span></div>{item.float!==undefined&&<div style={{color:"#666",fontSize:"clamp(7px,1.8vw,9px)"}}>{getCondition(item.float)}</div>}</div>)})}</div>:
-        <div style={{display:"flex",flexDirection:"column",gap:2}}>{filteredInv.map((item,i)=>{const starred=st.starred?.[item.id];return(<div key={item.id||i} onClick={()=>setSelItem(item)} style={{display:"grid",gridTemplateColumns:"24px 1fr 80px 70px 24px",alignItems:"center",gap:6,padding:"5px 8px",background:starred?"#ffd70008":"#0d1117",borderLeft:`2px solid ${R[item.rarity]?.color}`,borderRadius:3,cursor:"pointer",fontSize:"clamp(8px,2.2vw,11px)"}}><span>{item.icon}</span><span style={{fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{tItem(item.name)}</span><span style={{color:R[item.rarity]?.color,fontWeight:600}}>{R[item.rarity]?.label}</span><span style={{color:"#4ade80",fontWeight:600}}>{money(item.value)}</span><span style={{color:starred?"#ffd700":"#333"}}>{starred?<MI n="star" s={12} c="#ffd700"/>:<MI n="star_outline" s={12} c="#333"/>}</span></div>)})}</div>}
+        invView==="grid"?<div style={S.invG}>{filteredInv.map((item,i)=>{const starred=st.starred?.[item.id];return(<div key={item.id||i} className="invItem" onClick={()=>setSelItem(item)} style={{...S.invI,borderLeftColor:R[item.rarity]?.color||"#555",cursor:"pointer",position:"relative",background:starred?"#ffd70008":"#0d1117"}}>{starred&&<div style={{position:"absolute",top:4,right:6,color:"#ffd700",fontSize:"clamp(10px,2.5vw,14px)"}}>{"\u2605"}</div>}<div style={{fontWeight:600,fontSize:"clamp(10px,2.8vw,13px)"}}>{iconFor(item)} {tItem(item.name)}</div><div style={{display:"flex",justifyContent:"space-between"}}><span style={{color:R[item.rarity]?.color,fontSize:"clamp(8px,2.2vw,10px)"}}>{R[item.rarity]?.label}</span><span style={{color:"#4ade80",fontSize:"clamp(9px,2.5vw,12px)",fontWeight:600}}>{money(item.value)}</span></div>{item.float!==undefined&&<div style={{color:"#666",fontSize:"clamp(7px,1.8vw,9px)"}}>{getCondition(item.float)}</div>}</div>)})}</div>:
+        <div style={{display:"flex",flexDirection:"column",gap:2}}>{filteredInv.map((item,i)=>{const starred=st.starred?.[item.id];return(<div key={item.id||i} onClick={()=>setSelItem(item)} style={{display:"grid",gridTemplateColumns:"24px 1fr 80px 70px 24px",alignItems:"center",gap:6,padding:"5px 8px",background:starred?"#ffd70008":"#0d1117",borderLeft:`2px solid ${R[item.rarity]?.color}`,borderRadius:3,cursor:"pointer",fontSize:"clamp(8px,2.2vw,11px)"}}><span>{iconFor(item)}</span><span style={{fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{tItem(item.name)}</span><span style={{color:R[item.rarity]?.color,fontWeight:600}}>{R[item.rarity]?.label}</span><span style={{color:"#4ade80",fontWeight:600}}>{money(item.value)}</span><span style={{color:starred?"#ffd700":"#333"}}>{starred?<MI n="star" s={12} c="#ffd700"/>:<MI n="star_outline" s={12} c="#333"/>}</span></div>)})}</div>}
     </div>}
 
     {/* STATS */}
