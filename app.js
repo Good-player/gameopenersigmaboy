@@ -454,12 +454,18 @@ function App(){
   useEffect(()=>{
     if(!curLobby?.id||curLobby.mode!=="buckshot")return;
     let dead=false;
+    // Remember the last winner we saw so we can distinguish "match ended" (lobby was reaped post-finish) from "lobby cancelled" on a 404
+    let lastSeenWinner=null;
     const fetchState=async()=>{
       if(dead)return;
       try{
         const r=await api("/buckshot/state",{lobbyId:curLobby.id,username:account?.username||""});
-        if(r?.state){setBuckshotState(r.state);return}
-        // Lobby gone (cancelled, deleted, or never existed). Bounce out cleanly.
+        if(r?.state){
+          if(r.state.winner)lastSeenWinner=r.state.winner;
+          setBuckshotState(r.state);
+          return;
+        }
+        // Lobby gone. Decide whether it was cancelled, ended normally, or reaped after our local copy already had a winner.
         if(r&&(r.error==="Lobby not found"||r.error==="Not found")){
           dead=true;
           clearInterval(id);
@@ -468,8 +474,15 @@ function App(){
           setBuckshotNarration(null);
           setBuckshotState(null);
           setCurLobby(null);
-          setToast({msg:"Lobby was cancelled by host. Bets refunded.",color:"#f59e0b"});
-          // Pull fresh balance (server has refunded us)
+          if(lastSeenWinner){
+            // The match had already concluded in our last poll. The lobby was just reaped from the DB. Don't show a misleading "cancelled" toast.
+            const youWon=lastSeenWinner===account?.username;
+            setToast({msg:youWon?"Match ended · you won":"Match ended",color:youWon?"#4ade80":"#888"});
+          } else {
+            // We never saw a winner — most likely the host cancelled before the game ran to completion.
+            setToast({msg:"Lobby was cancelled by host. Bets refunded.",color:"#f59e0b"});
+          }
+          // Pull fresh balance (server has refunded us or paid out the pot)
           try{await silentCloudSync()}catch{}
           refreshLobbies&&refreshLobbies();
         }
