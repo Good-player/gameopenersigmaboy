@@ -397,6 +397,14 @@ function App(){
 
   // Poll lobby while in one
   useEffect(()=>{if(!curLobby?.id)return;const id=setInterval(()=>refreshLobby(curLobby.id),3000);lobbyPollRef.current=id;return()=>clearInterval(id)},[curLobby?.id]);
+  // Auto-refresh the PvP lobby LIST while the user is on the PvP page and not yet in a lobby.
+  // Picks up new lobbies created by others and removes ones that became full/finished.
+  useEffect(()=>{
+    if(page!=="pvp"||curLobby)return;
+    refreshLobbies();
+    const id=setInterval(refreshLobbies,4000);
+    return()=>clearInterval(id);
+  },[page,curLobby?.id]);
   // Refresh user status map every 30s (used for online/away badges)
   useEffect(()=>{
     const fetchStatus=()=>{api("/online",{}).then(r=>{if(r?.players){const map={};for(const p of r.players){map[p.uname]=p.status}setUserStatusMap(map)}})};
