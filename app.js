@@ -329,6 +329,7 @@ function App(){
   const[appLoading,setAppLoading]=useState(true);const[offline,setOffline]=useState(false);const offlineRef=useRef(false);useEffect(()=>{window.__setOnline=(v)=>{if(!v&&!offlineRef.current){offlineRef.current=true;setOffline(true)}if(v&&offlineRef.current){offlineRef.current=false;setOffline(false)}};return()=>{window.__setOnline=null}},[]);const[loadProgress,setLoadProgress]=useState(0);const[loadMsg,setLoadMsg]=useState("Initializing...");const[slot,setSlot]=useState(0);const[slotMeta,setSlotMeta]=useState([null,null,null]);const[showSlots,setShowSlots]=useState(true);
   const[st,setSt]=useState(INIT);const[page,setPage]=useState("shop");const[selCase,setSelCase]=useState(null);const[wonItem,setWonItem]=useState(null);const[wonFloat,setWonFloat]=useState(0);const[wonQuote,setWonQuote]=useState("");const[scrollItems,setScrollItems]=useState([]);const[scrollDone,setScrollDone]=useState(false);const[opening,setOpening]=useState(false);const[resetMsg,setResetMsg]=useState("");const[loanAmt,setLoanAmt]=useState("");const[loanMinutes,setLoanMinutes]=useState("5");const[showLoanModal,setShowLoanModal]=useState(false);const[rentPaid,setRentPaid]=useState(0);const[inspecting,setInspecting]=useState(null);const[confirmReset,setConfirmReset]=useState(false);const[drops,setDrops]=useState([]);const[showSoundModal,setShowSoundModal]=useState(false);const[soundVer,setSoundVer]=useState(0);
   const[invSort,setInvSort]=useState("newest");const[invFilter,setInvFilter]=useState("all");const[invView,setInvView]=useState("grid");const[selItem,setSelItem]=useState(null);const[sellAmt,setSellAmt]=useState("");const[sellConfirm,setSellConfirm]=useState(null);const[lastWonId,setLastWonId]=useState(null);const[superWin,setSuperWin]=useState(null);const[openCategory,setOpenCategory]=useState(null);
+  const[mkListings,setMkListings]=useState([]);const[mkSort,setMkSort]=useState("newest");const[mkMyListings,setMkMyListings]=useState([]);const[mkView,setMkView]=useState("browse");const[mkListItem,setMkListItem]=useState(null);const[mkListPrice,setMkListPrice]=useState("");
   // Close category dropdown when clicking outside the nav.
   useEffect(()=>{
     if(!openCategory)return;
@@ -932,6 +933,10 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
     setOpenCategory(null);
     if(k==="map")getOnline().then(r=>{if(r)setOnlineData(r)});
     if(k==="pvp")refreshLobbies&&refreshLobbies();
+    if(k==="market"&&account){
+      api("/market/list",{sort:mkSort,limit:50}).then(r=>{if(r?.ok)setMkListings(r.listings||[])});
+      api("/market/my",{username:account.username}).then(r=>{if(r?.ok)setMkMyListings(r.listings||[])});
+    }
     if(k==="bj"&&account){api("/bj/buycard",{username:account.username,token:account.token}).then(r=>{if(r?.hasCard)setBjHasCard(true)})}
     if(k==="wheel"&&account){api("/wheel/status",{username:account.username}).then(r=>setWheelStatus(r))}
     if(k==="school"){
@@ -1125,7 +1130,7 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
       const inCategory={
         games:["flip","horse","bj","btc","plinko","roulette","wheel"],
         social:["live","lb","chat","dm","map"],
-        more:["stats","loan","me","school","faq"]
+        more:["market","stats","loan","me","school","faq"]
       };
       const tabLabel=(k)=>{
         if(k==="shop")return t("tab_shop");
@@ -1133,6 +1138,7 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
         if(k==="pvp")return t("tab_pvp");
         if(k==="dm")return `${t("tab_dm")}${dmUnread>0?" ("+dmUnread+")":""}`;
         if(k==="school")return t("tab_weather");
+        if(k==="market")return t("tab_market")||"Market";
         return t("tab_"+k)||k;
       };
       const isOn=(k)=>(page===k||(page==="opening"&&k==="shop"));
@@ -1545,7 +1551,7 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
                 })()}
                 {/* Forfeit button: explicit honest exit */}
                 {!buckshotState.winner&&!buckshotState.isSpectator&&<div style={{textAlign:"center",marginBottom:6}}>
-                  <button onClick={async()=>{const ok=await askConfirm({title:"Forfeit & leave",message:"You will lose your bet and your opponent gets the pot. Continue?",ok:"Forfeit",color:"#eb4b4b",icon:"flag"});if(!ok)return;const r=await api("/lobby/force-leave",{username:account.username});if(r?.ok){setToast({msg:"Forfeited",color:"#eb4b4b"});try{await silentCloudSync()}catch{}}}} style={{...S.btn,background:"#3a0a0a",color:"#eb4b4b",border:"1px solid #6b1818",fontSize:10,padding:"3px 10px"}}>FORFEIT & LEAVE</button>
+                  <button onClick={async()=>{const lostAmount=curLobby?.bet||0;const ok=await askConfirm({title:"Forfeit & leave",message:"You will lose your bet of "+money(lostAmount)+" and your opponent gets the pot. Continue?",ok:"Forfeit",color:"#eb4b4b",icon:"flag"});if(!ok)return;const r=await api("/lobby/force-leave",{username:account.username});if(r?.ok){setToast({msg:"Forfeited · lost "+money(lostAmount),color:"#eb4b4b"});try{await silentCloudSync()}catch{}}}} style={{...S.btn,background:"#3a0a0a",color:"#eb4b4b",border:"1px solid #6b1818",fontSize:10,padding:"3px 10px"}}>FORFEIT & LEAVE</button>
                 </div>}
                 {/* The Gun — visible centerpiece for shoot/blank animations */}
                 {!buckshotState.winner&&<div style={{display:"flex",justifyContent:"center",marginBottom:10,padding:"10px 0"}}>
@@ -1952,6 +1958,74 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
       </div>}
     </div>}
 
+    {/* MARKETPLACE */}
+    {page==="market"&&<div className="pageBody" style={{...S.body,maxWidth:900,margin:"0 auto"}}>
+      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+        <button onClick={()=>setPage("shop")} style={{...S.btn,background:"#ffffff08",color:"#888",padding:"4px 10px",fontSize:11,display:"inline-flex",alignItems:"center",gap:3}}><MI n="arrow_back" s={14}/>{t("back")}</button>
+        <div style={{fontSize:"clamp(18px,4.5vw,24px)",fontWeight:800,display:"flex",alignItems:"center",gap:8}}><MI n="storefront" s={24} c="#fbbf24"/> Marketplace</div>
+      </div>
+      <div style={{display:"flex",gap:6,marginBottom:10,flexWrap:"wrap"}}>
+        <button onClick={()=>setMkView("browse")} style={{...S.btn,background:mkView==="browse"?"#fbbf2433":"#ffffff08",color:mkView==="browse"?"#fbbf24":"#888",padding:"6px 14px",fontSize:11}}>Browse</button>
+        <button onClick={()=>setMkView("mine")} style={{...S.btn,background:mkView==="mine"?"#fbbf2433":"#ffffff08",color:mkView==="mine"?"#fbbf24":"#888",padding:"6px 14px",fontSize:11}}>My Listings</button>
+        <button onClick={()=>setMkView("sell")} style={{...S.btn,background:mkView==="sell"?"#fbbf2433":"#ffffff08",color:mkView==="sell"?"#fbbf24":"#888",padding:"6px 14px",fontSize:11}}>Sell an Item</button>
+        <div style={{flex:1}}/>
+        <button onClick={async()=>{const r=await api("/market/list",{sort:mkSort,limit:50});if(r?.ok)setMkListings(r.listings||[]);const m=await api("/market/my",{username:account?.username});if(m?.ok)setMkMyListings(m.listings||[])}} style={{...S.btn,background:"#ffffff08",color:"#888",padding:"4px 10px",fontSize:11}}><MI n="refresh" s={14}/></button>
+      </div>
+      {mkView==="browse"&&<div>
+        <div style={{display:"flex",gap:6,marginBottom:10,fontSize:11}}>
+          <span style={{color:"#888"}}>Sort:</span>
+          {[["newest","Newest"],["cheapest","Cheapest"],["expensive","Most Expensive"]].map(([k,l])=><button key={k} onClick={()=>setMkSort(k)} style={{...S.btn,background:mkSort===k?"#fbbf2422":"transparent",color:mkSort===k?"#fbbf24":"#666",border:"1px solid "+(mkSort===k?"#fbbf2444":"#222"),padding:"2px 8px",fontSize:10}}>{l}</button>)}
+        </div>
+        {!mkListings.length?<div style={{color:"#888",padding:30,textAlign:"center",background:"#0d1117",borderRadius:8}}>No active listings. Click "Sell an Item" to create one.</div>:
+        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))",gap:8}}>{mkListings.map(l=>{
+          const item=l.item||{};const rColor=R[item.rarity]?.color||"#555";
+          const isMine=l.seller===account?.username;
+          return <div key={l.id} className="invItem" style={{background:"#0d1117",border:"1px solid "+rColor+"44",borderLeft:"3px solid "+rColor,borderRadius:6,padding:10}}>
+            <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:4}}><span style={{fontSize:20}}>{iconFor(item)}</span><div style={{flex:1,minWidth:0}}><div style={{fontWeight:600,fontSize:12,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{tItem(item.name)}</div><div style={{fontSize:9,color:rColor,textTransform:"uppercase",letterSpacing:1}}>{item.rarity}</div></div></div>
+            <div style={{fontSize:10,color:"#888",marginBottom:6}}>Worth {money(item.value||0)} · by <span style={{color:"#cbd5e1"}}>{l.seller}</span></div>
+            <div style={{display:"flex",alignItems:"center",gap:6}}><div style={{fontWeight:800,color:"#fbbf24",fontSize:14,flex:1}}>{money(l.price)}</div>
+              {isMine?<button onClick={async()=>{const ok=await askConfirm({title:"Cancel listing?",message:"The item returns to your inventory.",ok:"Unlist",color:"#fbbf24"});if(!ok)return;const r=await api("/market/unlist",{username:account.username,token:account.token,listingId:l.id});if(r?.ok){setToast({msg:"Unlisted",color:"#fbbf24"});setMkListings(p=>p.filter(x=>x.id!==l.id));await silentCloudSync()}else setToast({msg:r?.error||"Failed",color:"#eb4b4b"})}} style={{...S.btn,background:"#ffffff08",color:"#fbbf24",padding:"4px 10px",fontSize:10}}>Unlist</button>
+              :<button disabled={st.bal<l.price} onClick={async()=>{const ok=await askConfirm({title:"Buy?",message:`${tItem(item.name)} for ${money(l.price)}? Worth ${money(item.value||0)}.`,ok:"Buy",color:"#4ade80"});if(!ok)return;lastServerActionRef.current=Date.now();const r=await api("/market/buy",{username:account.username,token:account.token,listingId:l.id,slot});if(r?.ok&&r.item){setSt(p=>{const ns={...p,bal:r.serverBal!==undefined?r.serverBal:p.bal-l.price,inv:[...p.inv,r.item]};save(ns,drops);return ns});setToast({msg:"Bought "+tItem(item.name),color:"#4ade80"});setMkListings(p=>p.filter(x=>x.id!==l.id))}else setToast({msg:r?.error||"Failed",color:"#eb4b4b"})}} style={{...S.btn,background:st.bal>=l.price?"#4ade8022":"#222",color:st.bal>=l.price?"#4ade80":"#555",padding:"4px 10px",fontSize:10}}>Buy</button>}
+            </div>
+          </div>;
+        })}</div>}
+      </div>}
+      {mkView==="mine"&&<div>
+        {!mkMyListings.length?<div style={{color:"#888",padding:30,textAlign:"center",background:"#0d1117",borderRadius:8}}>You have no listings.</div>:
+        <div style={{display:"flex",flexDirection:"column",gap:6}}>{mkMyListings.map(l=>{
+          const item=l.item||{};const rColor=R[item.rarity]?.color||"#555";
+          return <div key={l.id} style={{display:"flex",alignItems:"center",gap:8,background:"#0d1117",border:"1px solid #222",borderLeft:"3px solid "+rColor,borderRadius:6,padding:8,opacity:l.status==="sold"?0.7:1}}>
+            <span style={{fontSize:18}}>{iconFor(item)}</span>
+            <div style={{flex:1,minWidth:0}}><div style={{fontWeight:600,fontSize:12}}>{tItem(item.name)}</div><div style={{fontSize:9,color:"#666"}}>{l.status==="active"?"Listed":l.status==="sold"?"SOLD to "+l.sold_to:"Cancelled"} · {money(l.price)}</div></div>
+            {l.status==="active"&&<button onClick={async()=>{const r=await api("/market/unlist",{username:account.username,token:account.token,listingId:l.id});if(r?.ok){setToast({msg:"Unlisted",color:"#fbbf24"});setMkMyListings(p=>p.filter(x=>x.id!==l.id));await silentCloudSync()}}} style={{...S.btn,background:"#ffffff08",color:"#fbbf24",padding:"3px 8px",fontSize:10}}>Unlist</button>}
+          </div>;
+        })}</div>}
+      </div>}
+      {mkView==="sell"&&<div>
+        <div style={{color:"#888",fontSize:11,marginBottom:10}}>Pick an item from your inventory to list. <span style={{color:"#fbbf24"}}>5% marketplace fee</span> applies on sale.</div>
+        {mkListItem?<div style={{background:"#0d1117",border:"1px solid "+(R[mkListItem.rarity]?.color||"#222")+"44",borderRadius:8,padding:14,marginBottom:10}}>
+          <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}><span style={{fontSize:30}}>{iconFor(mkListItem)}</span><div><div style={{fontWeight:700,fontSize:14}}>{tItem(mkListItem.name)}</div><div style={{fontSize:10,color:R[mkListItem.rarity]?.color}}>{mkListItem.rarity?.toUpperCase()}</div><div style={{fontSize:10,color:"#888"}}>Sell value: {money(mkListItem.value||0)}</div></div></div>
+          <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}>
+            <span style={{fontSize:11,color:"#888"}}>Price:</span>
+            <input type="number" value={mkListPrice} onChange={e=>setMkListPrice(e.target.value)} placeholder={mkListItem.value} style={{...S.input,flex:1,padding:"6px 10px",fontSize:13}}/>
+          </div>
+          <div style={{fontSize:10,color:"#888",marginBottom:10}}>You'll receive {money(Math.floor((+mkListPrice||0)*0.95))} after 5% fee</div>
+          <div style={{display:"flex",gap:6}}>
+            <button onClick={()=>{setMkListItem(null);setMkListPrice("")}} style={{...S.btn,background:"#ffffff08",color:"#888",flex:1,padding:8,fontSize:11}}>Cancel</button>
+            <button onClick={async()=>{const price=+mkListPrice||0;if(price<1){setToast({msg:"Set a price",color:"#eb4b4b"});return}const r=await api("/market/sell",{username:account.username,token:account.token,slot,itemId:mkListItem.id,price});if(r?.ok){setToast({msg:"Listed!",color:"#4ade80"});setSt(p=>{const ns={...p,inv:p.inv.filter(i=>i.id!==mkListItem.id)};const ns2={...ns,starred:{...ns.starred}};delete ns2.starred[mkListItem.id];save(ns2,drops);return ns2});setMkListItem(null);setMkListPrice("");setMkView("mine");const m=await api("/market/my",{username:account.username});if(m?.ok)setMkMyListings(m.listings||[])}else setToast({msg:r?.error||"Failed",color:"#eb4b4b"})}} style={{...S.btn,background:"#4ade8033",color:"#4ade80",flex:2,padding:8,fontSize:11,fontWeight:700}}>Confirm List</button>
+          </div>
+        </div>:<div>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(140px,1fr))",gap:6,maxHeight:"60vh",overflowY:"auto"}}>{st.inv.slice().sort((a,b)=>b.value-a.value).slice(0,200).map(item=>{
+            const rColor=R[item.rarity]?.color||"#555";
+            return <div key={item.id} onClick={()=>{setMkListItem(item);setMkListPrice(String(item.value))}} className="caseCardHover" style={{cursor:"pointer",background:"#0d1117",border:"1px solid "+rColor+"33",borderLeft:"3px solid "+rColor,borderRadius:6,padding:8}}>
+              <div style={{display:"flex",alignItems:"center",gap:6}}><span style={{fontSize:18}}>{iconFor(item)}</span><div style={{flex:1,minWidth:0}}><div style={{fontWeight:600,fontSize:11,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{tItem(item.name)}</div><div style={{fontSize:9,color:"#888"}}>{money(item.value)}</div></div></div>
+            </div>;
+          })}</div>
+          {st.inv.length===0&&<div style={{color:"#888",padding:30,textAlign:"center"}}>Inventory empty. Open some cases first.</div>}
+          {st.inv.length>200&&<div style={{color:"#888",fontSize:10,marginTop:6,textAlign:"center"}}>Showing top 200 by value. Use the inventory page to sell more.</div>}
+        </div>}
+      </div>}
+    </div>}
     {/* FAQ */}
     {/* ═══════════ FAQ ═══════════ */}
     {page==="faq"&&<div style={{...S.body,maxWidth:720,margin:"0 auto"}}>
