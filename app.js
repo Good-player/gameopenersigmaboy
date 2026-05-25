@@ -330,6 +330,7 @@ function App(){
   const[st,setSt]=useState(INIT);const[page,setPage]=useState("shop");const[selCase,setSelCase]=useState(null);const[wonItem,setWonItem]=useState(null);const[wonFloat,setWonFloat]=useState(0);const[wonQuote,setWonQuote]=useState("");const[scrollItems,setScrollItems]=useState([]);const[scrollDone,setScrollDone]=useState(false);const[opening,setOpening]=useState(false);const[resetMsg,setResetMsg]=useState("");const[loanAmt,setLoanAmt]=useState("");const[loanMinutes,setLoanMinutes]=useState("5");const[showLoanModal,setShowLoanModal]=useState(false);const[rentPaid,setRentPaid]=useState(0);const[inspecting,setInspecting]=useState(null);const[confirmReset,setConfirmReset]=useState(false);const[drops,setDrops]=useState([]);const[showSoundModal,setShowSoundModal]=useState(false);const[soundVer,setSoundVer]=useState(0);
   const[invSort,setInvSort]=useState("newest");const[invFilter,setInvFilter]=useState("all");const[invView,setInvView]=useState("grid");const[selItem,setSelItem]=useState(null);const[sellAmt,setSellAmt]=useState("");const[sellConfirm,setSellConfirm]=useState(null);const[lastWonId,setLastWonId]=useState(null);const[superWin,setSuperWin]=useState(null);const[openCategory,setOpenCategory]=useState(null);
   const[mkListings,setMkListings]=useState([]);const[mkSort,setMkSort]=useState("newest");const[mkMyListings,setMkMyListings]=useState([]);const[mkView,setMkView]=useState("browse");const[mkListItem,setMkListItem]=useState(null);const[mkListPrice,setMkListPrice]=useState("");
+  const[tradeId,setTradeId]=useState(null);const[tradeState,setTradeState]=useState(null);const[tradeTargetInput,setTradeTargetInput]=useState("");const[tradeMyItems,setTradeMyItems]=useState([]);const[tradeMyCash,setTradeMyCash]=useState("0");const[tradePicking,setTradePicking]=useState(false);
   // Close category dropdown when clicking outside the nav.
   useEffect(()=>{
     if(!openCategory)return;
@@ -406,6 +407,27 @@ function App(){
     const id=setInterval(refreshLobbies,4000);
     return()=>clearInterval(id);
   },[page,curLobby?.id]);
+  // Poll the active trade while the user is on the trade page and has a trade ID
+  useEffect(()=>{
+    if(!tradeId||page!=="trade"||!account)return;
+    const fetchTrade=async()=>{
+      const r=await api("/trade/state",{username:account.username,tradeId});
+      if(r?.ok&&r.trade){
+        setTradeState(r.trade);
+        if(r.trade.status==="completed"){
+          setToast({msg:"Trade completed!",color:"#4ade80"});
+          try{await silentCloudSync()}catch{}
+          setTradeId(null);setTradeState(null);setTradeMyItems([]);setTradeMyCash("0");
+        }else if(r.trade.status==="cancelled"){
+          setToast({msg:"Trade cancelled",color:"#fbbf24"});
+          setTradeId(null);setTradeState(null);setTradeMyItems([]);setTradeMyCash("0");
+        }
+      }
+    };
+    fetchTrade();
+    const id=setInterval(fetchTrade,2000);
+    return()=>clearInterval(id);
+  },[tradeId,page,account?.username]);
   // Refresh user status map every 30s (used for online/away badges)
   useEffect(()=>{
     const fetchStatus=()=>{api("/online",{}).then(r=>{if(r?.players){const map={};for(const p of r.players){map[p.uname]=p.status}setUserStatusMap(map)}})};
@@ -1130,7 +1152,7 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
       const inCategory={
         games:["flip","horse","bj","btc","plinko","roulette","wheel"],
         social:["live","lb","chat","dm","map"],
-        more:["market","stats","loan","me","school","faq"]
+        more:["market","trade","stats","loan","me","school","faq"]
       };
       const tabLabel=(k)=>{
         if(k==="shop")return t("tab_shop");
@@ -1139,6 +1161,7 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
         if(k==="dm")return `${t("tab_dm")}${dmUnread>0?" ("+dmUnread+")":""}`;
         if(k==="school")return t("tab_weather");
         if(k==="market")return t("tab_market")||"Market";
+        if(k==="trade")return t("tab_trade")||"Trade";
         return t("tab_"+k)||k;
       };
       const isOn=(k)=>(page===k||(page==="opening"&&k==="shop"));
@@ -2025,6 +2048,130 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
           {st.inv.length>200&&<div style={{color:"#888",fontSize:10,marginTop:6,textAlign:"center"}}>Showing top 200 by value. Use the inventory page to sell more.</div>}
         </div>}
       </div>}
+    </div>}
+    {/* TRADE */}
+    {page==="trade"&&<div className="pageBody" style={{...S.body,maxWidth:900,margin:"0 auto"}}>
+      <div style={{display:"flex",alignItems:"center",gap:8,marginBottom:10}}>
+        <button onClick={()=>setPage("shop")} style={{...S.btn,background:"#ffffff08",color:"#888",padding:"4px 10px",fontSize:11,display:"inline-flex",alignItems:"center",gap:3}}><MI n="arrow_back" s={14}/>{t("back")}</button>
+        <div style={{fontSize:"clamp(18px,4.5vw,24px)",fontWeight:800,display:"flex",alignItems:"center",gap:8}}><MI n="swap_horiz" s={24} c="#3b82f6"/> Trade</div>
+      </div>
+      {!tradeState&&!tradeId&&<div style={{background:"#0d1117",border:"1px solid #222",borderRadius:8,padding:16}}>
+        <div style={{fontSize:13,fontWeight:700,marginBottom:8}}>Start a trade with another player</div>
+        <div style={{color:"#888",fontSize:11,marginBottom:12,lineHeight:1.6}}>
+          Trades are protected by a two-phase commit: you both build your offers, then both <b style={{color:"#fbbf24"}}>LOCK</b>, then both <b style={{color:"#4ade80"}}>CONFIRM</b> to finalize.<br/>
+          Any change to either offer resets both locks/confirms — no last-second item swaps possible.
+        </div>
+        <div style={{display:"flex",gap:6}}>
+          <input value={tradeTargetInput} onChange={e=>setTradeTargetInput(e.target.value)} placeholder="Username to trade with" style={{...S.input,flex:1,padding:"8px 12px",fontSize:13}}/>
+          <button onClick={async()=>{
+            const target=(tradeTargetInput||"").trim().toLowerCase();
+            if(!target){setToast({msg:"Enter a username",color:"#eb4b4b"});return}
+            if(target===account?.username){setToast({msg:"Can't trade with yourself",color:"#eb4b4b"});return}
+            const r=await api("/trade/propose",{username:account.username,token:account.token,target,slot});
+            if(r?.ok&&r.tradeId){
+              setTradeId(r.tradeId);
+              setTradeTargetInput("");
+              if(r.existing)setToast({msg:"Resumed existing trade",color:"#fbbf24"});
+              else setToast({msg:"Trade proposed",color:"#4ade80"});
+            }else setToast({msg:r?.error||"Failed",color:"#eb4b4b"});
+          }} style={{...S.btn,background:"#3b82f6",color:"#fff",padding:"8px 18px",fontSize:12,fontWeight:700}}>Propose</button>
+        </div>
+      </div>}
+      {tradeState&&(()=>{
+        const me=tradeState.a_user===account?.username?"a":"b";
+        const them=me==="a"?"b":"a";
+        const myOffer=me==="a"?tradeState.a_offer:tradeState.b_offer;
+        const theirOffer=them==="a"?tradeState.a_offer:tradeState.b_offer;
+        const myCash=me==="a"?tradeState.a_cash:tradeState.b_cash;
+        const theirCash=them==="a"?tradeState.a_cash:tradeState.b_cash;
+        const myLocked=me==="a"?tradeState.a_locked:tradeState.b_locked;
+        const theirLocked=them==="a"?tradeState.a_locked:tradeState.b_locked;
+        const myConfirmed=me==="a"?tradeState.a_confirmed:tradeState.b_confirmed;
+        const theirConfirmed=them==="a"?tradeState.a_confirmed:tradeState.b_confirmed;
+        const themName=them==="a"?tradeState.a_user:tradeState.b_user;
+        const bothLocked=tradeState.a_locked&&tradeState.b_locked;
+        const renderOffer=(items,cash,isMe)=>{
+          return <div style={{background:"#080a0e",borderRadius:6,padding:8,minHeight:120}}>
+            {items.length===0&&!cash?<div style={{color:"#444",fontSize:11,textAlign:"center",padding:20}}>(empty)</div>:
+            <div>{items.map(it=>{const rColor=R[it.rarity]?.color||"#555";return <div key={it.id} style={{display:"flex",alignItems:"center",gap:6,padding:"4px 6px",background:"#0d1117",borderLeft:"3px solid "+rColor,borderRadius:4,marginBottom:3}}>
+              <span style={{fontSize:16}}>{iconFor(it)}</span><div style={{flex:1,minWidth:0}}><div style={{fontSize:11,fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{tItem(it.name)}</div><div style={{fontSize:9,color:"#888"}}>{money(it.value)}</div></div>
+            </div>})}
+            {cash>0&&<div style={{padding:"4px 6px",background:"#0d1117",borderLeft:"3px solid #fbbf24",borderRadius:4,marginTop:3,fontSize:11,color:"#fbbf24",fontWeight:600}}>💰 {money(cash)}</div>}
+            </div>}
+          </div>;
+        };
+        return <div>
+          {/* Status banner */}
+          <div style={{textAlign:"center",padding:10,marginBottom:10,background:tradeState.status==="completed"?"#4ade8033":bothLocked?"#fbbf2433":"#0d1117",border:"1px solid "+(bothLocked?"#fbbf24":"#222"),borderRadius:6,fontFamily:"'Black Ops One',sans-serif",letterSpacing:2,fontSize:14,color:bothLocked?"#fbbf24":"#888"}}>
+            {tradeState.status==="completed"?"✓ TRADE COMPLETED":
+             tradeState.a_confirmed&&tradeState.b_confirmed?"FINALIZING...":
+             bothLocked?(myConfirmed?"WAITING FOR "+themName.toUpperCase()+" TO CONFIRM":"REVIEW THE OFFER - CONFIRM TO FINALIZE"):
+             myLocked&&!theirLocked?"WAITING FOR "+themName.toUpperCase()+" TO LOCK":
+             !myLocked&&theirLocked?themName.toUpperCase()+" HAS LOCKED - YOUR TURN":
+             "BUILD YOUR OFFER"}
+          </div>
+          {/* Two-column trade view */}
+          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
+            {/* YOUR SIDE */}
+            <div style={{background:"#0d1117",border:"2px solid "+(myLocked?"#fbbf24":"#222"),borderRadius:8,padding:10}}>
+              <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}><span style={{fontSize:12,fontWeight:700,color:"#4ade80"}}>YOU</span>{myLocked&&<span style={{fontSize:9,padding:"1px 6px",background:"#fbbf2433",color:"#fbbf24",borderRadius:3}}>LOCKED</span>}{myConfirmed&&<span style={{fontSize:9,padding:"1px 6px",background:"#4ade8033",color:"#4ade80",borderRadius:3}}>CONFIRMED</span>}</div>
+              {renderOffer(myOffer,myCash,true)}
+              {!myLocked&&<div style={{marginTop:8}}>
+                <div style={{display:"flex",alignItems:"center",gap:4,marginBottom:6}}>
+                  <input type="number" value={tradeMyCash} onChange={e=>setTradeMyCash(e.target.value)} placeholder="Cash" min={0} max={st.bal} style={{...S.input,flex:1,padding:"4px 8px",fontSize:11}}/>
+                  <button onClick={()=>setTradePicking(true)} style={{...S.btn,background:"#3b82f6",color:"#fff",padding:"4px 10px",fontSize:10}}>Pick items</button>
+                </div>
+                <button onClick={async()=>{
+                  const r=await api("/trade/offer",{username:account.username,token:account.token,tradeId,itemIds:tradeMyItems.map(i=>i.id),cash:+tradeMyCash||0});
+                  if(r?.ok)setToast({msg:"Offer updated",color:"#4ade80"});else setToast({msg:r?.error||"Failed",color:"#eb4b4b"});
+                }} style={{...S.btn,background:"#3b82f6",color:"#fff",width:"100%",padding:6,fontSize:11,marginBottom:4}}>Update Offer</button>
+              </div>}
+              {!myLocked?<button onClick={async()=>{
+                // Push current offer first, then lock
+                const r1=await api("/trade/offer",{username:account.username,token:account.token,tradeId,itemIds:tradeMyItems.map(i=>i.id),cash:+tradeMyCash||0});
+                if(!r1?.ok){setToast({msg:r1?.error||"Failed",color:"#eb4b4b"});return}
+                const r=await api("/trade/lock",{username:account.username,token:account.token,tradeId});
+                if(r?.ok)setToast({msg:"Locked your offer",color:"#fbbf24"});else setToast({msg:r?.error||"Failed",color:"#eb4b4b"});
+              }} style={{...S.btn,background:"#fbbf2433",color:"#fbbf24",width:"100%",padding:8,fontSize:11,fontWeight:700,marginTop:6}}>🔒 LOCK MY OFFER</button>
+              :bothLocked&&!myConfirmed?<button onClick={async()=>{
+                const r=await api("/trade/confirm",{username:account.username,token:account.token,tradeId});
+                if(r?.ok){if(r.completed)setToast({msg:"Trade completed!",color:"#4ade80"});else setToast({msg:"Confirmed - waiting for "+themName,color:"#4ade80"})}else setToast({msg:r?.error||"Failed",color:"#eb4b4b"});
+              }} style={{...S.btn,background:"#4ade8033",color:"#4ade80",width:"100%",padding:8,fontSize:11,fontWeight:700,marginTop:6}}>✓ CONFIRM</button>
+              :myConfirmed?<div style={{color:"#4ade80",fontSize:10,textAlign:"center",marginTop:6}}>Confirmed — waiting for {themName}</div>
+              :null}
+            </div>
+            {/* THEIR SIDE */}
+            <div style={{background:"#0d1117",border:"2px solid "+(theirLocked?"#fbbf24":"#222"),borderRadius:8,padding:10}}>
+              <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}><span style={{fontSize:12,fontWeight:700,color:"#eb4b4b"}}>{themName.toUpperCase()}</span>{theirLocked&&<span style={{fontSize:9,padding:"1px 6px",background:"#fbbf2433",color:"#fbbf24",borderRadius:3}}>LOCKED</span>}{theirConfirmed&&<span style={{fontSize:9,padding:"1px 6px",background:"#4ade8033",color:"#4ade80",borderRadius:3}}>CONFIRMED</span>}</div>
+              {renderOffer(theirOffer,theirCash,false)}
+            </div>
+          </div>
+          {/* Cancel button — always available before complete */}
+          <button onClick={async()=>{
+            const ok=await askConfirm({title:"Cancel trade?",message:"All items return to their owners. Cannot be undone.",ok:"Cancel trade",color:"#eb4b4b"});
+            if(!ok)return;
+            const r=await api("/trade/cancel",{username:account.username,token:account.token,tradeId});
+            if(r?.ok){setTradeId(null);setTradeState(null);setTradeMyItems([]);setTradeMyCash("0");setToast({msg:"Trade cancelled",color:"#fbbf24"})}
+          }} style={{...S.btn,background:"#eb4b4b22",color:"#eb4b4b",width:"100%",padding:8,fontSize:11}}>Cancel Trade</button>
+          {/* Item picker modal */}
+          {tradePicking&&<div style={S.overlay} onClick={()=>setTradePicking(false)}>
+            <div className="modalIn" style={{...S.modal,maxWidth:"min(90vw,560px)",maxHeight:"80vh",overflowY:"auto"}} onClick={e=>e.stopPropagation()}>
+              <div style={{fontSize:14,fontWeight:700,marginBottom:8}}>Pick up to 20 items</div>
+              <div style={{color:"#888",fontSize:10,marginBottom:10}}>Selected: {tradeMyItems.length}/20</div>
+              <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(140px,1fr))",gap:6,marginBottom:10}}>{st.inv.slice().sort((a,b)=>b.value-a.value).slice(0,300).map(item=>{
+                const rColor=R[item.rarity]?.color||"#555";
+                const selected=tradeMyItems.some(t=>t.id===item.id);
+                return <div key={item.id} onClick={()=>{
+                  setTradeMyItems(p=>selected?p.filter(t=>t.id!==item.id):(p.length>=20?p:[...p,item]));
+                }} style={{cursor:"pointer",background:selected?"#3b82f622":"#0d1117",border:"1px solid "+(selected?"#3b82f6":rColor+"33"),borderLeft:"3px solid "+rColor,borderRadius:6,padding:6}}>
+                  <div style={{display:"flex",alignItems:"center",gap:4}}><span style={{fontSize:16}}>{iconFor(item)}</span><div style={{flex:1,minWidth:0}}><div style={{fontWeight:600,fontSize:10,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{tItem(item.name)}</div><div style={{fontSize:9,color:"#888"}}>{money(item.value)}</div></div>{selected&&<MI n="check_circle" s={14} c="#3b82f6"/>}</div>
+                </div>;
+              })}</div>
+              <button onClick={()=>setTradePicking(false)} style={{...S.btn,background:"#3b82f6",color:"#fff",width:"100%",padding:8,fontSize:12,fontWeight:700}}>Done ({tradeMyItems.length})</button>
+            </div>
+          </div>}
+        </div>;
+      })()}
     </div>}
     {/* FAQ */}
     {/* ═══════════ FAQ ═══════════ */}
