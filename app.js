@@ -43,7 +43,10 @@ function clearAccount(){localStorage.removeItem("co-account");document.cookie="c
 // Auth API
 async function authRegister(username,password){return api("/auth/register",{username,password,fingerprint:FINGERPRINT})}
 async function authLogin(username,password){return api("/auth/login",{username,password,fingerprint:FINGERPRINT})}
-async function authSave(username,token,slot,data){return api("/auth/save",{username,token,slot,data})}
+async function authSave(username,token,slot,data){
+  const clientLastSync=parseInt(localStorage.getItem("co-lastsync")||"0");
+  return api("/auth/save",{username,token,slot,data,clientLastSync});
+}
 async function authLoad(username,token){return api("/auth/load",{username,token})}
 
 // Cookie consent check
@@ -407,6 +410,31 @@ function App(){
     const id=setInterval(refreshLobbies,4000);
     return()=>clearInterval(id);
   },[page,curLobby?.id]);
+  // Auto-refresh marketplace listings every 6s while on market page.
+  // Lets the seller see "sold" status transitions and triggers a silent cloud sync to pull credited balance.
+  useEffect(()=>{
+    if(page!=="market"||!account)return;
+    const fetchMarket=async()=>{
+      try{
+        const r=await api("/market/list",{sort:mkSort,limit:50});
+        if(r?.ok)setMkListings(r.listings||[]);
+        const m=await api("/market/my",{username:account.username});
+        if(m?.ok){
+          // Detect newly-sold listings — server has credited the seller, trigger sync to pull new balance
+          const prevActiveIds=new Set(mkMyListings.filter(x=>x.status==="active").map(x=>x.id));
+          const newlySold=(m.listings||[]).filter(x=>x.status==="sold"&&prevActiveIds.has(x.id));
+          setMkMyListings(m.listings||[]);
+          if(newlySold.length>0){
+            setToast({msg:newlySold.length+" item"+(newlySold.length>1?"s":"")+" sold!",color:"#4ade80"});
+            try{await silentCloudSync()}catch{}
+          }
+        }
+      }catch{}
+    };
+    fetchMarket();
+    const id=setInterval(fetchMarket,6000);
+    return()=>clearInterval(id);
+  },[page,account?.username,mkSort]);
   // Poll the active trade while the user is on the trade page and has a trade ID
   useEffect(()=>{
     if(!tradeId||page!=="trade"||!account)return;
@@ -929,6 +957,27 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
       if(!data){setSaveStatus("No data");return}
       const r=await authSave(account.username,account.token,slot,data);
       if(r?.error==="Unauthorized"){clearAccount();setAccount(null);setSaveStatus("Session expired");return}
+      // Server rejected the save because there are pending credits/changes we haven't synced.
+      // Pull them now to avoid clobbering them on the next attempt.
+      if(r?.retry&&r?.forceSync){
+        setSaveStatus("Syncing...");
+        try{
+          const lr=await api("/auth/load",{username:account.username,token:account.token,ackForceSync:true});
+          if(lr?.ok&&lr.slots){
+            for(let si=0;si<3;si++){if(lr.slots[si])await _stSet("co-s"+si,JSON.stringify(lr.slots[si]))}
+            const curSlotData=lr.slots[slot];
+            if(curSlotData&&curSlotData.st){
+              setSt(s=>({...INIT,...curSlotData.st,starred:curSlotData.st?.starred||{}}));
+              if(curSlotData.drops)setDrops(curSlotData.drops);
+              setToast({msg:"Synced server credits",color:"#3b82f6"});
+            }
+            localStorage.setItem("co-lastsync",String(r.forceSync));
+          }
+        }catch{}
+        setSaveStatus("Synced");
+        setTimeout(()=>setSaveStatus(""),3000);
+        return;
+      }
       if(r?.ok)setSaveStatus("Saved!");else setSaveStatus(r?.error||"Failed");
     }catch{setSaveStatus("Error")}
     setTimeout(()=>setSaveStatus(""),3000);
