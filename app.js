@@ -2348,54 +2348,40 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
       return <div style={{...S.body,maxWidth:720,margin:"0 auto"}}>
         <div style={{fontSize:"clamp(16px,4vw,22px)",fontWeight:800,marginBottom:12,display:"flex",alignItems:"center",gap:8}}><MI n="cloud" s={26} c="#60a5fa"/> {t("weather_title")} · {t("weather_location")}</div>
 
-        {/* SMHI WARNINGS — grouped by event+description so identical alerts across many län collapse into one card */}
+        {/* SMHI WARNINGS — match SMHI's clean card layout. Uses SMHI's curated areaName text (e.g. "Östra delarna av Svealand och Götaland") instead of comma-separated län. */}
         {smhiWarnings?.warnings?.length>0&&<div style={{marginBottom:14}}>
           {(()=>{
-            // Group warnings by event + description; collect area lists. Avoids the "20 län comma-separated" wall of text.
+            // Group warnings by event + description so identical alerts across multiple län collapse into one card
             const groups=new Map();
             for(const wn of smhiWarnings.warnings){
               const key=(wn.event||"")+"|"+(wn.description||"")+"|"+(wn.level||"");
-              if(!groups.has(key))groups.set(key,{...wn,_areas:[]});
-              groups.get(key)._areas.push(wn.area||"");
+              if(!groups.has(key))groups.set(key,{...wn,_areaNames:new Set(),_lans:new Set()});
+              const g=groups.get(key);
+              if(wn.areaName)g._areaNames.add(wn.areaName);
+              if(wn.area)g._lans.add(wn.area);
             }
-            // Region summary helper — collapses many län into "delar av Götaland" etc.
-            const regionMap={
-              // Götaland counties
-              "Skåne":"Götaland","Blekinge":"Götaland","Kalmar":"Götaland","Kronoberg":"Götaland","Jönköping":"Götaland","Halland":"Götaland","Östergötland":"Götaland","Västra Götaland":"Götaland","Gotland":"Götaland",
-              // Svealand counties
-              "Stockholm":"Svealand","Uppsala":"Svealand","Södermanland":"Svealand","Örebro":"Svealand","Västmanland":"Svealand","Värmland":"Svealand","Dalarna":"Svealand",
-              // Norrland counties
-              "Gävleborg":"Norrland","Västernorrland":"Norrland","Jämtland":"Norrland","Västerbotten":"Norrland","Norrbotten":"Norrland"
-            };
-            const summarize=(areaStr)=>{
-              if(!areaStr)return "";
-              // Pull out län names (often "X län"), get the region for each
-              const lans=areaStr.split(",").map(s=>s.trim().replace(/\s*län$/i,""));
-              const regions=new Set();
-              for(const l of lans){for(const k in regionMap){if(l.includes(k))regions.add(regionMap[k])}}
-              if(regions.size===0)return areaStr.length>80?areaStr.substring(0,77)+"...":areaStr;
-              if(regions.size===1)return "Delar av "+Array.from(regions)[0];
-              if(regions.size===2)return "Delar av "+Array.from(regions).join(" och ");
-              return "Hela "+Array.from(regions).join(", ");
-            };
             return Array.from(groups.values()).map((wn,i)=>{
               const lvlColor=wn.level==="RED"?"#dc2626":wn.level==="ORANGE"?"#fb923c":"#fbbf24";
-              const allAreas=Array.from(new Set(wn._areas.filter(Boolean))).join(", ");
-              const areaSummary=summarize(allAreas);
-              return <div key={i} onClick={()=>toggle("warn"+i)} style={{background:"linear-gradient(135deg,"+lvlColor+"10,"+lvlColor+"05)",border:"1px solid "+lvlColor+"55",borderLeft:"4px solid "+lvlColor,borderRadius:8,padding:"clamp(10px,2.5vw,14px)",marginBottom:8,cursor:"pointer",animation:"slideIn .3s"}}>
-                <div style={{display:"flex",alignItems:"flex-start",gap:10}}>
-                  <MI n="local_fire_department" s={28} c={lvlColor} f={{flexShrink:0,filter:"drop-shadow(0 0 4px "+lvlColor+"66)"}}/>
+              // Prefer SMHI's curated areaName text. If a single curated text covers everything, use it.
+              // If multiple curated texts (different sub-regions), join with " · ". Final fallback: län list.
+              const curatedAreas=Array.from(wn._areaNames).filter(Boolean);
+              const allLans=Array.from(wn._lans).filter(Boolean).join(", ");
+              const areaDisplay=curatedAreas.length>0?curatedAreas.join(" · "):allLans;
+              return <div key={i} onClick={()=>toggle("warn"+i)} style={{background:"linear-gradient(135deg,"+lvlColor+"10,"+lvlColor+"05)",border:"1px solid "+lvlColor+"55",borderLeft:"4px solid "+lvlColor,borderRadius:8,padding:"clamp(12px,3vw,16px)",marginBottom:8,cursor:"pointer",animation:"slideIn .3s"}}>
+                <div style={{display:"flex",alignItems:"flex-start",gap:12}}>
+                  <MI n="local_fire_department" s={32} c={lvlColor} f={{flexShrink:0,filter:"drop-shadow(0 0 6px "+lvlColor+"66)"}}/>
                   <div style={{flex:1,minWidth:0}}>
-                    <div style={{color:lvlColor,fontWeight:800,fontSize:"clamp(13px,3vw,15px)",letterSpacing:0.2}}>{wn.event}</div>
-                    <div style={{color:"#cbd5e1",fontSize:"clamp(11px,2.5vw,12px)",marginTop:3,lineHeight:1.4}}>{areaSummary}</div>
-                    {wn.description&&<div style={{color:"#94a3b8",fontSize:"clamp(10px,2.3vw,11px)",marginTop:6,lineHeight:1.4}}>{wn.description}</div>}
+                    <div style={{color:lvlColor,fontWeight:800,fontSize:"clamp(14px,3.5vw,17px)",letterSpacing:0.2,marginBottom:4}}>{wn.event}</div>
+                    <div style={{color:"#cbd5e1",fontSize:"clamp(11px,2.6vw,13px)",lineHeight:1.5,marginBottom:6}}>{areaDisplay}</div>
+                    {wn.description&&<div style={{color:"#94a3b8",fontSize:"clamp(11px,2.5vw,12px)",lineHeight:1.5}}>{wn.description}</div>}
                   </div>
-                  <MI n={expandedSection["warn"+i]?"expand_less":"expand_more"} s={18} c="#888" f={{flexShrink:0,marginTop:4}}/>
+                  <MI n={expandedSection["warn"+i]?"expand_less":"expand_more"} s={20} c="#666" f={{flexShrink:0,marginTop:6}}/>
                 </div>
-                {expandedSection["warn"+i]&&<div style={{marginTop:10,paddingTop:8,borderTop:"1px solid "+lvlColor+"33",fontSize:"clamp(10px,2.3vw,11px)",lineHeight:1.5}}>
-                  {allAreas&&<div style={{color:"#cbd5e1",marginBottom:6}}><span style={{color:"#666"}}>{lang==="sv"?"Berörda områden":"Areas"}: </span>{allAreas}</div>}
-                  {wn.startDate&&<div style={{color:"#94a3b8"}}>{lang==="sv"?"Från":"From"}: {new Date(wn.startDate).toLocaleString(lang==="sv"?"sv-SE":"en-GB")}</div>}
-                  {wn.endDate&&<div style={{color:"#94a3b8"}}>{lang==="sv"?"Till":"Until"}: {new Date(wn.endDate).toLocaleString(lang==="sv"?"sv-SE":"en-GB")}</div>}
+                {expandedSection["warn"+i]&&<div style={{marginTop:10,paddingTop:10,borderTop:"1px solid "+lvlColor+"33",fontSize:"clamp(10px,2.3vw,11px)",lineHeight:1.5}}>
+                  {wn.advice&&<div style={{color:"#cbd5e1",marginBottom:8,padding:"8px 10px",background:"#0d1117",borderRadius:6,borderLeft:"3px solid "+lvlColor}}><div style={{fontSize:9,color:"#666",letterSpacing:1,marginBottom:3,textTransform:"uppercase"}}>{lang==="sv"?"Vad ska jag tänka på":"What to think about"}</div>{wn.advice}</div>}
+                  {allLans&&<div style={{color:"#94a3b8",marginBottom:4}}><span style={{color:"#666"}}>{lang==="sv"?"Berörda län":"Counties"}: </span>{allLans}</div>}
+                  {wn.startDate&&<div style={{color:"#666"}}>{lang==="sv"?"Från":"From"}: {new Date(wn.startDate).toLocaleString(lang==="sv"?"sv-SE":"en-GB")}</div>}
+                  {wn.endDate&&<div style={{color:"#666"}}>{lang==="sv"?"Till":"Until"}: {new Date(wn.endDate).toLocaleString(lang==="sv"?"sv-SE":"en-GB")}</div>}
                 </div>}
               </div>;
             });
