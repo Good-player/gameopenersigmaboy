@@ -333,7 +333,7 @@ function App(){
   const[st,setSt]=useState(INIT);const[page,setPage]=useState("shop");const[selCase,setSelCase]=useState(null);const[wonItem,setWonItem]=useState(null);const[wonFloat,setWonFloat]=useState(0);const[wonQuote,setWonQuote]=useState("");const[scrollItems,setScrollItems]=useState([]);const[scrollDone,setScrollDone]=useState(false);const[opening,setOpening]=useState(false);const[resetMsg,setResetMsg]=useState("");const[loanAmt,setLoanAmt]=useState("");const[loanMinutes,setLoanMinutes]=useState("5");const[showLoanModal,setShowLoanModal]=useState(false);const[rentPaid,setRentPaid]=useState(0);const[inspecting,setInspecting]=useState(null);const[confirmReset,setConfirmReset]=useState(false);const[drops,setDrops]=useState([]);const[showSoundModal,setShowSoundModal]=useState(false);const[soundVer,setSoundVer]=useState(0);
   const[invSort,setInvSort]=useState("newest");const[invFilter,setInvFilter]=useState("all");const[invView,setInvView]=useState("grid");const[selItem,setSelItem]=useState(null);const[sellAmt,setSellAmt]=useState("");const[sellConfirm,setSellConfirm]=useState(null);const[lastWonId,setLastWonId]=useState(null);const[superWin,setSuperWin]=useState(null);const[openCategory,setOpenCategory]=useState(null);
   const[mkListings,setMkListings]=useState([]);const[mkSort,setMkSort]=useState("newest");const[mkMyListings,setMkMyListings]=useState([]);const[mkView,setMkView]=useState("browse");const[mkListItem,setMkListItem]=useState(null);const[mkListPrice,setMkListPrice]=useState("");
-  const[tradeId,setTradeId]=useState(null);const[tradeState,setTradeState]=useState(null);const[tradeTargetInput,setTradeTargetInput]=useState("");const[tradeMyItems,setTradeMyItems]=useState([]);const[tradeMyCash,setTradeMyCash]=useState("0");const[tradePicking,setTradePicking]=useState(false);
+  const[tradeId,setTradeId]=useState(null);const[tradeState,setTradeState]=useState(null);const[tradeTargetInput,setTradeTargetInput]=useState("");const[tradeMyItems,setTradeMyItems]=useState([]);const[tradeMyCash,setTradeMyCash]=useState("0");const[tradePicking,setTradePicking]=useState(false);const[incomingTrades,setIncomingTrades]=useState([]);const[seenTradeIds,setSeenTradeIds]=useState(()=>{try{return new Set(JSON.parse(localStorage.getItem("co-seen-trades")||"[]"))}catch{return new Set()}});
   // Close category dropdown when clicking outside the nav.
   useEffect(()=>{
     if(!openCategory)return;
@@ -410,6 +410,31 @@ function App(){
     const id=setInterval(refreshLobbies,4000);
     return()=>clearInterval(id);
   },[page,curLobby?.id]);
+  // Poll for incoming trade proposals every 8 seconds (so the recipient of a trade gets a notification banner).
+  // Toast fires once per new trade ID; subsequent polls don't re-toast for the same ID.
+  useEffect(()=>{
+    if(!account?.username)return;
+    let on=true;
+    const fetchIncoming=async()=>{
+      try{
+        const r=await api("/trade/incoming",{username:account.username});
+        if(!on||!r?.ok)return;
+        const trades=r.trades||[];
+        setIncomingTrades(trades);
+        // Toast for any new trade we haven't seen yet (where the OTHER party proposed)
+        for(const t of trades){
+          if(!t.proposedByMe&&!seenTradeIds.has(t.id)){
+            setToast({msg:t.other+" wants to trade!",color:"#3b82f6"});
+            seenTradeIds.add(t.id);
+            try{localStorage.setItem("co-seen-trades",JSON.stringify([...seenTradeIds].slice(-50)))}catch{}
+          }
+        }
+      }catch{}
+    };
+    fetchIncoming();
+    const id=setInterval(fetchIncoming,8000);
+    return()=>{on=false;clearInterval(id)};
+  },[account?.username]);
   // Auto-refresh marketplace listings every 6s while on market page.
   // Lets the seller see "sold" status transitions and triggers a silent cloud sync to pull credited balance.
   useEffect(()=>{
@@ -1218,12 +1243,21 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
       const cat=(catKey,label,icon)=>{
         const open=openCategory===catKey;
         const active=categoryOn(catKey);
+        // Count unhandled incoming trades for the "More" category badge
+        const unreadTrades=catKey==="more"?incomingTrades.filter(t=>!t.proposedByMe).length:0;
         return <div key={catKey} style={{position:"relative"}}>
-          <button onClick={()=>setOpenCategory(open?null:catKey)} className={open?"badgePop":""} style={{...S.tab,...(active?S.tabOn:{}),display:"inline-flex",alignItems:"center",gap:4}}>
+          <button onClick={()=>setOpenCategory(open?null:catKey)} className={open?"badgePop":""} style={{...S.tab,...(active?S.tabOn:{}),display:"inline-flex",alignItems:"center",gap:4,position:"relative"}}>
             <MI n={icon} s={14}/> {label} <MI n={open?"expand_less":"expand_more"} s={14}/>
+            {unreadTrades>0&&<span style={{position:"absolute",top:-3,right:-3,minWidth:14,height:14,padding:"0 4px",background:"#eb4b4b",color:"#fff",borderRadius:7,fontSize:8,fontWeight:800,display:"flex",alignItems:"center",justifyContent:"center",boxShadow:"0 0 6px #eb4b4b66"}}>{unreadTrades}</span>}
           </button>
           {open&&<div className="dropOpen" style={{position:"absolute",top:"calc(100% + 4px)",left:0,background:"#0d1117",border:"1px solid #2a3040",borderRadius:8,boxShadow:"0 8px 24px rgba(0,0,0,0.5)",zIndex:50,minWidth:180,padding:6,display:"flex",flexDirection:"column",gap:2}}>
-            {inCategory[catKey].map(k=><button key={k} onClick={()=>goTo(k)} style={{...S.tab,...(isOn(k)?S.tabOn:{}),textAlign:"left",width:"100%",background:isOn(k)?S.tabOn.background:"transparent",border:isOn(k)?S.tabOn.border:"1px solid transparent",color:k==="dm"&&dmUnread>0?"#f59e0b":(isOn(k)?S.tabOn.color:"#cbd5e1")}}>{tabLabel(k)}</button>)}
+            {inCategory[catKey].map(k=>{
+              const showTradeBadge=k==="trade"&&incomingTrades.filter(t=>!t.proposedByMe).length>0;
+              return <button key={k} onClick={()=>goTo(k)} style={{...S.tab,...(isOn(k)?S.tabOn:{}),textAlign:"left",width:"100%",background:isOn(k)?S.tabOn.background:"transparent",border:isOn(k)?S.tabOn.border:"1px solid transparent",color:k==="dm"&&dmUnread>0?"#f59e0b":showTradeBadge?"#3b82f6":(isOn(k)?S.tabOn.color:"#cbd5e1"),position:"relative",display:"flex",alignItems:"center",gap:6}}>
+                {tabLabel(k)}
+                {showTradeBadge&&<span style={{marginLeft:"auto",padding:"1px 6px",background:"#3b82f6",color:"#fff",borderRadius:6,fontSize:9,fontWeight:800}}>{incomingTrades.filter(t=>!t.proposedByMe).length}</span>}
+              </button>;
+            })}
           </div>}
         </div>;
       };
@@ -2104,6 +2138,26 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
         <button onClick={()=>setPage("shop")} style={{...S.btn,background:"#ffffff08",color:"#888",padding:"4px 10px",fontSize:11,display:"inline-flex",alignItems:"center",gap:3}}><MI n="arrow_back" s={14}/>{t("back")}</button>
         <div style={{fontSize:"clamp(18px,4.5vw,24px)",fontWeight:800,display:"flex",alignItems:"center",gap:8}}><MI n="swap_horiz" s={24} c="#3b82f6"/> Trade</div>
       </div>
+      {/* INCOMING TRADES — listed before the propose form so the recipient sees them first */}
+      {!tradeState&&!tradeId&&incomingTrades.length>0&&<div style={{marginBottom:10}}>
+        <div style={{fontSize:11,color:"#888",letterSpacing:1.5,marginBottom:6,textTransform:"uppercase"}}>Active Trades ({incomingTrades.length})</div>
+        {incomingTrades.map(t=>{
+          const theyOffered=(()=>{try{return JSON.parse(t.theyOffered||"[]")}catch{return[]}})();
+          return <div key={t.id} className="invItem" style={{background:"linear-gradient(135deg,#3b82f615,#0d1117)",border:"1px solid #3b82f655",borderLeft:"4px solid #3b82f6",borderRadius:8,padding:"10px 12px",marginBottom:6,cursor:"pointer"}} onClick={()=>setTradeId(t.id)}>
+            <div style={{display:"flex",alignItems:"center",gap:10}}>
+              <MI n="swap_horiz" s={20} c="#3b82f6"/>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontWeight:700,fontSize:12,color:"#cbd5e1"}}>{t.proposedByMe?<>You proposed to <span style={{color:"#fbbf24"}}>{t.other}</span></>:<><span style={{color:"#fbbf24"}}>{t.other}</span> wants to trade</>}</div>
+                <div style={{fontSize:10,color:"#888",marginTop:2}}>
+                  Their offer: {theyOffered.length>0?theyOffered.length+" item"+(theyOffered.length>1?"s":""):"nothing"}{t.theirCash>0?" + "+money(t.theirCash):""}
+                  {t.theyLocked&&<span style={{color:"#fbbf24",marginLeft:6,fontWeight:700}}>· LOCKED</span>}
+                </div>
+              </div>
+              <button style={{...S.btn,background:"#3b82f6",color:"#fff",padding:"4px 12px",fontSize:11,fontWeight:700}}>Open</button>
+            </div>
+          </div>;
+        })}
+      </div>}
       {!tradeState&&!tradeId&&<div style={{background:"#0d1117",border:"1px solid #222",borderRadius:8,padding:16}}>
         <div style={{fontSize:13,fontWeight:700,marginBottom:8}}>Start a trade with another player</div>
         <div style={{color:"#888",fontSize:11,marginBottom:12,lineHeight:1.6}}>
@@ -2160,7 +2214,7 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
              "BUILD YOUR OFFER"}
           </div>
           {/* Two-column trade view */}
-          <div style={{display:"grid",gridTemplateColumns:"1fr 1fr",gap:10,marginBottom:10}}>
+          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit,minmax(280px,1fr))",gap:10,marginBottom:10}}>
             {/* YOUR SIDE */}
             <div style={{background:"#0d1117",border:"2px solid "+(myLocked?"#fbbf24":"#222"),borderRadius:8,padding:10}}>
               <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}><span style={{fontSize:12,fontWeight:700,color:"#4ade80"}}>YOU</span>{myLocked&&<span style={{fontSize:9,padding:"1px 6px",background:"#fbbf2433",color:"#fbbf24",borderRadius:3}}>LOCKED</span>}{myConfirmed&&<span style={{fontSize:9,padding:"1px 6px",background:"#4ade8033",color:"#4ade80",borderRadius:3}}>CONFIRMED</span>}</div>
@@ -2294,26 +2348,58 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
       return <div style={{...S.body,maxWidth:720,margin:"0 auto"}}>
         <div style={{fontSize:"clamp(16px,4vw,22px)",fontWeight:800,marginBottom:12,display:"flex",alignItems:"center",gap:8}}><MI n="cloud" s={26} c="#60a5fa"/> {t("weather_title")} · {t("weather_location")}</div>
 
-        {/* SMHI WARNINGS */}
+        {/* SMHI WARNINGS — grouped by event+description so identical alerts across many län collapse into one card */}
         {smhiWarnings?.warnings?.length>0&&<div style={{marginBottom:14}}>
-          {smhiWarnings.warnings.map((wn,i)=>{
-            const lvlColor=wn.level==="RED"?"#dc2626":wn.level==="ORANGE"?"#fb923c":"#fbbf24";
-            return <div key={i} onClick={()=>toggle("warn"+i)} style={{background:lvlColor+"15",border:"1px solid "+lvlColor+"55",borderLeft:"4px solid "+lvlColor,borderRadius:8,padding:"10px 12px",marginBottom:6,cursor:"pointer",animation:"slideIn .3s"}}>
-              <div style={{display:"flex",alignItems:"center",gap:8}}>
-                <MI n="warning" s={20} c={lvlColor}/>
-                <div style={{flex:1}}>
-                  <div style={{color:lvlColor,fontWeight:800,fontSize:12}}>{wn.event}</div>
-                  <div style={{color:"#cbd5e1",fontSize:10}}>{wn.area} · {wn.level_label||wn.level}</div>
+          {(()=>{
+            // Group warnings by event + description; collect area lists. Avoids the "20 län comma-separated" wall of text.
+            const groups=new Map();
+            for(const wn of smhiWarnings.warnings){
+              const key=(wn.event||"")+"|"+(wn.description||"")+"|"+(wn.level||"");
+              if(!groups.has(key))groups.set(key,{...wn,_areas:[]});
+              groups.get(key)._areas.push(wn.area||"");
+            }
+            // Region summary helper — collapses many län into "delar av Götaland" etc.
+            const regionMap={
+              // Götaland counties
+              "Skåne":"Götaland","Blekinge":"Götaland","Kalmar":"Götaland","Kronoberg":"Götaland","Jönköping":"Götaland","Halland":"Götaland","Östergötland":"Götaland","Västra Götaland":"Götaland","Gotland":"Götaland",
+              // Svealand counties
+              "Stockholm":"Svealand","Uppsala":"Svealand","Södermanland":"Svealand","Örebro":"Svealand","Västmanland":"Svealand","Värmland":"Svealand","Dalarna":"Svealand",
+              // Norrland counties
+              "Gävleborg":"Norrland","Västernorrland":"Norrland","Jämtland":"Norrland","Västerbotten":"Norrland","Norrbotten":"Norrland"
+            };
+            const summarize=(areaStr)=>{
+              if(!areaStr)return "";
+              // Pull out län names (often "X län"), get the region for each
+              const lans=areaStr.split(",").map(s=>s.trim().replace(/\s*län$/i,""));
+              const regions=new Set();
+              for(const l of lans){for(const k in regionMap){if(l.includes(k))regions.add(regionMap[k])}}
+              if(regions.size===0)return areaStr.length>80?areaStr.substring(0,77)+"...":areaStr;
+              if(regions.size===1)return "Delar av "+Array.from(regions)[0];
+              if(regions.size===2)return "Delar av "+Array.from(regions).join(" och ");
+              return "Hela "+Array.from(regions).join(", ");
+            };
+            return Array.from(groups.values()).map((wn,i)=>{
+              const lvlColor=wn.level==="RED"?"#dc2626":wn.level==="ORANGE"?"#fb923c":"#fbbf24";
+              const allAreas=Array.from(new Set(wn._areas.filter(Boolean))).join(", ");
+              const areaSummary=summarize(allAreas);
+              return <div key={i} onClick={()=>toggle("warn"+i)} style={{background:"linear-gradient(135deg,"+lvlColor+"10,"+lvlColor+"05)",border:"1px solid "+lvlColor+"55",borderLeft:"4px solid "+lvlColor,borderRadius:8,padding:"clamp(10px,2.5vw,14px)",marginBottom:8,cursor:"pointer",animation:"slideIn .3s"}}>
+                <div style={{display:"flex",alignItems:"flex-start",gap:10}}>
+                  <MI n="local_fire_department" s={28} c={lvlColor} f={{flexShrink:0,filter:"drop-shadow(0 0 4px "+lvlColor+"66)"}}/>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{color:lvlColor,fontWeight:800,fontSize:"clamp(13px,3vw,15px)",letterSpacing:0.2}}>{wn.event}</div>
+                    <div style={{color:"#cbd5e1",fontSize:"clamp(11px,2.5vw,12px)",marginTop:3,lineHeight:1.4}}>{areaSummary}</div>
+                    {wn.description&&<div style={{color:"#94a3b8",fontSize:"clamp(10px,2.3vw,11px)",marginTop:6,lineHeight:1.4}}>{wn.description}</div>}
+                  </div>
+                  <MI n={expandedSection["warn"+i]?"expand_less":"expand_more"} s={18} c="#888" f={{flexShrink:0,marginTop:4}}/>
                 </div>
-                <MI n={expandedSection["warn"+i]?"expand_less":"expand_more"} s={20} c="#888"/>
-              </div>
-              {expandedSection["warn"+i]&&<div style={{marginTop:8,paddingTop:8,borderTop:"1px solid "+lvlColor+"33",color:"#cbd5e1",fontSize:11,lineHeight:1.5}}>
-                {wn.description}
-                {wn.startDate&&<div style={{color:"#94a3b8",fontSize:10,marginTop:6}}>{lang==="sv"?"Från":"From"}: {new Date(wn.startDate).toLocaleString(lang==="sv"?"sv-SE":"en-GB")}</div>}
-                {wn.endDate&&<div style={{color:"#94a3b8",fontSize:10}}>{lang==="sv"?"Till":"Until"}: {new Date(wn.endDate).toLocaleString(lang==="sv"?"sv-SE":"en-GB")}</div>}
-              </div>}
-            </div>;
-          })}
+                {expandedSection["warn"+i]&&<div style={{marginTop:10,paddingTop:8,borderTop:"1px solid "+lvlColor+"33",fontSize:"clamp(10px,2.3vw,11px)",lineHeight:1.5}}>
+                  {allAreas&&<div style={{color:"#cbd5e1",marginBottom:6}}><span style={{color:"#666"}}>{lang==="sv"?"Berörda områden":"Areas"}: </span>{allAreas}</div>}
+                  {wn.startDate&&<div style={{color:"#94a3b8"}}>{lang==="sv"?"Från":"From"}: {new Date(wn.startDate).toLocaleString(lang==="sv"?"sv-SE":"en-GB")}</div>}
+                  {wn.endDate&&<div style={{color:"#94a3b8"}}>{lang==="sv"?"Till":"Until"}: {new Date(wn.endDate).toLocaleString(lang==="sv"?"sv-SE":"en-GB")}</div>}
+                </div>}
+              </div>;
+            });
+          })()}
         </div>}
 
         {/* MAIN WEATHER */}
