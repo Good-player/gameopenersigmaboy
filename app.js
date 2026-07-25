@@ -439,20 +439,26 @@ function App(){
   // Lets the seller see "sold" status transitions and triggers a silent cloud sync to pull credited balance.
   useEffect(()=>{
     if(page!=="market"||!account)return;
+    // Tracked locally inside the effect (NOT the state snapshot, which is a stale closure here):
+    // null = first poll, we don't know the previous state yet, so don't fire "sold" toasts.
+    let prevActiveIds=null;
     const fetchMarket=async()=>{
       try{
         const r=await api("/market/list",{sort:mkSort,limit:50});
         if(r?.ok)setMkListings(r.listings||[]);
         const m=await api("/market/my",{username:account.username});
         if(m?.ok){
-          // Detect newly-sold listings — server has credited the seller, trigger sync to pull new balance
-          const prevActiveIds=new Set(mkMyListings.filter(x=>x.status==="active").map(x=>x.id));
-          const newlySold=(m.listings||[]).filter(x=>x.status==="sold"&&prevActiveIds.has(x.id));
-          setMkMyListings(m.listings||[]);
-          if(newlySold.length>0){
-            setToast({msg:newlySold.length+" item"+(newlySold.length>1?"s":"")+" sold!",color:"#4ade80"});
-            try{await silentCloudSync()}catch{}
+          const listings=m.listings||[];
+          // Detect newly-sold listings — only listings that were ACTIVE on the previous poll and are SOLD now
+          if(prevActiveIds!==null){
+            const newlySold=listings.filter(x=>x.status==="sold"&&prevActiveIds.has(x.id));
+            if(newlySold.length>0){
+              setToast({msg:newlySold.length+" item"+(newlySold.length>1?"s":"")+" sold!",color:"#4ade80"});
+              try{await silentCloudSync()}catch{}
+            }
           }
+          prevActiveIds=new Set(listings.filter(x=>x.status==="active").map(x=>x.id));
+          setMkMyListings(listings);
         }
       }catch{}
     };
@@ -2225,13 +2231,13 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
                   <button onClick={()=>setTradePicking(true)} style={{...S.btn,background:"#3b82f6",color:"#fff",padding:"4px 10px",fontSize:10}}>Pick items</button>
                 </div>
                 <button onClick={async()=>{
-                  const r=await api("/trade/offer",{username:account.username,token:account.token,tradeId,itemIds:tradeMyItems.map(i=>i.id),cash:+tradeMyCash||0});
+                  const r=await api("/trade/offer",{username:account.username,token:account.token,tradeId,itemIds:tradeMyItems.map(i=>i.id),cash:+tradeMyCash||0,slot});
                   if(r?.ok)setToast({msg:"Offer updated",color:"#4ade80"});else setToast({msg:r?.error||"Failed",color:"#eb4b4b"});
                 }} style={{...S.btn,background:"#3b82f6",color:"#fff",width:"100%",padding:6,fontSize:11,marginBottom:4}}>Update Offer</button>
               </div>}
               {!myLocked?<button onClick={async()=>{
                 // Push current offer first, then lock
-                const r1=await api("/trade/offer",{username:account.username,token:account.token,tradeId,itemIds:tradeMyItems.map(i=>i.id),cash:+tradeMyCash||0});
+                const r1=await api("/trade/offer",{username:account.username,token:account.token,tradeId,itemIds:tradeMyItems.map(i=>i.id),cash:+tradeMyCash||0,slot});
                 if(!r1?.ok){setToast({msg:r1?.error||"Failed",color:"#eb4b4b"});return}
                 const r=await api("/trade/lock",{username:account.username,token:account.token,tradeId});
                 if(r?.ok)setToast({msg:"Locked your offer",color:"#fbbf24"});else setToast({msg:r?.error||"Failed",color:"#eb4b4b"});
