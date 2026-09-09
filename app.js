@@ -332,6 +332,7 @@ function App(){
   const[appLoading,setAppLoading]=useState(true);const[offline,setOffline]=useState(false);const offlineRef=useRef(false);useEffect(()=>{window.__setOnline=(v)=>{if(!v&&!offlineRef.current){offlineRef.current=true;setOffline(true)}if(v&&offlineRef.current){offlineRef.current=false;setOffline(false)}};return()=>{window.__setOnline=null}},[]);const[loadProgress,setLoadProgress]=useState(0);const[loadMsg,setLoadMsg]=useState("Initializing...");const[slot,setSlot]=useState(0);const[slotMeta,setSlotMeta]=useState([null,null,null]);const[showSlots,setShowSlots]=useState(true);
   const[st,setSt]=useState(INIT);const[page,setPage]=useState("shop");const[selCase,setSelCase]=useState(null);const[wonItem,setWonItem]=useState(null);const[wonFloat,setWonFloat]=useState(0);const[wonQuote,setWonQuote]=useState("");const[scrollItems,setScrollItems]=useState([]);const[scrollDone,setScrollDone]=useState(false);const[opening,setOpening]=useState(false);const[resetMsg,setResetMsg]=useState("");const[loanAmt,setLoanAmt]=useState("");const[loanMinutes,setLoanMinutes]=useState("5");const[showLoanModal,setShowLoanModal]=useState(false);const[rentPaid,setRentPaid]=useState(0);const[inspecting,setInspecting]=useState(null);const[confirmReset,setConfirmReset]=useState(false);const[drops,setDrops]=useState([]);const[showSoundModal,setShowSoundModal]=useState(false);const[soundVer,setSoundVer]=useState(0);
   const[invSort,setInvSort]=useState("newest");const[invFilter,setInvFilter]=useState("all");const[invView,setInvView]=useState("grid");const[selItem,setSelItem]=useState(null);const[sellAmt,setSellAmt]=useState("");const[sellConfirm,setSellConfirm]=useState(null);const[lastWonId,setLastWonId]=useState(null);const[superWin,setSuperWin]=useState(null);const[openCategory,setOpenCategory]=useState(null);
+  const[ctMode,setCtMode]=useState(false);const[ctSel,setCtSel]=useState([]);const[ctPreview,setCtPreview]=useState(null);const[ctBusy,setCtBusy]=useState(false);const[ctResult,setCtResult]=useState(null);
   const[mkListings,setMkListings]=useState([]);const[mkSort,setMkSort]=useState("newest");const[mkMyListings,setMkMyListings]=useState([]);const[mkView,setMkView]=useState("browse");const[mkListItem,setMkListItem]=useState(null);const[mkListPrice,setMkListPrice]=useState("");
   const[tradeId,setTradeId]=useState(null);const[tradeState,setTradeState]=useState(null);const[tradeTargetInput,setTradeTargetInput]=useState("");const[tradeMyItems,setTradeMyItems]=useState([]);const[tradeMyCash,setTradeMyCash]=useState("0");const[tradePicking,setTradePicking]=useState(false);const[incomingTrades,setIncomingTrades]=useState([]);const[seenTradeIds,setSeenTradeIds]=useState(()=>{try{return new Set(JSON.parse(localStorage.getItem("co-seen-trades")||"[]"))}catch{return new Set()}});
   // Close category dropdown when clicking outside the nav.
@@ -822,6 +823,16 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
   // Auto cloud save every 30s
   useEffect(()=>{if(!account?.username||!account?.token||showSlots)return;const id=setInterval(()=>{cloudSave()},10000);return()=>clearInterval(id)},[account,showSlots,slot]);
 
+  // Trade-up: pull the exact odds from the server once a full set of 3 is selected. The same
+  // contractPlan() builds these numbers and picks the winner, so what's shown is what's rolled.
+  useEffect(()=>{
+    if(!ctMode||ctSel.length!==3||!account){setCtPreview(null);return}
+    let alive=true;
+    api("/contract/preview",{username:account.username,token:account.token,slot,itemIds:ctSel})
+      .then(r=>{if(alive)setCtPreview(r&&r.ok?r:null)});
+    return()=>{alive=false};
+  },[ctMode,ctSel,account,slot]);
+
   const save=useCallback(async(s,d)=>{try{const lk=await _stGet("co-lock-"+slot);if(lk?.value&&lk.value!==TAB_ID)return;await _stSet("co-s"+slot,JSON.stringify({st:s,drops:d||[]}))}catch{}const inv=s.inv||[];const tv=inv.reduce((a,i)=>a+i.value,0);setSlotMeta(prev=>{const m=[...prev];m[slot]={bal:s.bal,items:inv.length,totalVal:tv,opened:s.stats?.opened||0};saveSlotMeta(m);return m})},[slot]);
   useEffect(()=>{if(showSlots)return;const id=setInterval(()=>{if(syncLockRef.current)return;setSt(cur=>{setDrops(dd=>{save(cur,dd);return dd});return cur})},5000);return()=>clearInterval(id)},[save,showSlots]);
 
@@ -1102,6 +1113,32 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
   });setSellConfirm(null)}
   function toggleStar(id){setSt(p=>{const s={...p.starred};if(s[id])delete s[id];else s[id]=true;const ns={...p,starred:s};save(ns,drops);return ns})}
 
+  // ===== TRADE-UP CONTRACT =====
+  // Server-authoritative: it owns the odds, consumes the inputs and grants the output in one CAS
+  // write on the slot, so all the client does is collect 3 ids and re-sync afterwards.
+  function ctToggle(item){
+    if(!account)return;
+    setCtSel(prev=>{
+      if(prev.includes(item.id))return prev.filter(i=>i!==item.id);
+      const first=prev.length?st.inv.find(x=>x.id===prev[0]):null;
+      if(first&&first.rarity!==item.rarity){setToast({msg:t("ct_mixed"),color:"#eb4b4b"});return prev}
+      if(prev.length>=3)return prev;
+      return[...prev,item.id];
+    });
+  }
+  function ctExit(){setCtMode(false);setCtSel([]);setCtPreview(null)}
+  async function ctSubmit(){
+    if(ctSel.length!==3||ctBusy||!account)return;
+    setCtBusy(true);
+    const r=await api("/contract/submit",{username:account.username,token:account.token,slot,itemIds:ctSel});
+    setCtBusy(false);
+    if(!r?.ok){setToast({msg:r?.error||"Contract failed",color:"#eb4b4b"});return}
+    setCtSel([]);setCtPreview(null);setCtResult(r);
+    try{sndReveal(!!r.upgraded)}catch{}
+    // The slot was written server-side, so pull it back rather than mutating local state.
+    await silentCloudSync();
+  }
+
   function getFilteredSorted(inv,starred){let items=[...inv];if(invFilter==="starred")items=items.filter(i=>starred[i.id]);else if(invFilter!=="all")items=items.filter(i=>i.rarity===invFilter);if(invSort==="newest")items.reverse();else if(invSort==="value-high")items.sort((a,b)=>b.value-a.value);else if(invSort==="value-low")items.sort((a,b)=>a.value-b.value);else if(invSort==="rarity")items.sort((a,b)=>RKEYS.indexOf(b.rarity)-RKEYS.indexOf(a.rarity));else if(invSort==="name")items.sort((a,b)=>a.name.localeCompare(b.name));return items}
 
   useEffect(()=>{if(page!=="bj")return;const iv=setInterval(()=>{api("/bj/state",{tableId:"main",username:account?.username||""}).then(r=>{if(r?.table)setBjTable(r.table)})},1000);api("/bj/state",{tableId:"main",username:account?.username||""}).then(r=>{if(r?.table)setBjTable(r.table)});return()=>clearInterval(iv)},[page,account]);
@@ -1322,15 +1359,59 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
         <select value={invSort} onChange={e=>setInvSort(e.target.value)} style={S.sel}><option value="newest">Newest</option><option value="oldest">Oldest</option><option value="value-high">Value ↓</option><option value="value-low">Value ↑</option><option value="rarity">Rarity</option><option value="name">Name</option></select>
         <select value={invFilter} onChange={e=>setInvFilter(e.target.value)} style={S.sel}><option value="all">All</option><option value="starred">★ Starred</option>{RKEYS.map(k=><option key={k} value={k}>{R[k].label}</option>)}</select>
         <button onClick={()=>setInvView(v=>v==="grid"?"list":"grid")} style={{...S.btn,background:"#ffffff08",color:"#888",padding:"5px 8px"}}>{invView==="grid"?"List":"Grid"}</button>
+        {account&&<button onClick={()=>{if(ctMode)ctExit();else setCtMode(true)}} title={ctMode?t("ct_exit"):t("ct_title")} style={{...S.btn,background:ctMode?"#8b5cf633":"#ffffff08",color:ctMode?"#8b5cf6":"#888",padding:"5px 8px",border:"1px solid "+(ctMode?"#8b5cf6":"transparent")}}><MI n="upgrade" s={11} c={ctMode?"#8b5cf6":"#888"}/> {t("ct_button")}</button>}
         <div style={{flex:1}}/>
         <input type="number" placeholder="#" value={sellAmt} onChange={e=>setSellAmt(e.target.value)} style={{...S.sel,width:"clamp(40px,12vw,60px)"}}/>
         <button onClick={()=>{const n=parseInt(sellAmt);if(n>0)setSellConfirm("count")}} disabled={!sellAmt||parseInt(sellAmt)<=0} style={{...S.btn,background:"#4ade8022",color:"#4ade80",padding:"5px 8px"}}>Sell #</button>
         <button onClick={()=>setSellConfirm("all")} disabled={unstarredCount===0} style={{...S.btn,background:"#eb4b4b22",color:"#eb4b4b",padding:"5px 8px"}}>Sell all</button>
       </div>
+      {ctMode&&<div style={{background:"#0d1117",border:"1px solid #8b5cf644",borderRadius:6,padding:10,marginBottom:10}}>
+        <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",gap:8,flexWrap:"wrap",marginBottom:4}}>
+          <div style={{fontWeight:800,color:"#8b5cf6",fontSize:"clamp(12px,3vw,15px)"}}><MI n="upgrade" s={15} c="#8b5cf6"/> {t("ct_title")}</div>
+          <div style={{color:"#888",fontSize:"clamp(9px,2.2vw,11px)"}}>{t("ct_selected",{n:ctSel.length})}</div>
+        </div>
+        <div style={{color:"#666",fontSize:"clamp(9px,2.2vw,11px)",marginBottom:8}}>{t("ct_hint")}</div>
+        <div style={{display:"flex",gap:4,marginBottom:8,flexWrap:"wrap"}}>
+          {[0,1,2].map(i=>{const id=ctSel[i];const it=id?st.inv.find(x=>x.id===id):null;return(
+            <div key={i} onClick={()=>it&&ctToggle(it)} style={{flex:"1 1 90px",minHeight:36,border:"1px dashed "+(it?(R[it.rarity]?.color||"#555"):"#2a2f3a"),borderRadius:4,padding:"4px 6px",background:it?"#ffffff05":"transparent",fontSize:"clamp(8px,2vw,10px)",cursor:it?"pointer":"default"}}>
+              {it?<><div style={{fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{iconFor(it)} {tItem(it.name)}</div><div style={{color:"#4ade80"}}>{money(it.value)}</div></>
+                 :<div style={{color:"#333",textAlign:"center",lineHeight:"28px"}}>{i+1}</div>}
+            </div>)})}
+        </div>
+        {ctPreview&&<div style={{display:"flex",gap:10,flexWrap:"wrap",marginBottom:8,fontSize:"clamp(9px,2.2vw,11px)"}}>
+          <span style={{color:"#888"}}>{t("ct_input_value")}: <b style={{color:"#4ade80"}}>{money(ctPreview.inputValue)}</b></span>
+          <span style={{color:"#888"}}>{t("ct_target")}: <b style={{color:R[ctPreview.targetRarity]?.color}}>{R[ctPreview.targetRarity]?.label||ctPreview.targetRarity}</b></span>
+          <span style={{color:"#888"}}>{t("ct_upgrade_chance")}: <b style={{color:"#8b5cf6"}}>{ctPreview.upgradeChance}%</b></span>
+        </div>}
+        <div style={{display:"flex",gap:6}}>
+          <button onClick={ctSubmit} disabled={ctSel.length!==3||ctBusy} style={{...S.btn,background:ctSel.length===3&&!ctBusy?"#8b5cf6":"#1a1d24",color:ctSel.length===3&&!ctBusy?"#fff":"#555",fontWeight:800,padding:"8px 16px",flex:1}}>{ctBusy?t("ct_working"):t("ct_submit")}</button>
+          <button onClick={()=>setCtSel([])} disabled={!ctSel.length} style={{...S.btn,background:"#ffffff08",color:"#888",padding:"8px 12px"}}>{t("ct_clear")}</button>
+        </div>
+        {ctPreview?.odds&&<div style={{marginTop:8}}>
+          <div style={{color:"#666",fontSize:"clamp(8px,2vw,10px)",marginBottom:3}}>{t("ct_odds")}</div>
+          <div style={{maxHeight:110,overflowY:"auto",display:"flex",flexDirection:"column",gap:1}}>
+            {ctPreview.odds.map((o,i)=><div key={i} style={{display:"grid",gridTemplateColumns:"1fr 64px 46px",gap:6,fontSize:"clamp(8px,2vw,10px)",padding:"2px 4px",background:o.upgrade?"#8b5cf611":"#ffffff05",borderRadius:2}}>
+              <span style={{color:R[o.rarity]?.color,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{o.upgrade?"↑ ":""}{tItem(o.name)}</span>
+              <span style={{color:"#4ade80",textAlign:"right"}}>{money(o.value)}</span>
+              <span style={{color:"#888",textAlign:"right"}}>{o.chance}%</span>
+            </div>)}
+          </div>
+        </div>}
+      </div>}
       {filteredInv.length===0?<div style={{color:"#555",padding:20,textAlign:"center"}}>No items match.</div>:
-        invView==="grid"?<div style={S.invG}>{filteredInv.map((item,i)=>{const starred=st.starred?.[item.id];return(<div key={item.id||i} className="invItem" onClick={()=>setSelItem(item)} style={{...S.invI,borderLeftColor:R[item.rarity]?.color||"#555",cursor:"pointer",position:"relative",background:starred?"#ffd70008":"#0d1117"}}>{starred&&<div style={{position:"absolute",top:4,right:6,color:"#ffd700",fontSize:"clamp(10px,2.5vw,14px)"}}>{"\u2605"}</div>}<div style={{fontWeight:600,fontSize:"clamp(10px,2.8vw,13px)"}}>{iconFor(item)} {tItem(item.name)}</div><div style={{display:"flex",justifyContent:"space-between"}}><span style={{color:R[item.rarity]?.color,fontSize:"clamp(8px,2.2vw,10px)"}}>{R[item.rarity]?.label}</span><span style={{color:"#4ade80",fontSize:"clamp(9px,2.5vw,12px)",fontWeight:600}}>{money(item.value)}</span></div>{item.float!==undefined&&<div style={{color:"#666",fontSize:"clamp(7px,1.8vw,9px)"}}>{getCondition(item.float)}</div>}</div>)})}</div>:
-        <div style={{display:"flex",flexDirection:"column",gap:2}}>{filteredInv.map((item,i)=>{const starred=st.starred?.[item.id];return(<div key={item.id||i} onClick={()=>setSelItem(item)} style={{display:"grid",gridTemplateColumns:"24px 1fr 80px 70px 24px",alignItems:"center",gap:6,padding:"5px 8px",background:starred?"#ffd70008":"#0d1117",borderLeft:`2px solid ${R[item.rarity]?.color}`,borderRadius:3,cursor:"pointer",fontSize:"clamp(8px,2.2vw,11px)"}}><span>{iconFor(item)}</span><span style={{fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{tItem(item.name)}</span><span style={{color:R[item.rarity]?.color,fontWeight:600}}>{R[item.rarity]?.label}</span><span style={{color:"#4ade80",fontWeight:600}}>{money(item.value)}</span><span style={{color:starred?"#ffd700":"#333"}}>{starred?<MI n="star" s={12} c="#ffd700"/>:<MI n="star_outline" s={12} c="#333"/>}</span></div>)})}</div>}
+        invView==="grid"?<div style={S.invG}>{filteredInv.map((item,i)=>{const starred=st.starred?.[item.id];const ctOn=ctMode&&ctSel.includes(item.id);const ctDim=ctMode&&!ctOn&&ctSel.length>=3;return(<div key={item.id||i} className="invItem" onClick={()=>ctMode?ctToggle(item):setSelItem(item)} style={{...S.invI,borderLeftColor:R[item.rarity]?.color||"#555",cursor:"pointer",position:"relative",background:ctOn?"#8b5cf618":starred?"#ffd70008":"#0d1117",outline:ctOn?"2px solid #8b5cf6":"none",opacity:ctDim?0.4:1}}>{starred&&<div style={{position:"absolute",top:4,right:6,color:"#ffd700",fontSize:"clamp(10px,2.5vw,14px)"}}>{"\u2605"}</div>}<div style={{fontWeight:600,fontSize:"clamp(10px,2.8vw,13px)"}}>{iconFor(item)} {tItem(item.name)}</div><div style={{display:"flex",justifyContent:"space-between"}}><span style={{color:R[item.rarity]?.color,fontSize:"clamp(8px,2.2vw,10px)"}}>{R[item.rarity]?.label}</span><span style={{color:"#4ade80",fontSize:"clamp(9px,2.5vw,12px)",fontWeight:600}}>{money(item.value)}</span></div>{item.float!==undefined&&<div style={{color:"#666",fontSize:"clamp(7px,1.8vw,9px)"}}>{getCondition(item.float)}</div>}</div>)})}</div>:
+        <div style={{display:"flex",flexDirection:"column",gap:2}}>{filteredInv.map((item,i)=>{const starred=st.starred?.[item.id];const ctOn=ctMode&&ctSel.includes(item.id);const ctDim=ctMode&&!ctOn&&ctSel.length>=3;return(<div key={item.id||i} onClick={()=>ctMode?ctToggle(item):setSelItem(item)} style={{display:"grid",gridTemplateColumns:"24px 1fr 80px 70px 24px",alignItems:"center",gap:6,padding:"5px 8px",background:ctOn?"#8b5cf618":starred?"#ffd70008":"#0d1117",borderLeft:`2px solid ${ctOn?"#8b5cf6":R[item.rarity]?.color}`,borderRadius:3,cursor:"pointer",fontSize:"clamp(8px,2.2vw,11px)",opacity:ctDim?0.4:1}}><span>{iconFor(item)}</span><span style={{fontWeight:600,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{tItem(item.name)}</span><span style={{color:R[item.rarity]?.color,fontWeight:600}}>{R[item.rarity]?.label}</span><span style={{color:"#4ade80",fontWeight:600}}>{money(item.value)}</span><span style={{color:starred?"#ffd700":"#333"}}>{starred?<MI n="star" s={12} c="#ffd700"/>:<MI n="star_outline" s={12} c="#333"/>}</span></div>)})}</div>}
     </div>}
+
+    {/* ═══════════ TRADE-UP CONTRACT RESULT ═══════════ */}
+    {ctResult?.item&&<div style={S.overlay} onClick={()=>setCtResult(null)}><div className="modalIn" style={{...S.modal,maxWidth:380,padding:20,textAlign:"center"}} onClick={e=>e.stopPropagation()}>
+      <div style={{fontSize:"clamp(12px,3.2vw,16px)",fontWeight:800,color:ctResult.upgraded?"#8b5cf6":"#888",marginBottom:8,letterSpacing:1}}>{ctResult.upgraded?t("ct_upgraded"):t("ct_sidegrade")}</div>
+      <div style={{fontSize:"clamp(14px,4vw,19px)",fontWeight:700,color:R[ctResult.item.rarity]?.color,marginBottom:3}}>{iconFor(ctResult.item)} {tItem(ctResult.item.name)}</div>
+      <div style={{color:R[ctResult.item.rarity]?.color,fontSize:"clamp(9px,2.4vw,11px)",marginBottom:10}}>{R[ctResult.item.rarity]?.label}{ctResult.item.float!==undefined?" · "+getCondition(ctResult.item.float):""}</div>
+      <div style={{color:"#888",fontSize:"clamp(10px,2.6vw,12px)"}}>{t("ct_result_value")}: <b style={{color:"#4ade80"}}>{money(ctResult.item.value)}</b></div>
+      <div style={{color:"#888",fontSize:"clamp(9px,2.4vw,11px)",marginBottom:14}}>{t("ct_profit")}: <b style={{color:(ctResult.profit||0)>=0?"#4ade80":"#eb4b4b"}}>{(ctResult.profit||0)>=0?"+":"-"}{money(Math.abs(ctResult.profit||0))}</b></div>
+      <button onClick={()=>setCtResult(null)} style={{...S.btn,background:"#8b5cf6",color:"#fff",fontWeight:700,padding:"9px 22px",width:"100%"}}>OK</button>
+    </div></div>}
 
     {/* STATS */}
     {/* ═══════════ STATS chart ═══════════ */}

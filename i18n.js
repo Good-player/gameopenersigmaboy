@@ -244,8 +244,27 @@
       lang_label: "Language",
       lang_english: "English",
       lang_swedish: "Svenska",
+
+      // Trade-up contract
+      ct_title: "Trade-Up Contract",
+      ct_button: "Contract",
+      ct_hint: "Pick 3 items of the same rarity to trade up",
+      ct_selected: "Selected {n}/3",
+      ct_input_value: "You put in",
+      ct_upgrade_chance: "Upgrade chance",
+      ct_target: "Trading up to",
+      ct_submit: "Sign Contract",
+      ct_clear: "Clear",
+      ct_odds: "Possible outcomes",
+      ct_mixed: "All 3 items must be the same rarity",
+      ct_upgraded: "UPGRADED!",
+      ct_sidegrade: "No upgrade this time",
+      ct_result_value: "Worth",
+      ct_profit: "Net",
+      ct_exit: "Leave contract mode",
+      ct_working: "Signing...",
     },
-    
+
     sv: {
       // Common
       cancel: "Avbryt",
@@ -488,6 +507,25 @@
       lang_label: "Språk",
       lang_english: "English",
       lang_swedish: "Svenska",
+
+      // Trade-up contract
+      ct_title: "Uppgraderingskontrakt",
+      ct_button: "Kontrakt",
+      ct_hint: "Välj 3 föremål av samma sällsynthet för att uppgradera",
+      ct_selected: "Valda {n}/3",
+      ct_input_value: "Du satsar",
+      ct_upgrade_chance: "Chans att uppgradera",
+      ct_target: "Uppgraderar till",
+      ct_submit: "Skriv under",
+      ct_clear: "Rensa",
+      ct_odds: "Möjliga utfall",
+      ct_mixed: "Alla 3 föremål måste ha samma sällsynthet",
+      ct_upgraded: "UPPGRADERAD!",
+      ct_sidegrade: "Ingen uppgradering denna gång",
+      ct_result_value: "Värd",
+      ct_profit: "Netto",
+      ct_exit: "Lämna kontraktsläge",
+      ct_working: "Skriver under...",
     }
   };
 
