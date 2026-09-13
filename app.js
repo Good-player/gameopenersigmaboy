@@ -380,6 +380,15 @@ function App(){
     if(!window.RT)return;
     const unsubChat=window.RT.on("chat",(msg)=>{
       if(!msg)return;
+      if(msg.channel && msg.channel.startsWith("lobby:")){
+        if(curLobby && msg.channel === "lobby:" + curLobby.id){
+          setLobbyChat(prev=>{
+            if(prev.some(x=>x.id===msg.id || (x.msg===msg.msg && x.uname===msg.uname && Date.now() - (x._t||0) < 2000))) return prev;
+            return [{id:msg.id, uname:msg.uname, msg:msg.msg, ago:"just now", _t:Date.now()}, ...prev].slice(0,50);
+          });
+        }
+        return;
+      }
       const m={...msg,pfp:pfpCache.current[msg.uid]||msg.pfp||""};
       setChatLog(prev=>{
         if(prev.some(x=>x.id===m.id))return prev;
@@ -412,17 +421,34 @@ function App(){
     });
 
     const unsubBuckshot=window.RT.on("buckshot",(st)=>{
-      if(st)setBuckshotState(st);
+      if(!st)return;
+      if(curLobby && st.lobbyId && st.lobbyId !== curLobby.id)return;
+      setBuckshotState(st);
     });
 
-    const unsubLobby=window.RT.on("lobbyinfo",(lob)=>{
+    const unsubLobby=window.RT.on("lobbyinfo",(data)=>{
+      if(!data)return;
+      const lob=data.lobby||data;
       if(lob&&curLobby&&curLobby.id===lob.id){
-        setCurLobby(prev=>({...prev,...lob}));
+        if(lob.cancelled){
+          setCurLobby(null);
+          setLobbyChat([]);
+          setToast({msg:"Lobby cancelled",color:"#f59e0b"});
+          try{silentCloudSync()}catch{}
+          return;
+        }
+        setCurLobby(prev=>({...prev,...lob, ...(data.players?{_players:data.players}:{})}));
+      }
+    });
+
+    const unsubLobbyStart=window.RT.on("lobbystart",(data)=>{
+      if(data&&curLobby&&data.lobbyId===curLobby.id){
+        refreshLobby(curLobby.id);
       }
     });
 
     return()=>{
-      unsubChat();unsubFeed();unsubDm();unsubOnline();unsubBuckshot();unsubLobby();
+      unsubChat();unsubFeed();unsubDm();unsubOnline();unsubBuckshot();unsubLobby();unsubLobbyStart();
     };
   },[account?.username,curLobby?.id]);
 
@@ -463,8 +489,17 @@ function App(){
     setCurLobby(null);setLobbyChat([]);clearInterval(lobbyPollRef.current);refreshLobbies();
   }
 
-  // Poll lobby while in one
-  useEffect(()=>{if(!curLobby?.id)return;const id=setInterval(()=>refreshLobby(curLobby.id),3000);lobbyPollRef.current=id;return()=>clearInterval(id)},[curLobby?.id]);
+  // Poll lobby while in one and join WebSocket room
+  useEffect(()=>{
+    if(!curLobby?.id)return;
+    if(window.RT&&window.RT.join)window.RT.join("lobby:"+curLobby.id);
+    const id=setInterval(()=>refreshLobby(curLobby.id),3000);
+    lobbyPollRef.current=id;
+    return()=>{
+      clearInterval(id);
+      if(window.RT&&window.RT.leave)window.RT.leave("lobby:"+curLobby.id);
+    };
+  },[curLobby?.id]);
   // Auto-refresh the PvP lobby LIST while the user is on the PvP page and not yet in a lobby.
   // Picks up new lobbies created by others and removes ones that became full/finished.
   useEffect(()=>{
@@ -603,11 +638,18 @@ function App(){
     const id=setInterval(tick,5000);
     return()=>clearInterval(id);
   },[]);
-  // Buckshot Roulette: poll game state every 650ms while in a buckshot lobby & join socket room
+  // Buckshot Roulette: subscribe to socket rooms & poll fallback
   useEffect(()=>{
     if(!curLobby?.id||curLobby.mode!=="buckshot")return;
     let dead=false;
-    if(window.RT&&window.RT.join)window.RT.join("lobby:"+curLobby.id);
+    const lRoom="lobby:"+curLobby.id;
+    const bRoom="buckshot:"+curLobby.id;
+    const uRoom=account?.username?("buckshot:"+curLobby.id+":"+account.username.toLowerCase()):null;
+    if(window.RT&&window.RT.join){
+      window.RT.join(lRoom);
+      window.RT.join(bRoom);
+      if(uRoom)window.RT.join(uRoom);
+    }
     // Remember the last winner we saw so we can distinguish "match ended" (lobby was reaped post-finish) from "lobby cancelled" on a 404
     let lastSeenWinner=null;
     const fetchState=async()=>{
@@ -644,17 +686,21 @@ function App(){
     };
     window._fetchBuckshotState=fetchState;
     fetchState();
-    const id=setInterval(fetchState,650);
+    const id=setInterval(fetchState,1500);
     return()=>{
       dead=true;
       clearInterval(id);
       window._fetchBuckshotState=null;
-      if(window.RT&&window.RT.leave)window.RT.leave("lobby:"+curLobby.id);
+      if(window.RT&&window.RT.leave){
+        window.RT.leave(lRoom);
+        window.RT.leave(bRoom);
+        if(uRoom)window.RT.leave(uRoom);
+      }
       _SND.stopMusic();
       buckshotEventCursorRef.current=0;
       setBuckshotNarration(null);
     };
-  },[curLobby?.id,curLobby?.mode]);
+  },[curLobby?.id,curLobby?.mode,account?.username]);
   // Disconnect-on-leave: when user navigates away from PvP page or closes tab during a playing buckshot game,
   // tell the server. Gives the user 15s grace to reconnect before pot goes to opponent.
   useEffect(()=>{
@@ -1125,15 +1171,14 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
       setTimeout(()=>flash.remove(),500);
     }
     sndReveal(winner.value>=c.price,winner.rarity);
-    let rp=0;
+    const rp=sr?.rentPaid||0;
+    setRentPaid(rp);
     setSt(prev=>{
-      let rc=prev.rentCtr+1;if(rc>=RENT_EVERY){rp=RENT_AMT;rc=0}
-      setRentPaid(rp);
-      const newBal=prev.bal-rp;
+      const rc=sr?.rentCtr!==undefined?sr.rentCtr:((prev.rentCtr+1)%RENT_EVERY);
       const isBig=winner.value>=c.price*3;
-      const he={n:prev.stats.opened,bal:newBal};
+      const he={n:prev.stats.opened,bal:prev.bal};
       if(isBig)he.label=winner.name+" "+money(winner.value);
-      const ns={...prev,bal:newBal,loan:prev.loan,rentCtr:rc,history:[...(prev.history||[]),he].slice(-200),starred:prev.starred||{}};
+      const ns={...prev,rentCtr:rc,history:[...(prev.history||[]),he].slice(-200),starred:prev.starred||{}};
       const nd={name:winner.name,rarity:winner.rarity,value:winner.value,cond:getCondition(fl),icon:winner.icon};
       setDrops(dd=>{const r=[nd,...dd].slice(0,20);save(ns,r);return r});
       setTimeout(()=>{checkReset(ns);lockRef.current=false},400);
@@ -1149,15 +1194,16 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
     const items=r.results.map(rr=>({...rr,id:rr.serverItemId||uid(),icon:c.items.find(i=>i.name===rr.name)?.icon||"?",from:c.id,t:Date.now()}));
     setMultiResults({items,case:c,totalValue:r.totalValue,totalCost:cPrice*count});
     lastServerActionRef.current=Date.now();
+    if(r.rentPaid) setRentPaid(r.rentPaid);
     setSt(p=>{
       const newBal=(r.serverBal!==null&&r.serverBal!==undefined)?r.serverBal:(p.bal-cPrice*count+r.totalValue);
-      const ns={...p,bal:newBal,inv:[...p.inv,...items],stats:{...p.stats,spent:p.stats.spent+cPrice*count,won:p.stats.won+r.totalValue,opened:p.stats.opened+count}};
+      const ns={...p,bal:newBal,inv:[...p.inv,...items],rentCtr:r.rentCtr!==undefined?r.rentCtr:p.rentCtr,stats:{...p.stats,spent:p.stats.spent+cPrice*count,won:p.stats.won+r.totalValue,opened:p.stats.opened+count}};
       save(ns,drops);return ns;
     });
     sndReveal(r.totalValue>c.price*count);setPage("multi");lockRef.current=false;
   }
   function openAgain(){setLastWonId(null);if(!selCase||st.bal<selCase.price){setPage("shop");setOpening(false);return}doOpen(selCase)}
-  function borrow(){
+  async function borrow(){
     const a=parseInt(loanAmt);
     if(!a||a<=0){setToast({msg:"Enter amount",color:"#eb4b4b"});return}
     const cs=st.creditScore||500;
@@ -1166,6 +1212,22 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
     if(actual<=0){setToast({msg:"Already at credit limit",color:"#eb4b4b"});return}
     const minutes=parseInt(loanMinutes)||5;
     if(minutes<1||minutes>10){setToast({msg:"Payback time: 1-10 minutes online",color:"#eb4b4b"});return}
+    if(account){
+      const r=await api("/loan/borrow",{username:account.username,token:account.token,slot,amount:actual,minutes});
+      if(r&&r.ok){
+        lastServerActionRef.current=Date.now();
+        const deadlineOnlineMinutes=(st.onlineMinutes||0)+minutes;
+        setSt(p=>{const ns={...p,bal:r.newBal!==undefined?r.newBal:p.bal+actual,loan:r.newLoan!==undefined?r.newLoan:p.loan+r.owed,creditScore:Math.max(0,p.creditScore||500),loanDeadline:deadlineOnlineMinutes,loanRequestAt:Date.now(),loanTermMinutes:minutes};save(ns,drops);return ns});
+        setLoanAmt("");
+        setLoanMinutes("5");
+        setShowLoanModal(false);
+        setToast({msg:"Borrowed "+money(actual)+" — owe "+money(r.owed||actual)+" by "+minutes+" online min",color:"#f59e0b"});
+        return;
+      } else if(r&&r.error){
+        setToast({msg:r.error,color:"#eb4b4b"});
+        return;
+      }
+    }
     const rate=cs>=700?0.05:cs>=500?0.1:cs>=300?0.2:cs>=150?0.35:0.5;
     const owedAmount=Math.round(actual*(1+rate));
     const deadlineOnlineMinutes=(st.onlineMinutes||0)+minutes;
@@ -1175,7 +1237,31 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
     setShowLoanModal(false);
     setToast({msg:"Borrowed "+money(actual)+" — owe "+money(owedAmount)+" by "+minutes+" online min",color:"#f59e0b"});
   }
-  function repay(){const a=parseInt(loanAmt);if(!a||a<=0)return;const actual=Math.min(a,st.loan,st.bal);if(actual<=0)return;setSt(p=>{const paid=(p.loansPaid||0)+actual;const fullPaid=p.loan-actual<=0;const csBoost=fullPaid?20:Math.floor(actual/1000)*2;const ns={...p,bal:p.bal-actual,loan:p.loan-actual,creditScore:Math.min(1000,(p.creditScore||100)+csBoost),loansPaid:paid};save(ns,drops);return ns});setLoanAmt("")}
+  async function repay(){
+    const a=parseInt(loanAmt);
+    if(!a||a<=0)return;
+    const actual=Math.min(a,st.loan,st.bal);
+    if(actual<=0)return;
+    if(account){
+      const r=await api("/loan/repay",{username:account.username,token:account.token,slot,amount:actual});
+      if(r&&r.ok){
+        lastServerActionRef.current=Date.now();
+        setSt(p=>{
+          const paid=(p.loansPaid||0)+actual;
+          const ns={...p,bal:r.newBal!==undefined?r.newBal:p.bal-actual,loan:r.newLoan!==undefined?r.newLoan:p.loan-actual,creditScore:r.creditScore!==undefined?r.creditScore:p.creditScore,loansPaid:paid};
+          save(ns,drops);return ns;
+        });
+        setLoanAmt("");
+        setToast({msg:"Repaid "+money(actual),color:"#4ade80"});
+        return;
+      } else if(r&&r.error){
+        setToast({msg:r.error,color:"#eb4b4b"});
+        return;
+      }
+    }
+    setSt(p=>{const paid=(p.loansPaid||0)+actual;const fullPaid=p.loan-actual<=0;const csBoost=fullPaid?20:Math.floor(actual/1000)*2;const ns={...p,bal:p.bal-actual,loan:p.loan-actual,creditScore:Math.min(1000,(p.creditScore||100)+csBoost),loansPaid:paid};save(ns,drops);return ns});
+    setLoanAmt("");
+  }
   function doReset(){const fresh={...INIT,inv:[],stats:{...INIT.stats},history:[{n:0,bal:DEFAULT_BAL,label:"Start"}],starred:{}};setSt(fresh);setDrops([]);save(fresh,[]);setPage("shop");lockRef.current=false;setOpening(false);setConfirmReset(false)}
 
   // Auth handlers
@@ -1317,18 +1403,102 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
   }
   function logout(){clearAccount();setAccount(null)}
 
-  function sellItem(item){sndSell();setSt(p=>{const idx=p.inv.findIndex(i=>i.id===item.id);if(idx===-1)return p;const ni=[...p.inv];ni.splice(idx,1);const starred={...p.starred};delete starred[item.id];const ns={...p,bal:p.bal+item.value,inv:ni,stats:{...p.stats,sold:(p.stats.sold||0)+item.value},starred};save(ns,drops);return ns});setSelItem(null)}
-  function sellLastWon(){if(!lastWonId||!wonItem)return;sndSell();setSt(p=>{const idx=p.inv.findIndex(i=>i.id===lastWonId);if(idx===-1)return p;const item=p.inv[idx];const ni=[...p.inv];ni.splice(idx,1);const starred={...p.starred};delete starred[lastWonId];const ns={...p,bal:p.bal+item.value,inv:ni,stats:{...p.stats,sold:(p.stats.sold||0)+item.value},starred};save(ns,drops);return ns});setLastWonId(null)}
-  function sellMultiple(count){sndSell();setSt(p=>{let sorted=getFilteredSorted(p.inv,p.starred);sorted=sorted.filter(i=>!p.starred[i.id]&&i.rarity!=="legendary"&&i.rarity!=="chroma");const toSell=sorted.slice(0,count);if(!toSell.length)return p;const ids=new Set(toSell.map(i=>i.id));const total=toSell.reduce((s,i)=>s+i.value,0);const ni=p.inv.filter(i=>!ids.has(i.id));const ns={...p,bal:p.bal+total,inv:ni,stats:{...p.stats,sold:(p.stats.sold||0)+total}};save(ns,drops);return ns})}
-  function sellAllUnstarred(){sndSell();setSt(p=>{
-    // ALWAYS protect legendary + chroma items from bulk-sell, even if not starred. The rarest items should never be lost to a misclick.
-    const unstarred=p.inv.filter(i=>!p.starred[i.id]&&i.rarity!=="legendary"&&i.rarity!=="chroma");
-    if(!unstarred.length)return p;
+  async function sellItem(item){
+    if(!item)return;
+    sndSell();
+    setSelItem(null);
+    if(account){
+      const r=await api("/item/sell",{username:account.username,token:account.token,slot,itemId:item.id});
+      if(r&&r.ok){
+        lastServerActionRef.current=Date.now();
+        setSt(p=>{
+          const ni=p.inv.filter(i=>i.id!==item.id);
+          const starred={...p.starred};delete starred[item.id];
+          const ns={...p,bal:(r.newBal!==undefined?r.newBal:p.bal+item.value),inv:ni,stats:{...p.stats,sold:(p.stats.sold||0)+(r.soldTotal||item.value)},starred};
+          save(ns,drops);return ns;
+        });
+        return;
+      }
+    }
+    setSt(p=>{const idx=p.inv.findIndex(i=>i.id===item.id);if(idx===-1)return p;const ni=[...p.inv];ni.splice(idx,1);const starred={...p.starred};delete starred[item.id];const ns={...p,bal:p.bal+item.value,inv:ni,stats:{...p.stats,sold:(p.stats.sold||0)+item.value},starred};save(ns,drops);return ns});
+  }
+
+  async function sellLastWon(){
+    if(!lastWonId||!wonItem)return;
+    const targetId=lastWonId;
+    const item=wonItem;
+    setLastWonId(null);
+    sndSell();
+    if(account){
+      const r=await api("/item/sell",{username:account.username,token:account.token,slot,itemId:targetId});
+      if(r&&r.ok){
+        lastServerActionRef.current=Date.now();
+        setSt(p=>{
+          const ni=p.inv.filter(i=>i.id!==targetId);
+          const starred={...p.starred};delete starred[targetId];
+          const ns={...p,bal:(r.newBal!==undefined?r.newBal:p.bal+item.value),inv:ni,stats:{...p.stats,sold:(p.stats.sold||0)+(r.soldTotal||item.value)},starred};
+          save(ns,drops);return ns;
+        });
+        return;
+      }
+    }
+    setSt(p=>{const idx=p.inv.findIndex(i=>i.id===targetId);if(idx===-1)return p;const it=p.inv[idx];const ni=[...p.inv];ni.splice(idx,1);const starred={...p.starred};delete starred[targetId];const ns={...p,bal:p.bal+it.value,inv:ni,stats:{...p.stats,sold:(p.stats.sold||0)+it.value},starred};save(ns,drops);return ns});
+  }
+
+  async function sellMultiple(count){
+    let sorted=getFilteredSorted(st.inv,st.starred);
+    sorted=sorted.filter(i=>!st.starred[i.id]&&i.rarity!=="legendary"&&i.rarity!=="chroma");
+    const toSell=sorted.slice(0,count);
+    if(!toSell.length)return;
+    sndSell();
+    const ids=toSell.map(i=>i.id);
+    const idSet=new Set(ids);
+    const total=toSell.reduce((s,i)=>s+i.value,0);
+    if(account){
+      const r=await api("/item/sell-bulk",{username:account.username,token:account.token,slot,itemIds:ids});
+      if(r&&r.ok){
+        lastServerActionRef.current=Date.now();
+        setSt(p=>{
+          const ni=p.inv.filter(i=>!idSet.has(i.id));
+          const ns={...p,bal:(r.newBal!==undefined?r.newBal:p.bal+total),inv:ni,stats:{...p.stats,sold:(p.stats.sold||0)+(r.soldTotal||total)}};
+          save(ns,drops);return ns;
+        });
+        return;
+      }
+    }
+    setSt(p=>{
+      const ni=p.inv.filter(i=>!idSet.has(i.id));
+      const ns={...p,bal:p.bal+total,inv:ni,stats:{...p.stats,sold:(p.stats.sold||0)+total}};
+      save(ns,drops);return ns;
+    });
+  }
+
+  async function sellAllUnstarred(){
+    const unstarred=st.inv.filter(i=>!st.starred[i.id]&&i.rarity!=="legendary"&&i.rarity!=="chroma");
+    if(!unstarred.length){setSellConfirm(null);return}
+    sndSell();
+    setSellConfirm(null);
+    const ids=unstarred.map(i=>i.id);
+    const idSet=new Set(ids);
     const total=unstarred.reduce((s,i)=>s+i.value,0);
-    const keep=p.inv.filter(i=>p.starred[i.id]||i.rarity==="legendary"||i.rarity==="chroma");
-    const ns={...p,bal:p.bal+total,inv:keep,stats:{...p.stats,sold:(p.stats.sold||0)+total}};
-    save(ns,drops);return ns;
-  });setSellConfirm(null)}
+    if(account){
+      const r=await api("/item/sell-bulk",{username:account.username,token:account.token,slot,itemIds:ids});
+      if(r&&r.ok){
+        lastServerActionRef.current=Date.now();
+        setSt(p=>{
+          const keep=p.inv.filter(i=>!idSet.has(i.id));
+          const ns={...p,bal:(r.newBal!==undefined?r.newBal:p.bal+total),inv:keep,stats:{...p.stats,sold:(p.stats.sold||0)+(r.soldTotal||total)}};
+          save(ns,drops);return ns;
+        });
+        return;
+      }
+    }
+    setSt(p=>{
+      const keep=p.inv.filter(i=>p.starred[i.id]||i.rarity==="legendary"||i.rarity==="chroma");
+      const ns={...p,bal:p.bal+total,inv:keep,stats:{...p.stats,sold:(p.stats.sold||0)+total}};
+      save(ns,drops);return ns;
+    });
+  }
   function toggleStar(id){setSt(p=>{const s={...p.starred};if(s[id])delete s[id];else s[id]=true;const ns={...p,starred:s};save(ns,drops);return ns})}
 
   // ===== TRADE-UP CONTRACT =====
@@ -2148,7 +2318,7 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
       <div style={{display:"flex",gap:6,marginTop:12,justifyContent:"center",flexWrap:"wrap"}}>
         <button onClick={()=>{setPage("shop");setMultiResults(null)}} style={{...S.btn,background:"#ffffff08",color:"#999"}}>Back to Shop</button>
         {st.bal>=multiResults.case.price*10&&<button onClick={()=>{setMultiResults(null);doMultiOpen(multiResults.case,10)}} style={{...S.btn,background:"#4ade80",color:"#000",fontWeight:700}}>Open x10 Again</button>}
-        <button onClick={()=>{const total=multiResults.items.reduce((s,it)=>s+it.value,0);setSt(p=>{const inv=p.inv.filter(x=>!multiResults.items.find(mi=>mi.id===x.id));const ns={...p,bal:p.bal+total,inv};save(ns,drops);return ns});setToast({msg:"Sold all for $"+total.toLocaleString(),color:"#4ade80"});setMultiResults(null);setPage("shop")}} style={{...S.btn,background:"#fbbf24",color:"#000",fontWeight:700}}>Sell All ({money(multiResults.totalValue)})</button>
+        <button onClick={async()=>{const ids=multiResults.items.map(it=>it.id);const idSet=new Set(ids);const total=multiResults.items.reduce((s,it)=>s+it.value,0);sndSell();setMultiResults(null);setPage("shop");if(account){const r=await api("/item/sell-bulk",{username:account.username,token:account.token,slot,itemIds:ids});if(r&&r.ok){lastServerActionRef.current=Date.now();setSt(p=>{const inv=p.inv.filter(x=>!idSet.has(x.id));const ns={...p,bal:(r.newBal!==undefined?r.newBal:p.bal+total),inv,stats:{...p.stats,sold:(p.stats.sold||0)+(r.soldTotal||total)}};save(ns,drops);return ns});setToast({msg:"Sold all for $"+total.toLocaleString(),color:"#4ade80"});return}}setSt(p=>{const inv=p.inv.filter(x=>!idSet.has(x.id));const ns={...p,bal:p.bal+total,inv,stats:{...p.stats,sold:(p.stats.sold||0)+total}};save(ns,drops);return ns});setToast({msg:"Sold all for $"+total.toLocaleString(),color:"#4ade80"})}} style={{...S.btn,background:"#fbbf24",color:"#000",fontWeight:700}}>Sell All ({money(multiResults.totalValue)})</button>
       </div>
     </div>}
 
@@ -2988,7 +3158,7 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
           {bjTable.phase==="playing"&&me&&me.status==="playing"&&<div style={{display:"flex",gap:6,justifyContent:"center",marginTop:12}}>
             <button onClick={async()=>{const r=await api("/bj/action",{username:account.username,tableId:"main",action:"hit"});if(r?.table)setBjTable(r.table)}} style={{...S.btn,background:"#4ade80",color:"#000",padding:"10px 20px",fontWeight:700}}>HIT</button>
             <button onClick={async()=>{const r=await api("/bj/action",{username:account.username,tableId:"main",action:"stand"});if(r?.table)setBjTable(r.table)}} style={{...S.btn,background:"#eb4b4b",color:"#fff",padding:"10px 20px",fontWeight:700}}>STAND</button>
-            <button onClick={async()=>{if(st.bal<me.bet){setToast({msg:"Need "+money(me.bet),color:"#eb4b4b"});return}setSt(p=>({...p,bal:p.bal-me.bet}));const r=await api("/bj/action",{username:account.username,tableId:"main",action:"double"});if(r?.table)setBjTable(r.table)}} style={{...S.btn,background:"#f59e0b",color:"#000",padding:"10px 20px",fontWeight:700}}>DOUBLE</button>
+            <button onClick={async()=>{if(st.bal<me.bet){setToast({msg:"Need "+money(me.bet),color:"#eb4b4b"});return}const r=await api("/bj/action",{username:account.username,tableId:"main",action:"double",slot});if(r?.serverBal!==null&&r?.serverBal!==undefined){lastServerActionRef.current=Date.now();setSt(p=>{const ns={...p,bal:r.serverBal};save(ns,drops);return ns})}else{setSt(p=>({...p,bal:p.bal-me.bet}))}if(r?.table)setBjTable(r.table)}} style={{...S.btn,background:"#f59e0b",color:"#000",padding:"10px 20px",fontWeight:700}}>DOUBLE</button>
           </div>}
           {bjTable.phase==="finished"&&me&&<div className="bounceIn" style={{textAlign:"center",padding:12,marginTop:8}}>
             <div style={{fontSize:22,fontWeight:800,color:me.result==="win"||me.result==="blackjack"?"#4ade80":me.result==="push"?"#f59e0b":"#eb4b4b"}}>{me.result==="blackjack"?"♠ BLACKJACK! ♠":me.result==="win"?"YOU WIN!":me.result==="push"?"PUSH":"You lost"}</div>
@@ -3003,7 +3173,7 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
           </div>}
           {!bjHasCard&&!me&&<div style={{marginTop:12,padding:10,background:"#0d1117",borderRadius:8,textAlign:"center"}}>
             <div style={{color:"#888",fontSize:11,marginBottom:6}}>You're spectating. Buy a card to play:</div>
-            <button onClick={async()=>{if(st.bal<50000){setToast({msg:"Need $50,000",color:"#eb4b4b"});return}const r=await api("/bj/buycard",{username:account?.username,token:account?.token});if(r?.ok){setBjHasCard(true);setSt(p=>{const ns={...p,bal:p.bal-50000};save(ns,drops);return ns});setToast({msg:"Card purchased!",color:"#4ade80"})}else setToast({msg:r?.error||"Failed",color:"#eb4b4b"})}} style={{...S.btn,background:"#f59e0b",color:"#000",padding:"8px 20px",fontWeight:700}}>Buy Card ($50K)</button>
+            <button onClick={async()=>{if(st.bal<50000){setToast({msg:"Need $50,000",color:"#eb4b4b"});return}const r=await api("/bj/buycard",{username:account?.username,token:account?.token,slot});if(r?.ok){setBjHasCard(true);if(r.serverBal!==null&&r.serverBal!==undefined){lastServerActionRef.current=Date.now();setSt(p=>{const ns={...p,bal:r.serverBal};save(ns,drops);return ns})}else{setSt(p=>{const ns={...p,bal:p.bal-50000};save(ns,drops);return ns})}setToast({msg:"Card purchased!",color:"#4ade80"})}else setToast({msg:r?.error||"Failed",color:"#eb4b4b"})}} style={{...S.btn,background:"#f59e0b",color:"#000",padding:"8px 20px",fontWeight:700}}>Buy Card ($50K)</button>
           </div>}
           {me&&bjTable.phase==="waiting"&&<div style={{textAlign:"center",color:"#f59e0b",marginTop:8,fontSize:11}}>Waiting... {bjTable.countdown>0?`Starting in ${bjTable.countdown}s`:`${bjTable.players.length}/5 players`}</div>}
         </div>
