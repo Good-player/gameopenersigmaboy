@@ -315,6 +315,215 @@ function BalanceTicker({value,color,fontSize}){
 
 function Starburst({color,children,spin}){const pts=18,outer=50,inner=42;let d="";for(let i=0;i<pts*2;i++){const a=(Math.PI*i)/pts-Math.PI/2,r=i%2===0?outer:inner;d+=(i===0?"M":"L")+(50+r*Math.cos(a))+","+(50+r*Math.sin(a))}d+="Z";return(<div style={{position:"relative",width:"clamp(120px,35vw,200px)",height:"clamp(120px,35vw,200px)"}}><svg viewBox="0 0 100 100" style={{position:"absolute",inset:0,width:"100%",height:"100%",filter:`drop-shadow(0 0 ${spin?24:12}px ${color}${spin?"88":"44"})`,animation:spin?"spin 8s linear infinite":"none"}}><path d={d} fill={color+"22"} stroke={color} strokeWidth="0.5"/></svg><div style={{position:"absolute",inset:0,display:"flex",alignItems:"center",justifyContent:"center"}}>{children}</div></div>)}
 
+function drawCrashCanvas(ctx, W, H, st) {
+  ctx.fillStyle = "#080b12";
+  ctx.fillRect(0, 0, W, H);
+
+  // Grid
+  ctx.strokeStyle = "#141c2a";
+  ctx.lineWidth = 1;
+  const gridStep = 45;
+  ctx.beginPath();
+  for (let x = 0; x < W; x += gridStep) { ctx.moveTo(x, 0); ctx.lineTo(x, H); }
+  for (let y = 0; y < H; y += gridStep) { ctx.moveTo(0, y); ctx.lineTo(W, y); }
+  ctx.stroke();
+
+  const padLeft = 45;
+  const padBottom = 30;
+  const graphW = W - padLeft - 25;
+  const graphH = H - padBottom - 25;
+
+  if (st.state === "betting") {
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.font = "bold clamp(15px, 3.5vw, 20px) sans-serif";
+    ctx.fillStyle = "#f59e0b";
+    ctx.fillText("PREPARING ROCKET LAUNCH", W / 2, H / 2 - 22);
+    ctx.font = "bold clamp(36px, 8vw, 56px) sans-serif";
+    ctx.fillStyle = "#e2e8f0";
+    ctx.fillText((st.countdown || 6.0).toFixed(1) + "s", W / 2, H / 2 + 25);
+    return;
+  }
+
+  let liveMult = st.multiplier || 1.00;
+  if (st.state === "flying" && st.startTime > 0) {
+    const elapsed = Math.max(0, (Date.now() - st.startTime) / 1000);
+    liveMult = Math.max(1.00, Math.pow(Math.E, 0.065 * elapsed));
+  } else if (st.state === "crashed") {
+    liveMult = st.crashPoint || st.multiplier || 1.00;
+  }
+
+  const maxM = Math.max(2.0, liveMult * 1.25);
+  const maxT = Math.max(10, Math.log(maxM) / 0.065);
+
+  // Ticks
+  ctx.fillStyle = "#475569";
+  ctx.font = "10px sans-serif";
+  ctx.textAlign = "right";
+  ctx.textBaseline = "middle";
+  const stepM = maxM > 25 ? 5 : maxM > 10 ? 2 : 0.5;
+  for (let m = 1; m <= maxM; m += stepM) {
+    const y = H - padBottom - ((m - 1) / (maxM - 1)) * graphH;
+    if (y >= 20) {
+      ctx.fillText(m.toFixed(1) + "x", padLeft - 8, y);
+      ctx.strokeStyle = "#162032";
+      ctx.beginPath();
+      ctx.moveTo(padLeft, y);
+      ctx.lineTo(W - 20, y);
+      ctx.stroke();
+    }
+  }
+
+  const isCrashed = st.state === "crashed";
+  const curveColor = isCrashed ? "#eb4b4b" : "#4ade80";
+
+  ctx.beginPath();
+  const numPts = 60;
+  const currentElapsed = st.startTime > 0 ? (Date.now() - st.startTime) / 1000 : 0;
+  const simT = isCrashed ? (Math.log(st.crashPoint || liveMult) / 0.065) : currentElapsed;
+
+  let endX = padLeft;
+  let endY = H - padBottom;
+
+  for (let i = 0; i <= numPts; i++) {
+    const t = (i / numPts) * simT;
+    const m = Math.pow(Math.E, 0.065 * t);
+    const x = padLeft + (t / maxT) * graphW;
+    const y = H - padBottom - ((m - 1) / (maxM - 1)) * graphH;
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+    if (i === numPts) { endX = x; endY = y; }
+  }
+
+  // Gradient under curve
+  ctx.lineTo(endX, H - padBottom);
+  ctx.lineTo(padLeft, H - padBottom);
+  ctx.closePath();
+  const grad = ctx.createLinearGradient(0, endY, 0, H - padBottom);
+  grad.addColorStop(0, isCrashed ? "#eb4b4b33" : "#4ade8033");
+  grad.addColorStop(1, "transparent");
+  ctx.fillStyle = grad;
+  ctx.fill();
+
+  // Stroke
+  ctx.beginPath();
+  for (let i = 0; i <= numPts; i++) {
+    const t = (i / numPts) * simT;
+    const m = Math.pow(Math.E, 0.065 * t);
+    const x = padLeft + (t / maxT) * graphW;
+    const y = H - padBottom - ((m - 1) / (maxM - 1)) * graphH;
+    if (i === 0) ctx.moveTo(x, y);
+    else ctx.lineTo(x, y);
+  }
+  ctx.strokeStyle = curveColor;
+  ctx.lineWidth = 3.5;
+  ctx.shadowColor = curveColor;
+  ctx.shadowBlur = 8;
+  ctx.stroke();
+  ctx.shadowBlur = 0;
+
+  // Rocket or Boom
+  if (!isCrashed) {
+    ctx.save();
+    ctx.translate(endX, endY);
+    ctx.fillStyle = "#f59e0b";
+    ctx.beginPath();
+    ctx.arc(-8, 6, 3 + Math.random() * 3, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.fillStyle = "#eb4b4b";
+    ctx.beginPath();
+    ctx.arc(-12, 9, 2 + Math.random() * 2, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.font = "22px sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("🚀", 0, -2);
+    ctx.restore();
+  } else {
+    ctx.save();
+    ctx.translate(endX, endY);
+    ctx.font = "26px sans-serif";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "middle";
+    ctx.fillText("💥", 0, 0);
+    ctx.restore();
+  }
+
+  // Giant text in center
+  ctx.textAlign = "center";
+  ctx.textBaseline = "middle";
+  if (isCrashed) {
+    ctx.font = "bold clamp(26px, 6vw, 42px) sans-serif";
+    ctx.fillStyle = "#eb4b4b";
+    ctx.fillText("CRASHED @" + (st.crashPoint || liveMult).toFixed(2) + "x", W / 2, H / 2 - 15);
+    ctx.font = "12px sans-serif";
+    ctx.fillStyle = "#888";
+    ctx.fillText("Next round in a few seconds...", W / 2, H / 2 + 20);
+  } else {
+    ctx.font = "bold clamp(36px, 8vw, 60px) sans-serif";
+    ctx.fillStyle = "#4ade80";
+    ctx.fillText(liveMult.toFixed(2) + "x", W / 2, H / 2 - 8);
+    ctx.font = "bold 11px sans-serif";
+    ctx.fillStyle = "#94a3b8";
+    ctx.fillText("CURRENT MULTIPLIER", W / 2, H / 2 + 30);
+  }
+}
+
+function playCrashSound(type, param) {
+  if (typeof _SND !== "undefined" && _SND?.sfxMuted) return;
+  try {
+    const AudioCtx = window.AudioContext || window.webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    const vol = (typeof _SND !== "undefined" && _SND?.sfxVol !== undefined) ? _SND.sfxVol : 0.5;
+    if (type === "climb") {
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.type = "sine";
+      const freq = Math.min(880, 220 + (param || 1) * 35);
+      osc.frequency.setValueAtTime(freq, ctx.currentTime);
+      gain.gain.setValueAtTime(0.04 * vol, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.12);
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.12);
+    } else if (type === "cashout") {
+      [523.25, 659.25, 783.99].forEach((freq, i) => {
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.type = "triangle";
+        osc.frequency.setValueAtTime(freq, ctx.currentTime + i * 0.06);
+        gain.gain.setValueAtTime(0.1 * vol, ctx.currentTime + i * 0.06);
+        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + i * 0.06 + 0.35);
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+        osc.start(ctx.currentTime + i * 0.06);
+        osc.stop(ctx.currentTime + i * 0.06 + 0.35);
+      });
+    } else if (type === "crash") {
+      const bufferSize = ctx.sampleRate * 0.35;
+      const buffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
+      const data = buffer.getChannelData(0);
+      for (let i = 0; i < bufferSize; i++) {
+        data[i] = (Math.random() * 2 - 1) * Math.exp(-i / (ctx.sampleRate * 0.08));
+      }
+      const noise = ctx.createBufferSource();
+      noise.buffer = buffer;
+      const filter = ctx.createBiquadFilter();
+      filter.type = "lowpass";
+      filter.frequency.setValueAtTime(350, ctx.currentTime);
+      const gain = ctx.createGain();
+      gain.gain.setValueAtTime(0.25 * vol, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.35);
+      noise.connect(filter);
+      filter.connect(gain);
+      gain.connect(ctx.destination);
+      noise.start();
+    }
+  } catch (e) {}
+}
+
 function App(){
   // i18n hook - re-render on language change
   const[lang,setLang]=useState(typeof window!=='undefined'&&window.I18N?window.I18N.getLang():'en');
@@ -359,6 +568,24 @@ function App(){
   const[viewProfile,setViewProfile]=useState(null);const[editBio,setEditBio]=useState("");const[editPrivacy,setEditPrivacy]=useState("public");
   const[reportTarget,setReportTarget]=useState("");const[reportReason,setReportReason]=useState("");const[reportMsg,setReportMsg]=useState("");
   const[toast,setToast]=useState(null);const[userMenu,setUserMenu]=useState(null);const[reportModal,setReportModal]=useState(null);const[pvpEliminated,setPvpEliminated]=useState(false);const[horseRace,setHorseRace]=useState(null);const[horseAnim,setHorseAnim]=useState(0);const[horseBet,setHorseBet]=useState("");const[horsePick,setHorsePick]=useState(0);const[horseHistory,setHorseHistory]=useState([]);const[multiResults,setMultiResults]=useState(null);const[bjTable,setBjTable]=useState(null);const[bjBet,setBjBet]=useState("10000");const[bjHasCard,setBjHasCard]=useState(false);const[btcPrice,setBtcPrice]=useState(0);const[btcHistory,setBtcHistory]=useState([]);const[btcPortfolio,setBtcPortfolio]=useState({active:[],sold:[]});const[btcInvestAmt,setBtcInvestAmt]=useState("");const[btcDays,setBtcDays]=useState(7);const[btcLastUpdate,setBtcLastUpdate]=useState(0);const[btcNextUpdate,setBtcNextUpdate]=useState(0);const[btcTick,setBtcTick]=useState(0);const[btcChange24h,setBtcChange24h]=useState(0);const[plinkoBet,setPlinkoBet]=useState("1000");const[plinkoRisk,setPlinkoRisk]=useState("medium");const[plinkoRows,setPlinkoRows]=useState(12);const[plinkoResult,setPlinkoResult]=useState(null);const[plinkoAnim,setPlinkoAnim]=useState(false);const[rouletteBets,setRouletteBets]=useState([]);const[rouletteResult,setRouletteResult]=useState(null);const[rouletteAnim,setRouletteAnim]=useState(false);const[rouletteAmt,setRouletteAmt]=useState("1000");const[weatherData,setWeatherData]=useState(null);const[smhiWarnings,setSmhiWarnings]=useState(null);const[pollenData,setPollenData]=useState(null);const[airData,setAirData]=useState(null);const[expandedSection,setExpandedSection]=useState({});const[dailyStatus,setDailyStatus]=useState(null);const[dailyModal,setDailyModal]=useState(null);const[wheelStatus,setWheelStatus]=useState(null);const[wheelSpinning,setWheelSpinning]=useState(false);const[wheelResult,setWheelResult]=useState(null);const wheelCanvasRef=useRef(null);const horseCanvasRef=useRef(null);const horseAnimRef=useRef(null);const syncLockRef=useRef(false);const lastServerActionRef=useRef(0);const plinkoCanvasRef=useRef(null);const rouletteCanvasRef=useRef(null);const[pvpWinModal,setPvpWinModal]=useState(null);const[warnModal,setWarnModal]=useState(null);const[banModal,setBanModal]=useState(null);const[banTimer,setBanTimer]=useState("");const[giftModal,setGiftModal]=useState(null);const[giftAmt,setGiftAmt]=useState("");
+  const [crashState, setCrashState] = useState({
+    state: "betting",
+    roundId: 0,
+    multiplier: 1.00,
+    startTime: 0,
+    countdown: 6.0,
+    cooldown: 3.5,
+    crashPoint: 1.00,
+    history: [],
+    bets: []
+  });
+  const [crashBetAmt, setCrashBetAmt] = useState("100");
+  const [crashAutoCashout, setCrashAutoCashout] = useState("");
+  const [crashMyBet, setCrashMyBet] = useState(null);
+  const [crashSubmitting, setCrashSubmitting] = useState(false);
+  const crashCanvasRef = useRef(null);
+  const crashStateRef = useRef(crashState);
+  crashStateRef.current = crashState;
   const[events,setEvents]=useState([]);const[dismissedEvents,setDismissedEvents]=useState({});
   const[friendsList,setFriendsList]=useState([]);
   function showProfile(username){if(!username||username==="Anon"||username==="SYSTEM")return;api("/profile/full",{target:username.toLowerCase(),username:account?.username||""}).then(r=>{if(r?.profile)setViewProfile(r.profile)}).catch(()=>{})}
@@ -374,6 +601,209 @@ function App(){
       window.RT.connect(account.username,account.token,USER_ID);
     }
   },[account?.username,account?.token]);
+
+  // Realtime Crash Engine Hook
+  useEffect(() => {
+    if (page !== "crash") return;
+    window.RT?.join?.("crash");
+
+    api("/crash/state", {}).then(r => {
+      if (r?.ok) {
+        setCrashState(prev => ({
+          ...prev,
+          state: r.state,
+          roundId: r.roundId,
+          multiplier: r.multiplier,
+          startTime: r.startTime,
+          countdown: r.countdown,
+          cooldown: r.cooldown,
+          history: r.history || [],
+          bets: r.bets || []
+        }));
+        if (account?.username) {
+          const mine = (r.bets || []).find(b => b.username === account.username);
+          if (mine) setCrashMyBet(mine);
+        }
+      }
+    });
+
+    const onBetting = (d) => {
+      setCrashState(prev => {
+        const isNew = prev.roundId !== d.roundId;
+        if (isNew) setCrashMyBet(null);
+        return {
+          ...prev,
+          state: "betting",
+          roundId: d.roundId,
+          countdown: d.countdown !== undefined ? d.countdown : prev.countdown,
+          bets: isNew ? [] : prev.bets
+        };
+      });
+    };
+
+    const onFlying = (d) => {
+      setCrashState(prev => ({
+        ...prev,
+        state: "flying",
+        roundId: d.roundId,
+        startTime: d.startTime,
+        multiplier: 1.00,
+        bets: d.bets || prev.bets
+      }));
+      playCrashSound("climb", 1);
+    };
+
+    const onTick = (d) => {
+      setCrashState(prev => {
+        if (prev.state !== "flying") return prev;
+        return { ...prev, multiplier: d.mult, roundId: d.roundId };
+      });
+    };
+
+    const onCrashed = (d) => {
+      setCrashState(prev => ({
+        ...prev,
+        state: "crashed",
+        roundId: d.roundId,
+        multiplier: d.crashPoint,
+        crashPoint: d.crashPoint,
+        history: d.history || prev.history
+      }));
+      playCrashSound("crash");
+      setCrashMyBet(prev => {
+        if (prev && !prev.cashedOut) {
+          setToast({ msg: "Rocket crashed @ " + (d.crashPoint || 1.0).toFixed(2) + "x!", color: "#eb4b4b" });
+        }
+        return prev;
+      });
+    };
+
+    const onBet = (d) => {
+      setCrashState(prev => {
+        if (prev.bets.some(b => b.username === d.username)) return prev;
+        return {
+          ...prev,
+          bets: [...prev.bets, { username: d.username, bet: d.bet, cashoutAt: d.cashoutAt, cashedOut: false }]
+        };
+      });
+    };
+
+    const onCashout = (d) => {
+      setCrashState(prev => ({
+        ...prev,
+        bets: prev.bets.map(b => b.username === d.username ? { ...b, cashedOut: true, cashedOutMult: d.mult, won: d.won } : b)
+      }));
+      if (account?.username && d.username === account.username) {
+        setCrashMyBet(prev => ({ ...prev, cashedOut: true, cashedOutMult: d.mult, won: d.won }));
+        playCrashSound("cashout");
+        setToast({ msg: "Cashed out @ " + d.mult.toFixed(2) + "x (+$" + d.won.toLocaleString() + ")!", color: "#4ade80" });
+        try { silentCloudSync(); } catch(e) {}
+      }
+    };
+
+    const u1 = window.RT?.on?.("crash_betting", onBetting);
+    const u2 = window.RT?.on?.("crash_flying", onFlying);
+    const u3 = window.RT?.on?.("crash_tick", onTick);
+    const u4 = window.RT?.on?.("crash_crashed", onCrashed);
+    const u5 = window.RT?.on?.("crash_bet", onBet);
+    const u6 = window.RT?.on?.("crash_cashout", onCashout);
+
+    let animId;
+    let lastClimbSound = 0;
+    const renderLoop = () => {
+      const cv = crashCanvasRef.current;
+      if (cv) {
+        const dpr = window.devicePixelRatio || 1;
+        const rect = cv.getBoundingClientRect();
+        if (rect.width > 0 && rect.height > 0) {
+          if (cv.width !== Math.floor(rect.width * dpr) || cv.height !== Math.floor(rect.height * dpr)) {
+            cv.width = Math.floor(rect.width * dpr);
+            cv.height = Math.floor(rect.height * dpr);
+          }
+          const ctx = cv.getContext("2d");
+          ctx.save();
+          ctx.scale(dpr, dpr);
+          drawCrashCanvas(ctx, rect.width, rect.height, crashStateRef.current);
+          ctx.restore();
+
+          if (crashStateRef.current.state === "flying" && Date.now() - lastClimbSound > 650) {
+            lastClimbSound = Date.now();
+            playCrashSound("climb", crashStateRef.current.multiplier);
+          }
+        }
+      }
+      animId = requestAnimationFrame(renderLoop);
+    };
+    animId = requestAnimationFrame(renderLoop);
+
+    return () => {
+      window.RT?.leave?.("crash");
+      cancelAnimationFrame(animId);
+      if (typeof u1 === "function") u1();
+      if (typeof u2 === "function") u2();
+      if (typeof u3 === "function") u3();
+      if (typeof u4 === "function") u4();
+      if (typeof u5 === "function") u5();
+      if (typeof u6 === "function") u6();
+    };
+  }, [page, account?.username]);
+
+  const doCrashBet = async () => {
+    if (!account) { setShowAuth(true); return; }
+    const amount = parseInt(crashBetAmt);
+    if (!amount || amount < 10) { setToast({ msg: "Minimum bet is $10", color: "#eb4b4b" }); return; }
+    if (amount > st.bal) { setToast({ msg: "Insufficient balance", color: "#eb4b4b" }); return; }
+    const autoM = crashAutoCashout ? parseFloat(crashAutoCashout) : null;
+    if (autoM !== null && (isNaN(autoM) || autoM < 1.01 || autoM > 500)) {
+      setToast({ msg: "Auto cashout must be between 1.01x and 500x", color: "#eb4b4b" });
+      return;
+    }
+    setCrashSubmitting(true);
+    const r = await api("/crash/bet", {
+      username: account.username,
+      token: account.token,
+      slot,
+      bet: amount,
+      autoCashout: autoM
+    });
+    setCrashSubmitting(false);
+    if (r?.ok) {
+      setCrashMyBet({ bet: amount, cashoutAt: autoM, cashedOut: false, won: 0 });
+      if (r.serverBal !== null && r.serverBal !== undefined) {
+        lastServerActionRef.current = Date.now();
+        setSt(p => { const ns = { ...p, bal: r.serverBal }; save(ns, drops); return ns; });
+      } else {
+        setSt(p => { const ns = { ...p, bal: p.bal - amount }; save(ns, drops); return ns; });
+      }
+      setToast({ msg: "Bet placed for $" + amount.toLocaleString() + "!", color: "#4ade80" });
+    } else {
+      setToast({ msg: r?.error || "Bet failed", color: "#eb4b4b" });
+    }
+  };
+
+  const doCrashCashout = async () => {
+    if (!account || !crashMyBet || crashMyBet.cashedOut) return;
+    setCrashSubmitting(true);
+    const r = await api("/crash/cashout", {
+      username: account.username,
+      token: account.token,
+      slot
+    });
+    setCrashSubmitting(false);
+    if (r?.ok) {
+      setCrashMyBet(prev => ({ ...prev, cashedOut: true, cashedOutMult: r.mult, won: r.won }));
+      if (r.serverBal !== null && r.serverBal !== undefined) {
+        lastServerActionRef.current = Date.now();
+        setSt(p => { const ns = { ...p, bal: r.serverBal }; save(ns, drops); return ns; });
+      } else {
+        setSt(p => { const ns = { ...p, bal: p.bal + (r.won || 0) }; save(ns, drops); return ns; });
+      }
+      playCrashSound("cashout");
+      setToast({ msg: "Cashed out at " + r.mult.toFixed(2) + "x (+$" + (r.won || 0).toLocaleString() + ")!", color: "#4ade80" });
+    } else {
+      setToast({ msg: r?.error || "Cashout failed", color: "#eb4b4b" });
+    }
+  };
 
   // Realtime push listeners
   useEffect(()=>{
@@ -531,7 +961,13 @@ function App(){
     };
     fetchIncoming();
     const id=setInterval(fetchIncoming,8000);
-    return()=>{on=false;clearInterval(id)};
+    const unsub=window.RT?.on?.("trade_notification",(data)=>{
+      fetchIncoming();
+      if(data?.from&&data.from!==account.username){
+        setToast({msg:data.from+" wants to trade!",color:"#3b82f6"});
+      }
+    });
+    return()=>{on=false;clearInterval(id);if(typeof unsub==="function")unsub()};
   },[account?.username]);
   // Auto-refresh marketplace listings every 6s while on market page.
   // Lets the seller see "sold" status transitions and triggers a silent cloud sync to pull credited balance.
@@ -564,9 +1000,11 @@ function App(){
     const id=setInterval(fetchMarket,6000);
     return()=>clearInterval(id);
   },[page,account?.username,mkSort]);
-  // Poll the active trade while the user is on the trade page and has a trade ID
+  // Poll and WebSocket sync active trade while the user is on the trade page and has a trade ID
   useEffect(()=>{
     if(!tradeId||page!=="trade"||!account)return;
+    const roomName="trade:"+tradeId;
+    window.RT?.join?.(roomName);
     const fetchTrade=async()=>{
       const r=await api("/trade/state",{username:account.username,tradeId});
       if(r?.ok&&r.trade){
@@ -582,8 +1020,17 @@ function App(){
       }
     };
     fetchTrade();
-    const id=setInterval(fetchTrade,2000);
-    return()=>clearInterval(id);
+    const id=setInterval(fetchTrade,3000);
+    const unsub=window.RT?.on?.("trade_update",(data)=>{
+      if(data?.tradeId===tradeId||!data?.tradeId){
+        fetchTrade();
+      }
+    });
+    return()=>{
+      clearInterval(id);
+      window.RT?.leave?.(roomName);
+      if(typeof unsub==="function")unsub();
+    };
   },[tradeId,page,account?.username]);
   // Refresh user status map every 30s (used for online/away badges)
   useEffect(()=>{
@@ -1656,7 +2103,7 @@ if(dm.received)setDmInbox(prev=>({...prev,received:recFiltered,sent:sentFiltered
     {/* NAV */}
     {!(curLobby?.mode==="buckshot"&&curLobby?.status==="playing")&&(()=>{
       const inCategory={
-        games:["flip","horse","bj","btc","plinko","roulette","wheel"],
+        games:["crash","flip","horse","bj","btc","plinko","roulette","wheel"],
         social:["live","lb","chat","dm","map"],
         more:["market","trade","stats","loan","me","school","faq"]
       };
@@ -1668,6 +2115,7 @@ if(dm.received)setDmInbox(prev=>({...prev,received:recFiltered,sent:sentFiltered
         if(k==="school")return t("tab_weather");
         if(k==="market")return t("tab_market")||"Market";
         if(k==="trade")return t("tab_trade")||"Trade";
+        if(k==="crash")return t("tab_crash")||"Crash 🚀";
         return t("tab_"+k)||k;
       };
       const isOn=(k)=>(page===k||(page==="opening"&&k==="shop"));
@@ -2261,10 +2709,35 @@ if(dm.received)setDmInbox(prev=>({...prev,received:recFiltered,sent:sentFiltered
               <div style={{width:28,height:28,borderRadius:"50%",background:"#1e2430",display:"flex",alignItems:"center",justifyContent:"center",fontSize:12,cursor:"pointer"}} onClick={()=>{api("/profile/full",{target:dmTo,username:account?.username}).then(r=>{if(r?.profile)setViewProfile(r.profile)})}}><MI n="person" s={12} c="#555"/></div>
               <span style={{fontWeight:700,color:"#e2e8f0",flex:1}}>{dmTo}</span>
               <button onClick={()=>{api("/profile/full",{target:dmTo,username:account?.username}).then(r=>{if(r?.profile)setViewProfile(r.profile)})}} style={{...S.btn,background:"#ffffff08",color:"#888",padding:"2px 8px",fontSize:9}}>Profile</button>
+              {account&&dmTo&&account.username.toLowerCase()!==dmTo.toLowerCase()&&<button onClick={async()=>{
+                const r=await api("/trade/propose",{username:account.username,token:account.token,target:dmTo,slot});
+                if(r?.ok&&r.tradeId){
+                  setTradeId(r.tradeId);
+                  setPage("trade");
+                  setToast({msg:r.existing?"Resumed trade with "+dmTo:"Trade proposed to "+dmTo,color:"#4ade80"});
+                }else{
+                  setToast({msg:r?.error||"Failed to propose trade",color:"#eb4b4b"});
+                }
+              }} style={{...S.btn,background:"#10b98122",color:"#10b981",border:"1px solid #10b98133",padding:"2px 8px",fontSize:9,display:"flex",alignItems:"center",gap:3}}>🤝 Trade</button>}
             </div>
             {/* Messages */}
             <div style={{flex:1,overflowY:"auto",padding:10,display:"flex",flexDirection:"column-reverse",gap:4}}>
-              {(()=>{const all=[...(dmInbox?.received||[]).filter(m=>m.from_user===dmTo).map(m=>({...m,dir:"in",t:m.created_at})),...(dmInbox?.sent||[]).filter(m=>m.to_user===dmTo).map(m=>({...m,dir:"out",t:m.created_at}))].sort((a,b)=>b.t-a.t);return all.length===0?<div style={{color:"#555",textAlign:"center"}}>No messages yet</div>:all.map((m,i)=><div key={m.id||i} className="slideIn" style={{display:"flex",justifyContent:m.dir==="out"?"flex-end":"flex-start"}}><div style={{maxWidth:"75%",background:m.dir==="out"?"#3b82f622":"#141820",border:"1px solid "+(m.dir==="out"?"#3b82f633":"#1e2430"),borderRadius:10,borderBottomRightRadius:m.dir==="out"?2:10,borderBottomLeftRadius:m.dir==="in"?2:10,padding:"6px 10px"}}><div style={{fontSize:"clamp(9px,2.3vw,12px)",color:"#ccc"}} dangerouslySetInnerHTML={{__html:renderMd(m.msg)}}/>{m.gift_amount>0&&<div style={{marginTop:3}}>{m.gift_status==="pending"?<button onClick={async()=>{const r=await api("/gift/claim",{username:account.username,token:account.token,dmId:m.id});if(r?.ok){if(r.amount){const ns={...st,bal:(st.bal||0)+r.amount};setSt(ns)}setToast({msg:"Claimed $"+(r.amount||0).toLocaleString()+"!",color:"#4ade80"});api("/dm/inbox",{username:account.username,token:account.token,after:lastDmIdRef.current}).then(r2=>{if(r2?.ok){const mx=Math.max(lastDmIdRef.current,...(r2.received||[]).map(m=>m.id||0),...(r2.sent||[]).map(m=>m.id||0));lastDmIdRef.current=mx;if(r2.incremental){setDmInbox(prev=>{if(!prev)return r2;const ex=new Set([...(prev.received||[]).map(m=>m.id),...(prev.sent||[]).map(m=>m.id)]);return{...prev,unread:r2.unread,received:[...(r2.received||[]).filter(m=>!ex.has(m.id)),...(prev.received||[])].slice(0,200),sent:[...(r2.sent||[]).filter(m=>!ex.has(m.id)),...(prev.sent||[])].slice(0,200)}})}else setDmInbox(r2)}})}else setToast({msg:r?.error||"Failed",color:"#eb4b4b"})}} style={{background:"#4ade8022",border:"1px solid #4ade8033",borderRadius:6,padding:"4px 10px",color:"#4ade80",cursor:"pointer",fontSize:10,fontWeight:700,fontFamily:"inherit"}}>Claim {money(m.gift_amount||0)}</button>:<span style={{color:"#888",fontSize:9}}>Claimed{m.gift_claimed_by?" by "+m.gift_claimed_by:""}</span>}</div>}<div style={{fontSize:8,color:"#555",textAlign:m.dir==="out"?"right":"left",marginTop:2}}>{m.ago}</div></div></div>)})()}
+              {(()=>{const all=[...(dmInbox?.received||[]).filter(m=>m.from_user===dmTo).map(m=>({...m,dir:"in",t:m.created_at})),...(dmInbox?.sent||[]).filter(m=>m.to_user===dmTo).map(m=>({...m,dir:"out",t:m.created_at}))].sort((a,b)=>b.t-a.t);return all.length===0?<div style={{color:"#555",textAlign:"center"}}>No messages yet</div>:all.map((m,i)=><div key={m.id||i} className="slideIn" style={{display:"flex",justifyContent:m.dir==="out"?"flex-end":"flex-start"}}><div style={{maxWidth:"75%",background:m.dir==="out"?"#3b82f622":"#141820",border:"1px solid "+(m.dir==="out"?"#3b82f633":"#1e2430"),borderRadius:10,borderBottomRightRadius:m.dir==="out"?2:10,borderBottomLeftRadius:m.dir==="in"?2:10,padding:"6px 10px"}}>{m.msg&&m.msg.includes("[TRADE_OFFER:")?(
+                <div style={{background:"#10b98115",border:"1px solid #10b98144",borderRadius:8,padding:"8px 12px",marginTop:2,marginBottom:4}}>
+                  <div style={{display:"flex",alignItems:"center",gap:6,fontWeight:700,fontSize:11,color:"#10b981",marginBottom:4}}>
+                    <span>🤝 Trade Offer #{m.msg.match(/\[TRADE_OFFER:(\d+)\]/)?.[1]||""}</span>
+                  </div>
+                  <div style={{fontSize:10,color:"#aaa",marginBottom:6}}>
+                    {m.dir==="out"?"You sent a trade offer.":`${m.from_user} sent you a trade offer!`}
+                  </div>
+                  <button onClick={()=>{
+                    const tid=Number(m.msg.match(/\[TRADE_OFFER:(\d+)\]/)?.[1]);
+                    if(tid){setTradeId(tid);setPage("trade");}
+                  }} style={{...S.btn,background:"#10b981",color:"#000",fontWeight:700,fontSize:10,padding:"4px 10px",width:"100%"}}>
+                    Open Trade Lobby
+                  </button>
+                </div>
+              ):<div style={{fontSize:"clamp(9px,2.3vw,12px)",color:"#ccc"}} dangerouslySetInnerHTML={{__html:renderMd(m.msg)}}/>}{m.gift_amount>0&&<div style={{marginTop:3}}>{m.gift_status==="pending"?<button onClick={async()=>{const r=await api("/gift/claim",{username:account.username,token:account.token,dmId:m.id});if(r?.ok){if(r.amount){const ns={...st,bal:(st.bal||0)+r.amount};setSt(ns)}setToast({msg:"Claimed $"+(r.amount||0).toLocaleString()+"!",color:"#4ade80"});api("/dm/inbox",{username:account.username,token:account.token,after:lastDmIdRef.current}).then(r2=>{if(r2?.ok){const mx=Math.max(lastDmIdRef.current,...(r2.received||[]).map(m=>m.id||0),...(r2.sent||[]).map(m=>m.id||0));lastDmIdRef.current=mx;if(r2.incremental){setDmInbox(prev=>{if(!prev)return r2;const ex=new Set([...(prev.received||[]).map(m=>m.id),...(prev.sent||[]).map(m=>m.id)]);return{...prev,unread:r2.unread,received:[...(r2.received||[]).filter(m=>!ex.has(m.id)),...(prev.received||[])].slice(0,200),sent:[...(r2.sent||[]).filter(m=>!ex.has(m.id)),...(prev.sent||[])].slice(0,200)}})}else setDmInbox(r2)}})}else setToast({msg:r?.error||"Failed",color:"#eb4b4b"})}} style={{background:"#4ade8022",border:"1px solid #4ade8033",borderRadius:6,padding:"4px 10px",color:"#4ade80",cursor:"pointer",fontSize:10,fontWeight:700,fontFamily:"inherit"}}>Claim {money(m.gift_amount||0)}</button>:<span style={{color:"#888",fontSize:9}}>Claimed{m.gift_claimed_by?" by "+m.gift_claimed_by:""}</span>}</div>}<div style={{fontSize:8,color:"#555",textAlign:m.dir==="out"?"right":"left",marginTop:2}}>{m.ago}</div></div></div>)})()}
             </div>
             {/* Input */}
             <div style={{padding:"8px 10px",borderTop:"1px solid #151820",display:"flex",gap:4}}>
@@ -3214,6 +3687,122 @@ if(dm.received)setDmInbox(prev=>({...prev,received:recFiltered,sent:sentFiltered
       </div>})()}
     </div>}
 
+    {/* CRASH MODE */}
+    {/* ═══════════ CRASH ═══════════ */}
+    {page==="crash"&&<div style={{...S.body,maxWidth:850,margin:"0 auto"}}>
+      {/* Top bar with history pills */}
+      <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8,flexWrap:"wrap",gap:8}}>
+        <div style={{fontSize:"clamp(16px,4vw,22px)",fontWeight:800,display:"flex",alignItems:"center",gap:6}}>
+          <span>🚀 Crash</span>
+          <span style={{fontSize:11,color:crashState.state==="flying"?"#4ade80":crashState.state==="crashed"?"#eb4b4b":"#f59e0b",background:crashState.state==="flying"?"#4ade8022":crashState.state==="crashed"?"#eb4b4b22":"#f59e0b22",padding:"2px 8px",borderRadius:12,fontWeight:700,textTransform:"uppercase"}}>
+            {crashState.state}
+          </span>
+        </div>
+        {/* History pills */}
+        <div style={{display:"flex",gap:4,overflowX:"auto",maxWidth:"100%",paddingBottom:4}}>
+          {(crashState.history||[]).slice(0,12).map((h,i)=>{
+            const cp=h.crashPoint||1.00;
+            const col=cp>=10?"#ffd700":cp>=2?"#4ade80":"#eb4b4b";
+            return <div key={h.roundId||i} style={{background:col+"18",border:"1px solid "+col+"44",color:col,padding:"2px 7px",borderRadius:10,fontSize:10,fontWeight:700,whiteSpace:"nowrap"}}>
+              {cp.toFixed(2)}x
+            </div>;
+          })}
+        </div>
+      </div>
+
+      {/* Main Canvas Graph */}
+      <div style={{position:"relative",width:"100%",marginBottom:12}}>
+        <canvas ref={crashCanvasRef} style={{width:"100%",height:300,borderRadius:10,background:"#080b12",display:"block",border:"1px solid #162032"}}/>
+      </div>
+
+      {/* Controls & Players Split */}
+      <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fit, minmax(280px, 1fr))",gap:12}}>
+        {/* Left Column: Betting Controls */}
+        <div style={{background:"#0d1117",border:"1px solid #162032",borderRadius:10,padding:14}}>
+          <div style={{fontSize:11,color:"#888",fontWeight:700,marginBottom:6,textTransform:"uppercase"}}>Bet Amount</div>
+          <div style={{display:"flex",gap:6,marginBottom:8}}>
+            <div style={{position:"relative",flex:1}}>
+              <span style={{position:"absolute",left:10,top:"50%",transform:"translateY(-50%)",color:"#666",fontWeight:700}}>$</span>
+              <input value={crashBetAmt} onChange={e=>setCrashBetAmt(e.target.value.replace(/[^0-9]/g,""))} placeholder="100" style={{...S.input,paddingLeft:22,width:"100%",fontSize:14,fontWeight:700}}/>
+            </div>
+            <button onClick={()=>setCrashBetAmt(String(Math.max(10,Math.floor((parseInt(crashBetAmt)||100)/2))))} style={{...S.btn,background:"#ffffff08",color:"#888",padding:"4px 10px",fontSize:11}}>1/2</button>
+            <button onClick={()=>setCrashBetAmt(String(Math.min(st.bal,Math.max(10,(parseInt(crashBetAmt)||100)*2))))} style={{...S.btn,background:"#ffffff08",color:"#888",padding:"4px 10px",fontSize:11}}>2X</button>
+            <button onClick={()=>setCrashBetAmt(String(st.bal))} style={{...S.btn,background:"#ffffff08",color:"#888",padding:"4px 10px",fontSize:11}}>MAX</button>
+          </div>
+          {/* Quick presets */}
+          <div style={{display:"flex",gap:4,marginBottom:12,flexWrap:"wrap"}}>
+            {[100,500,1000,5000,25000,100000].map(a=><button key={a} onClick={()=>setCrashBetAmt(String(a))} style={{...S.btn,background:"#ffffff08",color:"#888",padding:"2px 8px",fontSize:9}}>{money(a)}</button>)}
+          </div>
+
+          <div style={{fontSize:11,color:"#888",fontWeight:700,marginBottom:6,textTransform:"uppercase"}}>Auto Cashout (Optional)</div>
+          <div style={{position:"relative",marginBottom:14}}>
+            <input value={crashAutoCashout} onChange={e=>setCrashAutoCashout(e.target.value)} placeholder="e.g. 2.00" style={{...S.input,width:"100%",fontSize:13}}/>
+            <span style={{position:"absolute",right:10,top:"50%",transform:"translateY(-50%)",color:"#666",fontWeight:700,fontSize:12}}>X</span>
+          </div>
+
+          {/* Big Dynamic Action Button */}
+          {(()=>{
+            if(!account){
+              return <button onClick={()=>setShowAuth(true)} style={{...S.btn,background:"#3b82f6",color:"#fff",width:"100%",padding:12,fontSize:14,fontWeight:800}}>LOGIN TO PLAY</button>;
+            }
+            if(crashState.state==="betting"){
+              if(crashMyBet){
+                return <button disabled style={{...S.btn,background:"#f59e0b22",color:"#f59e0b",border:"1px solid #f59e0b44",width:"100%",padding:12,fontSize:13,fontWeight:800,cursor:"default"}}>✓ BET PLACED (${crashMyBet.bet.toLocaleString()}) - PREPARING...</button>;
+              }
+              return <button onClick={doCrashBet} disabled={crashSubmitting} style={{...S.btn,background:"#4ade80",color:"#000",width:"100%",padding:12,fontSize:14,fontWeight:800,boxShadow:"0 0 16px #4ade8044"}}>
+                {crashSubmitting?"PLACING BET...":`PLACE BET ($${(parseInt(crashBetAmt)||0).toLocaleString()})`}
+              </button>;
+            }
+            if(crashState.state==="flying"){
+              if(crashMyBet&&!crashMyBet.cashedOut){
+                const curMult=crashState.multiplier||1.00;
+                const payout=Math.floor(crashMyBet.bet*curMult);
+                return <button onClick={doCrashCashout} disabled={crashSubmitting} style={{...S.btn,background:"#4ade80",color:"#000",width:"100%",padding:12,fontSize:15,fontWeight:900,boxShadow:"0 0 24px #4ade8088",animation:"pulse 0.8s infinite alternate"}}>
+                  💰 CASH OUT (${payout.toLocaleString()})
+                </button>;
+              }
+              if(crashMyBet?.cashedOut){
+                return <button disabled style={{...S.btn,background:"#4ade8022",color:"#4ade80",border:"1px solid #4ade8044",width:"100%",padding:12,fontSize:13,fontWeight:800,cursor:"default"}}>✓ CASHED OUT @ {crashMyBet.cashedOutMult?.toFixed(2)}x (+${(crashMyBet.won||0).toLocaleString()})</button>;
+              }
+              return <button disabled style={{...S.btn,background:"#ffffff08",color:"#666",width:"100%",padding:12,fontSize:13,fontWeight:700,cursor:"default"}}>ROCKET IN FLIGHT - WAIT FOR NEXT ROUND</button>;
+            }
+            // Crashed
+            if(crashMyBet&&!crashMyBet.cashedOut){
+              return <button disabled style={{...S.btn,background:"#eb4b4b22",color:"#eb4b4b",border:"1px solid #eb4b4b44",width:"100%",padding:12,fontSize:13,fontWeight:800,cursor:"default"}}>💥 CRASHED @ {(crashState.crashPoint||crashState.multiplier||1).toFixed(2)}x</button>;
+            }
+            return <button disabled style={{...S.btn,background:"#ffffff08",color:"#666",width:"100%",padding:12,fontSize:13,fontWeight:700,cursor:"default"}}>NEXT ROUND IN {(crashState.cooldown||3).toFixed(0)}s...</button>;
+          })()}
+        </div>
+
+        {/* Right Column: Live Players Bets */}
+        <div style={{background:"#0d1117",border:"1px solid #162032",borderRadius:10,padding:14,display:"flex",flexDirection:"column"}}>
+          <div style={{display:"flex",justifyContent:"space-between",alignItems:"center",marginBottom:8}}>
+            <div style={{fontSize:11,color:"#888",fontWeight:700,textTransform:"uppercase"}}>Live Bets ({crashState.bets?.length||0})</div>
+            <div style={{fontSize:10,color:"#4ade80"}}>Room: crash</div>
+          </div>
+          <div style={{flex:1,overflowY:"auto",maxHeight:220,display:"flex",flexDirection:"column",gap:4}}>
+            {(crashState.bets||[]).length===0?<div style={{color:"#555",fontSize:11,textAlign:"center",padding:"20px 0"}}>No bets placed yet this round</div>:
+              (crashState.bets||[]).map((b,i)=>{
+                const isMe=account?.username&&b.username===account.username;
+                return <div key={b.username||i} style={{display:"flex",justifyContent:"space-between",alignItems:"center",padding:"5px 8px",background:isMe?"#3b82f615":"#141820",borderRadius:6,border:"1px solid "+(isMe?"#3b82f633":"transparent")}}>
+                  <div style={{display:"flex",alignItems:"center",gap:5,fontSize:11,fontWeight:isMe?700:500,color:isMe?"#60a5fa":"#cbd5e1"}}>
+                    <StatusDot status="online" size={6}/>
+                    <span>{b.username}</span>
+                  </div>
+                  <div style={{display:"flex",alignItems:"center",gap:8,fontSize:11}}>
+                    <span style={{color:"#888"}}>${(b.bet||0).toLocaleString()}</span>
+                    {b.cashedOut?<span style={{color:"#4ade80",fontWeight:700}}>{b.cashedOutMult?.toFixed(2)}x (+${(b.won||0).toLocaleString()})</span>:
+                     crashState.state==="crashed"?<span style={{color:"#eb4b4b",fontSize:10}}>Crashed</span>:
+                     <span style={{color:"#f59e0b",fontSize:10}}>In flight...</span>}
+                  </div>
+                </div>;
+              })
+            }
+          </div>
+        </div>
+      </div>
+    </div>}
+
     {/* HORSE RACING */}
     {/* ═══════════ HORSE RACING ═══════════ */}
     {page==="horse"&&<div style={{...S.body,maxWidth:600,margin:"0 auto"}}>
@@ -3309,6 +3898,18 @@ if(dm.received)setDmInbox(prev=>({...prev,received:recFiltered,sent:sentFiltered
       <div style={{display:"flex",gap:4,width:"100%",flexWrap:"wrap"}}>
         {account&&viewProfile.username!==account.username&&<button onClick={async()=>{const r=await api("/friends/add",{username:account.username,token:account.token,target:viewProfile.username});if(r?.ok)setToast({msg:r.action==="accepted"?"Friend accepted!":"Friend request sent!",color:"#4ade80"});else setToast({msg:r?.error||"Failed",color:"#eb4b4b"})}} style={{...S.btn,background:viewProfile.friendStatus==="friends"?"#4ade8022":"#3b82f622",color:viewProfile.friendStatus==="friends"?"#4ade80":"#3b82f6",flex:1,border:"1px solid "+(viewProfile.friendStatus==="friends"?"#4ade8033":"#3b82f633")}}>{viewProfile.friendStatus==="friends"?"Friends ✓":viewProfile.friendStatus==="sent"?"Pending...":viewProfile.friendStatus==="received"?"Accept ✓":"+ Add Friend"}</button>}
         <button onClick={()=>{setDmTo(viewProfile.username);setViewProfile(null);setPage("dm")}} style={{...S.btn,background:"#8b5cf622",color:"#8b5cf6",flex:1}}>DM</button>
+        {account&&viewProfile.username!==account.username&&<button onClick={async()=>{
+          const target=viewProfile.username;
+          setViewProfile(null);
+          const r=await api("/trade/propose",{username:account.username,token:account.token,target,slot});
+          if(r?.ok&&r.tradeId){
+            setTradeId(r.tradeId);
+            setPage("trade");
+            setToast({msg:r.existing?"Resumed trade with "+target:"Trade proposed to "+target,color:"#4ade80"});
+          }else{
+            setToast({msg:r?.error||"Failed to open trade",color:"#eb4b4b"});
+          }
+        }} style={{...S.btn,background:"#10b98122",color:"#10b981",border:"1px solid #10b98133",flex:1}}>🤝 Trade</button>}
         {account&&viewProfile.username!==account.username&&<button onClick={()=>{setGiftModal({to:viewProfile.username,context:"profile"});setGiftAmt("")}} style={{...S.btn,background:"#ffd70022",color:"#ffd700",flex:1,border:"1px solid #ffd70033"}}><MI n="redeem" s={14}/> Gift $</button>}
         {account&&viewProfile.username!==account.username&&<button onClick={()=>setReportModal({targetUser:viewProfile.username,channel:"profile"})} style={{...S.btn,background:"#eb4b4b11",color:"#eb4b4b"}}><MI n="flag" s={14}/></button>}
         <button onClick={()=>setViewProfile(null)} style={{...S.btn,background:"#ffffff08",color:"#888",flex:1}}>Close</button>

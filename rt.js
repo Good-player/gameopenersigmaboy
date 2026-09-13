@@ -228,7 +228,7 @@
     join: function(room) {
       if (!room) return;
       joinedRooms.add(room);
-      if (ws && ws.readyState === WebSocket.OPEN && isAuth) {
+      if (ws && ws.readyState === WebSocket.OPEN) {
         send({ type: "sub", room: room });
       }
     },
@@ -236,7 +236,7 @@
     leave: function(room) {
       if (!room) return;
       joinedRooms.delete(room);
-      if (ws && ws.readyState === WebSocket.OPEN && isAuth) {
+      if (ws && ws.readyState === WebSocket.OPEN) {
         send({ type: "unsub", room: room });
       }
     },
