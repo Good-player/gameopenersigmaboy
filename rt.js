@@ -147,13 +147,25 @@
 
       // 5. Server pushed event
       if (msg.t === "push" && msg.kind) {
-        emit(msg.kind, msg.data !== undefined ? msg.data : msg);
+        if (msg.kind === "dm") {
+          if (msg.data && msg.data.from_user && msg.data.from_user !== "undefined") {
+            emit("dm", msg.data);
+          }
+          return;
+        }
+        if (msg.data !== undefined) {
+          emit(msg.kind, msg.data);
+        }
         return;
       }
 
       // 6. Direct DM payload
       if (msg.t === "dm") {
-        emit("dm", msg.data || msg);
+        if (msg.data && msg.data.from_user && msg.data.from_user !== "undefined") {
+          emit("dm", msg.data);
+        } else if (msg.from_user && msg.from_user !== "undefined") {
+          emit("dm", msg);
+        }
         return;
       }
 
