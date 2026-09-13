@@ -1,5 +1,5 @@
 // CASES Realtime WebSocket Client (rt.js)
-// Handles persistent connection, heartbeats, auth binding, and event routing
+// High-performance real-time engine for instant DMs, multiplayer lobbies, chat, and live feeds
 
 (function() {
   var isGitHub = /\.github\.io$/i.test(location.hostname);
@@ -16,6 +16,7 @@
   var credentials = null;
   var joinedRooms = new Set(["global"]);
   var listeners = {};
+  var pendingActions = new Map();
 
   function emit(event, data) {
     if (listeners[event]) {
@@ -51,16 +52,15 @@
       if (ws && ws.readyState === WebSocket.OPEN) {
         send({ type: "ping" });
       }
-    }, intervalMs || 25000);
+    }, intervalMs || 20000);
   }
 
   function scheduleReconnect() {
     stopHeartbeat();
     isAuth = false;
     if (reconnectTimer) return;
-    var delay = Math.min(1000 * Math.pow(1.5, retryCount), 15000);
+    var delay = Math.min(600 * Math.pow(1.3, retryCount), 8000);
     retryCount++;
-    console.log("[RT] Reconnecting in " + Math.round(delay) + "ms (attempt " + retryCount + ")...");
     reconnectTimer = setTimeout(function() {
       reconnectTimer = null;
       openSocket();
@@ -76,13 +76,12 @@
     try {
       ws = new WebSocket(DEFAULT_WS_URL);
     } catch(e) {
-      console.warn("[RT] WebSocket construct error:", e);
+      console.warn("[RT] WebSocket error:", e);
       scheduleReconnect();
       return;
     }
 
     ws.onopen = function() {
-      console.log("%c[RT] Connected to " + DEFAULT_WS_URL, "color:#4ade80");
       retryCount = 0;
       emit("connect", {});
     };
@@ -97,8 +96,7 @@
 
       // 1. Initial server hello
       if (msg.t === "hello") {
-        startHeartbeat(msg.heartbeatMs ? Math.max(10000, msg.heartbeatMs - 5000) : 25000);
-        // Authenticate if we have credentials
+        startHeartbeat(msg.heartbeatMs ? Math.max(10000, msg.heartbeatMs - 5000) : 20000);
         if (credentials && credentials.username && credentials.token) {
           send({
             type: "auth",
@@ -114,10 +112,16 @@
       if (msg.t === "auth") {
         if (msg.ok) {
           isAuth = true;
-          console.log("%c[RT] Authenticated as " + msg.username, "color:#4ade80;font-weight:bold");
-          // Rejoin active rooms
+          // Auto-subscribe to global and personal DM room
+          send({ type: "sub", room: "global" });
+          if (credentials && credentials.username) {
+            send({ type: "sub", room: "dm:" + credentials.username.toLowerCase() });
+          }
+          // Re-subscribe to any active rooms (e.g. current lobby)
           joinedRooms.forEach(function(room) {
-            send({ type: "join", room: room });
+            if (room !== "global") {
+              send({ type: "sub", room: room });
+            }
           });
           emit("auth_ok", msg);
         } else {
@@ -128,13 +132,32 @@
         return;
       }
 
-      // 3. Server pushed event
+      // 3. Sub acknowledgement
+      if (msg.t === "subbed") {
+        return;
+      }
+
+      // 4. Action RPC response (ack)
+      if (msg.t === "ack" && msg.id && pendingActions.has(msg.id)) {
+        var actionCb = pendingActions.get(msg.id);
+        pendingActions.delete(msg.id);
+        if (actionCb) actionCb(msg.data, msg.status);
+        return;
+      }
+
+      // 5. Server pushed event
       if (msg.t === "push" && msg.kind) {
         emit(msg.kind, msg.data !== undefined ? msg.data : msg);
         return;
       }
 
-      // 4. Pong / general
+      // 6. Direct DM payload
+      if (msg.t === "dm") {
+        emit("dm", msg.data || msg);
+        return;
+      }
+
+      // 7. Pong / general
       if (msg.t === "pong") {
         return;
       }
@@ -144,12 +167,10 @@
     };
 
     ws.onerror = function(err) {
-      console.warn("[RT] Socket error:", err);
       emit("error", err);
     };
 
     ws.onclose = function(e) {
-      console.log("[RT] Socket closed (code " + e.code + ")");
       isAuth = false;
       stopHeartbeat();
       emit("disconnect", e);
@@ -163,7 +184,7 @@
       credentials = { username: username, token: token, uid: uid };
       if (!ws || ws.readyState === WebSocket.CLOSED || ws.readyState === WebSocket.CLOSING) {
         openSocket();
-      } else if (ws.readyState === WebSocket.OPEN && (!isAuth || credentials.username !== username)) {
+      } else if (ws.readyState === WebSocket.OPEN) {
         send({
           type: "auth",
           username: username,
@@ -195,17 +216,70 @@
     join: function(room) {
       if (!room) return;
       joinedRooms.add(room);
-      if (ws && ws.readyState === WebSocket.OPEN) {
-        send({ type: "join", room: room });
+      if (ws && ws.readyState === WebSocket.OPEN && isAuth) {
+        send({ type: "sub", room: room });
       }
     },
 
     leave: function(room) {
       if (!room) return;
       joinedRooms.delete(room);
-      if (ws && ws.readyState === WebSocket.OPEN) {
-        send({ type: "leave", room: room });
+      if (ws && ws.readyState === WebSocket.OPEN && isAuth) {
+        send({ type: "unsub", room: room });
       }
+    },
+
+    // Fast RPC over WebSocket with automatic HTTP fallback
+    action: function(path, body, timeoutMs) {
+      var self = this;
+      return new Promise(function(resolve, reject) {
+        if (!self.isLive()) {
+          // Socket not active, resolve immediately via window.api
+          if (typeof window.api === "function") {
+            return window.api(path, body).then(resolve).catch(reject);
+          }
+          return reject(new Error("RT socket and api unavailable"));
+        }
+
+        var id = "act_" + Math.random().toString(36).slice(2, 10);
+        var timer = setTimeout(function() {
+          if (pendingActions.has(id)) {
+            pendingActions.delete(id);
+            // Timeout fallback to standard HTTP API
+            if (typeof window.api === "function") {
+              window.api(path, body).then(resolve).catch(reject);
+            } else {
+              reject(new Error("Socket action timeout"));
+            }
+          }
+        }, timeoutMs || 2500);
+
+        pendingActions.set(id, function(data, status) {
+          clearTimeout(timer);
+          if (status >= 200 && status < 300) {
+            resolve(data);
+          } else {
+            resolve(data || { error: "Action error " + status });
+          }
+        });
+
+        var sent = send({
+          type: "action",
+          path: path,
+          body: body || {},
+          id: id
+        });
+
+        if (!sent) {
+          clearTimeout(timer);
+          pendingActions.delete(id);
+          if (typeof window.api === "function") {
+            window.api(path, body).then(resolve).catch(reject);
+          } else {
+            reject(new Error("Send failed"));
+          }
+        }
+      });
     },
 
     send: send,

@@ -16,6 +16,7 @@ const SAME_ORIGIN_API = !/\.github\.io$/i.test(location.hostname) && /^https?:$/
 const API_BASE = API_OVERRIDE || (SAME_ORIGIN_API ? location.origin + "/api/caseopen" : BACKEND_BASE);
 const API_LIGHT = BACKEND_BASE;
 async function api(path,body){let resp;try{resp=await fetch(API_BASE+path,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({uid:USER_ID,uname:getUserName(),...body})})}catch(e){if(window.__setOnline)window.__setOnline(false);return null}if(window.__setOnline)window.__setOnline(true);try{return await resp.json()}catch{return null}}
+window.api=api;
 async function apiL(path,body){let resp;try{resp=await fetch(API_LIGHT+path,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({uid:USER_ID,uname:getUserName(),...body})})}catch(e){if(window.__setOnline)window.__setOnline(false);return null}if(window.__setOnline)window.__setOnline(true);try{return await resp.json()}catch{return null}}
 
 // Report an open to server (fire-and-forget)
@@ -23,7 +24,7 @@ async function apiL(path,body){let resp;try{resp=await fetch(API_LIGHT+path,{met
 // Report sell
 function reportSell(item){api("/sell",{item:item.name,value:item.value})}
 // Send chat
-async function sendChat(msg){return api("/chat",{msg:msg.slice(0,200)})}
+async function sendChat(msg){const p={msg:msg.slice(0,200)};if(window.RT&&window.RT.isLive()){return window.RT.action("/chat",p)}return api("/chat",p)}
 // Get live feed
 async function getFeed(){return api("/feed",{})}
 // Get leaderboard
@@ -602,10 +603,11 @@ function App(){
     const id=setInterval(tick,5000);
     return()=>clearInterval(id);
   },[]);
-  // Buckshot Roulette: poll game state every 1s while in a buckshot lobby
+  // Buckshot Roulette: poll game state every 650ms while in a buckshot lobby & join socket room
   useEffect(()=>{
     if(!curLobby?.id||curLobby.mode!=="buckshot")return;
     let dead=false;
+    if(window.RT&&window.RT.join)window.RT.join("lobby:"+curLobby.id);
     // Remember the last winner we saw so we can distinguish "match ended" (lobby was reaped post-finish) from "lobby cancelled" on a 404
     let lastSeenWinner=null;
     const fetchState=async()=>{
@@ -640,9 +642,18 @@ function App(){
         }
       }catch{}
     };
+    window._fetchBuckshotState=fetchState;
     fetchState();
-    const id=setInterval(fetchState,1000);
-    return()=>{dead=true;clearInterval(id);_SND.stopMusic();buckshotEventCursorRef.current=0;setBuckshotNarration(null)};
+    const id=setInterval(fetchState,650);
+    return()=>{
+      dead=true;
+      clearInterval(id);
+      window._fetchBuckshotState=null;
+      if(window.RT&&window.RT.leave)window.RT.leave("lobby:"+curLobby.id);
+      _SND.stopMusic();
+      buckshotEventCursorRef.current=0;
+      setBuckshotNarration(null);
+    };
   },[curLobby?.id,curLobby?.mode]);
   // Disconnect-on-leave: when user navigates away from PvP page or closes tab during a playing buckshot game,
   // tell the server. Gives the user 15s grace to reconnect before pot goes to opponent.
@@ -878,6 +889,152 @@ function App(){
 const newMax=Math.max(0,...(dm.received||[]).map(m=>m.id||0),...(dm.sent||[]).map(m=>m.id||0));if(newMax>lastDmIdRef.current)lastDmIdRef.current=newMax;if(dm.incremental){// merge new messages into existing inbox
 if((dm.received&&dm.received.length>0)||(dm.sent&&dm.sent.length>0)){setDmInbox(prev=>{if(!prev)return dm;const ex=new Set([...(prev.received||[]).map(m=>m.id),...(prev.sent||[]).map(m=>m.id)]);return{...prev,unread:dm.unread,received:[...(dm.received||[]).filter(m=>!ex.has(m.id)),...(prev.received||[])].slice(0,200),sent:[...(dm.sent||[]).filter(m=>!ex.has(m.id)),...(prev.sent||[])].slice(0,200)}})}}else{// first poll - full replacement
 if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||prev?.sent,unread:dm.unread}))}}}catch{}}if(account?.username&&account?.token&&dmPollCount%5===0){try{const st=await api("/status",{username:account.username,token:account.token});if(st?.banned){setBanModal({reason:st.banReason||"Banned",expires:st.banExpires||0});clearAccount();setAccount(null)}if(st?.warned&&!warnModal)setWarnModal(st.warnReason||"Warning");if(st?.forceSync&&st.forceSync>0){const lastSync=parseInt(localStorage.getItem("co-lastsync")||"0");const isFresh=(Date.now()-st.forceSync)<600000; /* 10min */ if(st.forceSync>lastSync&&isFresh){localStorage.setItem("co-lastsync",String(st.forceSync));syncLockRef.current=true;try{const lr=await api("/auth/load",{username:account.username,token:account.token,ackForceSync:true});if(lr?.ok&&lr.slots){for(let si=0;si<3;si++){if(lr.slots[si]){await _stSet("co-s"+si,JSON.stringify(lr.slots[si]))}}const curSlotData=lr.slots[slot];if(curSlotData&&curSlotData.st){setSt(s=>({...INIT,...curSlotData.st,starred:curSlotData.st?.starred||{}}));if(curSlotData.drops)setDrops(curSlotData.drops);setToast({msg:"Synced from cloud",color:"#3b82f6"})}}}catch{}setTimeout(()=>{syncLockRef.current=false},3000)}else if(st.forceSync>0&&!isFresh){/* Stale flag — clear it without overwriting local */ try{await api("/auth/load",{username:account.username,token:account.token,ackForceSync:true,clearOnly:true})}catch{}; localStorage.setItem("co-lastsync",String(st.forceSync))}}}catch{}}}catch{}};poll();let pollTimer=null;function schedulePoll(){if(!on)return;const ms=(window.RT&&window.RT.isLive())?20000:6000;pollTimer=setTimeout(async()=>{await poll();schedulePoll()},ms)}schedulePoll();return()=>{on=false;clearTimeout(pollTimer)}},[showSlots,account]);
+  // Realtime WebSocket engine bindings for instant DMs, Chat, Feed, and multiplayer updates
+  useEffect(()=>{
+    if(!window.RT)return;
+    if(account?.username&&account?.token){
+      window.RT.connect(account.username, account.token, USER_ID);
+    }
+    const onDm=(data)=>{
+      if(!data)return;
+      const incomingId=data.id||Date.now();
+      if(incomingId>lastDmIdRef.current)lastDmIdRef.current=incomingId;
+      setDmInbox(prev=>{
+        if(!prev)return{received:[data],sent:[],unread:1};
+        const exists=(prev.received||[]).some(m=>m.id===data.id)||(prev.sent||[]).some(m=>m.id===data.id);
+        if(exists)return prev;
+        const isCurrentChat=(page==="dm"&&dmTo===data.from_user);
+        return{
+          ...prev,
+          unread:isCurrentChat?(prev.unread||0):(prev.unread||0)+1,
+          received:[data,...(prev.received||[])].slice(0,200)
+        };
+      });
+      if(page==="dm"&&dmTo===data.from_user&&account?.username&&account?.token){
+        api("/dm/read",{username:account.username,token:account.token,from:data.from_user}).catch(()=>{});
+      }else if(data.from_user!==account?.username){
+        setToast({msg:"DM from "+data.from_user+": "+(data.msg||"").slice(0,30),color:"#3b82f6"});
+      }
+    };
+    const onChat=(data)=>{
+      if(!data)return;
+      setChatLog(prev=>{
+        const exists=prev.some(m=>m.id===data.id);
+        if(exists)return prev;
+        const pfp=pfpCache.current[data.uid]||data.pfp||"";
+        return[{...data,pfp},...prev].slice(0,200);
+      });
+      if(data.id&&data.id>lastChatIdRef.current)lastChatIdRef.current=data.id;
+    };
+    const onFeed=(data)=>{
+      if(!data)return;
+      setFeed(prev=>[data,...prev].slice(0,50));
+    };
+    const onBuckshot=(data)=>{
+      if(!data)return;
+      if(data.state)setBuckshotState(data.state);
+    };
+
+    const unsubDm=window.RT.on("dm",onDm);
+    const unsubChat=window.RT.on("chat",onChat);
+    const unsubFeed=window.RT.on("feed",onFeed);
+    const unsubBuckshot=window.RT.on("buckshot",onBuckshot);
+
+    const onCustomEvent=(e)=>{
+      const type=e.type.replace(/^rt:/,"");
+      if(type==="dm")onDm(e.detail);
+      else if(type==="chat")onChat(e.detail);
+      else if(type==="feed")onFeed(e.detail);
+      else if(type==="buckshot")onBuckshot(e.detail);
+    };
+
+    window.addEventListener("rt:dm",onCustomEvent);
+    window.addEventListener("rt:chat",onCustomEvent);
+    window.addEventListener("rt:feed",onCustomEvent);
+    window.addEventListener("rt:buckshot",onCustomEvent);
+
+    return()=>{
+      unsubDm();unsubChat();unsubFeed();unsubBuckshot();
+      window.removeEventListener("rt:dm",onCustomEvent);
+      window.removeEventListener("rt:chat",onCustomEvent);
+      window.removeEventListener("rt:feed",onCustomEvent);
+      window.removeEventListener("rt:buckshot",onCustomEvent);
+    };
+  },[account,page,dmTo]);
+
+  // High-speed DM sync while actively viewing DM screen
+  useEffect(()=>{
+    if(page!=="dm"||!account?.username||!account?.token)return;
+    const fastPollDm=async()=>{
+      try{
+        const r=await api("/dm/inbox",{username:account.username,token:account.token,after:lastDmIdRef.current});
+        if(r?.ok){
+          const mx=Math.max(lastDmIdRef.current,...(r.received||[]).map(m=>m.id||0),...(r.sent||[]).map(m=>m.id||0));
+          if(mx>lastDmIdRef.current)lastDmIdRef.current=mx;
+          if(r.incremental){
+            setDmInbox(prev=>{
+              if(!prev)return r;
+              const ex=new Set([...(prev.received||[]).map(m=>m.id),...(prev.sent||[]).map(m=>m.id)]);
+              return{
+                ...prev,
+                unread:r.unread,
+                received:[...(r.received||[]).filter(m=>!ex.has(m.id)),...(prev.received||[])].slice(0,200),
+                sent:[...(r.sent||[]).filter(m=>!ex.has(m.id)),...(prev.sent||[])].slice(0,200)
+              };
+            });
+          }else if(r.received){
+            setDmInbox(r);
+          }
+        }
+      }catch{}
+    };
+    fastPollDm();
+    const dmIv=setInterval(fastPollDm,1500);
+    return()=>clearInterval(dmIv);
+  },[page,account]);
+
+  // Fast optimistic DM sender
+  async function doSendDm(targetUser, messageText){
+    if(!messageText||!messageText.trim()||!targetUser||!account?.username||!account?.token)return;
+    const text=messageText.trim();
+    const tempId="opt_"+Date.now();
+    const optMsg={id:tempId,to_user:targetUser,msg:text,created_at:Date.now(),ago:"just now",read:0};
+    setDmInbox(prev=>{
+      if(!prev)return{received:[],sent:[optMsg],unread:0};
+      return{...prev,sent:[optMsg,...(prev.sent||[])]};
+    });
+    setDmMsg("");
+    const payload={username:account.username,token:account.token,to:targetUser,msg:text};
+    let r;
+    if(window.RT&&window.RT.isLive()){
+      r=await window.RT.action("/dm/send",payload);
+    }else{
+      r=await api("/dm/send",payload);
+    }
+    if(r?.ok){
+      api("/dm/inbox",{username:account.username,token:account.token,after:lastDmIdRef.current}).then(r2=>{
+        if(r2?.ok){
+          const mx=Math.max(lastDmIdRef.current,...(r2.received||[]).map(m=>m.id||0),...(r2.sent||[]).map(m=>m.id||0));
+          if(mx>lastDmIdRef.current)lastDmIdRef.current=mx;
+          if(r2.incremental){
+            setDmInbox(prev=>{
+              if(!prev)return r2;
+              const ex=new Set([...(prev.received||[]).map(m=>m.id),...(prev.sent||[]).map(m=>m.id)]);
+              return{
+                ...prev,
+                unread:r2.unread,
+                received:[...(r2.received||[]).filter(m=>!ex.has(m.id)),...(prev.received||[])].slice(0,200),
+                sent:[...(r2.sent||[]).filter(m=>!ex.has(m.id)),...(prev.sent||[])].slice(0,200)
+              };
+            });
+          }else setDmInbox(r2);
+        }
+      });
+    }else{
+      setToast({msg:r?.error||"Failed to send DM",color:"#eb4b4b"});
+    }
+  }
+
   // Chat cooldown countdown
   useEffect(()=>{if(chatCd<=0)return;const id=setTimeout(()=>setChatCd(c=>c-1),1000);return()=>clearTimeout(id)},[chatCd]);
   useEffect(()=>{if(!toast)return;const id=setTimeout(()=>setToast(null),3000);return()=>clearTimeout(id)},[toast]);
@@ -1630,8 +1787,8 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
         </div>)}
       </div>
       <div style={{display:"flex",gap:6}}>
-        <input value={chatMsg} onChange={e=>setChatMsg(e.target.value.slice(0,200))} onKeyDown={e=>{if(e.key==="Enter"&&chatMsg.trim()&&chatCd<=0){sendChat(chatMsg.trim()).then(r=>{if(r?.cooldown)setChatCd(r.cooldown);else if(r?.ok||r?.sent){setChatCd(5);getChat(false,lastChatIdRef.current).then(c2=>{if(c2?.msgs&&c2.msgs.length>0){const nm=c2.msgs.map(m=>({...m,pfp:pfpCache.current[m.uid]||""}));setChatLog(prev=>{const ids=new Set(prev.map(m=>m.id));const fresh=nm.filter(m=>!ids.has(m.id));return[...fresh,...prev].slice(0,200)});const mx=Math.max(...nm.map(m=>m.id||0));if(mx>lastChatIdRef.current)lastChatIdRef.current=mx}})}else if(r?.error==="Banned: "||r?.banned){setChatCd(999)}});setChatMsg("")}}} placeholder={chatCd>0?`Wait ${chatCd}s...`:"Type a message..."} style={{...S.input,flex:1,width:"auto"}} maxLength={200} disabled={chatCd>0}/>
-        <button onClick={()=>{if(chatMsg.trim()&&chatCd<=0){sendChat(chatMsg.trim()).then(r=>{if(r?.cooldown)setChatCd(r.cooldown);else if(r?.ok||r?.sent){setChatCd(5);getChat(false,lastChatIdRef.current).then(c2=>{if(c2?.msgs&&c2.msgs.length>0){const nm=c2.msgs.map(m=>({...m,pfp:pfpCache.current[m.uid]||""}));setChatLog(prev=>{const ids=new Set(prev.map(m=>m.id));const fresh=nm.filter(m=>!ids.has(m.id));return[...fresh,...prev].slice(0,200)});const mx=Math.max(...nm.map(m=>m.id||0));if(mx>lastChatIdRef.current)lastChatIdRef.current=mx}})}else if(r?.banned){setChatCd(999)}});setChatMsg("")}}} disabled={chatCd>0||!chatMsg.trim()} style={{...S.btn,background:chatCd>0?"#333":"#8b5cf6",color:chatCd>0?"#666":"#fff"}}>{chatCd>0?chatCd+"s":"Send"}</button>
+        <input value={chatMsg} onChange={e=>setChatMsg(e.target.value.slice(0,200))} onKeyDown={e=>{if(e.key==="Enter"&&chatMsg.trim()&&chatCd<=0){const txt=chatMsg.trim();sendChat(txt).then(r=>{if(r?.cooldown)setChatCd(r.cooldown);else if(r?.ok||r?.sent){setChatCd(1);const myMsg={id:Date.now(),uid:USER_ID,uname:account?.display_name||account?.username||nickname||"Me",msg:txt,channel:"global",created_at:Date.now(),pfp:account?.pfp||""};setChatLog(prev=>[myMsg,...prev.filter(m=>m.id!==myMsg.id)].slice(0,200));getChat(false,lastChatIdRef.current).then(c2=>{if(c2?.msgs&&c2.msgs.length>0){const nm=c2.msgs.map(m=>({...m,pfp:pfpCache.current[m.uid]||""}));setChatLog(prev=>{const ids=new Set(prev.map(m=>m.id));const fresh=nm.filter(m=>!ids.has(m.id));return[...fresh,...prev].slice(0,200)});const mx=Math.max(...nm.map(m=>m.id||0));if(mx>lastChatIdRef.current)lastChatIdRef.current=mx}})}else if(r?.error==="Banned: "||r?.banned){setChatCd(999)}});setChatMsg("")}}} placeholder={chatCd>0?`Wait ${chatCd}s...`:"Type a message..."} style={{...S.input,flex:1,width:"auto"}} maxLength={200} disabled={chatCd>0}/>
+        <button onClick={()=>{if(chatMsg.trim()&&chatCd<=0){const txt=chatMsg.trim();sendChat(txt).then(r=>{if(r?.cooldown)setChatCd(r.cooldown);else if(r?.ok||r?.sent){setChatCd(1);const myMsg={id:Date.now(),uid:USER_ID,uname:account?.display_name||account?.username||nickname||"Me",msg:txt,channel:"global",created_at:Date.now(),pfp:account?.pfp||""};setChatLog(prev=>[myMsg,...prev.filter(m=>m.id!==myMsg.id)].slice(0,200));getChat(false,lastChatIdRef.current).then(c2=>{if(c2?.msgs&&c2.msgs.length>0){const nm=c2.msgs.map(m=>({...m,pfp:pfpCache.current[m.uid]||""}));setChatLog(prev=>{const ids=new Set(prev.map(m=>m.id));const fresh=nm.filter(m=>!ids.has(m.id));return[...fresh,...prev].slice(0,200)});const mx=Math.max(...nm.map(m=>m.id||0));if(mx>lastChatIdRef.current)lastChatIdRef.current=mx}})}else if(r?.banned){setChatCd(999)}});setChatMsg("")}}} disabled={chatCd>0||!chatMsg.trim()} style={{...S.btn,background:chatCd>0?"#333":"#8b5cf6",color:chatCd>0?"#666":"#fff"}}>{chatCd>0?chatCd+"s":"Send"}</button>
       </div>
     </div>}
 
@@ -1739,7 +1896,7 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
               const renderItemSlot=(item,idx,canUse)=>{
                 const filled=!!item;
                 const anim=itemAnimSlot===idx;
-                return <button key={idx} disabled={!filled||!canUse} onClick={async()=>{if(!item)return;setItemAnimSlot(idx);setTimeout(()=>setItemAnimSlot(null),650);const r=await api("/buckshot/useitem",{lobbyId:curLobby.id,username:account.username,item});if(r?.ok){if(item==="magnifier"&&r.revealedShell){setToast({msg:"Peeked: "+r.revealedShell.toUpperCase()+" shell",color:r.revealedShell==="live"?"#eb4b4b":"#3b82f6"})}else setToast({msg:itemNames[item]+" used",color:"#4ade80"})}else setToast({msg:r?.error||"Failed",color:"#eb4b4b"})}} className={anim?"itemUseAnim":""} style={{aspectRatio:"1",background:filled?"linear-gradient(135deg,#2a0a0a,#1a0808)":"#0a0404",border:"2px solid "+(filled?"#5a1a1a":"#2a0808"),borderRadius:4,fontSize:filled?22:0,cursor:filled&&canUse?"pointer":"default",opacity:filled?1:0.5,padding:0,fontFamily:"inherit",color:"#fff",transition:"all .15s"}} title={filled?itemNames[item]+" - "+itemDesc[item]:"empty"}>{filled?itemIcons[item]:""}</button>;
+                return <button key={idx} disabled={!filled||!canUse} onClick={async()=>{if(!item)return;setItemAnimSlot(idx);setTimeout(()=>setItemAnimSlot(null),650);const r=await api("/buckshot/useitem",{lobbyId:curLobby.id,username:account.username,item});if(window._fetchBuckshotState)window._fetchBuckshotState();if(r?.ok){if(item==="magnifier"&&r.revealedShell){setToast({msg:"Peeked: "+r.revealedShell.toUpperCase()+" shell",color:r.revealedShell==="live"?"#eb4b4b":"#3b82f6"})}else setToast({msg:itemNames[item]+" used",color:"#4ade80"})}else setToast({msg:r?.error||"Failed",color:"#eb4b4b"})}} className={anim?"itemUseAnim":""} style={{aspectRatio:"1",background:filled?"linear-gradient(135deg,#2a0a0a,#1a0808)":"#0a0404",border:"2px solid "+(filled?"#5a1a1a":"#2a0808"),borderRadius:4,fontSize:filled?22:0,cursor:filled&&canUse?"pointer":"default",opacity:filled?1:0.5,padding:0,fontFamily:"inherit",color:"#fff",transition:"all .15s"}} title={filled?itemNames[item]+" - "+itemDesc[item]:"empty"}>{filled?itemIcons[item]:""}</button>;
               };
               const winnerUI=buckshotState.winner&&<div style={{textAlign:"center",padding:20,background:buckshotState.winner===account.username?"linear-gradient(135deg,#0a3010,#1a5020)":"linear-gradient(135deg,#3a0a0a,#5a1a1a)",border:"2px solid "+(buckshotState.winner===account.username?"#4ade80":"#eb4b4b"),borderRadius:6,marginTop:14}}>
                 <div style={{fontFamily:"'Black Ops One',sans-serif",fontSize:24,letterSpacing:3,color:buckshotState.winner===account.username?"#4ade80":"#eb4b4b",textShadow:"0 0 12px currentColor"}}>{buckshotState.winner===account.username?"VICTORY":"DEFEAT"}</div>
@@ -1846,7 +2003,7 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
             {lobbyChat.length===0?<div style={{color:"#555",textAlign:"center",fontSize:10}}>No messages</div>:
             lobbyChat.map((m,i)=><div key={i} style={{fontSize:"clamp(8px,2vw,10px)"}}><span style={{color:"#888"}}>{m.ago} </span><span style={{color:"#8b5cf6",fontWeight:700}}>{m.uname}</span> <span style={{color:"#ccc"}}>{m.msg}</span></div>)}
           </div>
-          <div style={{display:"flex",gap:4}}><input value={lobbyChatMsg} onChange={e=>setLobbyChatMsg(e.target.value.slice(0,200))} onKeyDown={e=>{if(e.key==="Enter"&&lobbyChatMsg.trim()){api("/lobby/chat",{username:account.username,lobbyId:curLobby.id,msg:lobbyChatMsg.trim()});setLobbyChatMsg("")}}} placeholder="Type..." style={{...S.input,flex:1,width:"auto",padding:"4px 8px",fontSize:10}} maxLength={200}/><button onClick={()=>{if(!lobbyChatMsg.trim())return;api("/lobby/chat",{username:account.username,lobbyId:curLobby.id,msg:lobbyChatMsg.trim()});setLobbyChatMsg("")}} style={{...S.btn,background:"#8b5cf6",color:"#fff",padding:"4px 10px",fontSize:10}}>Send</button></div>
+          <div style={{display:"flex",gap:4}}><input value={lobbyChatMsg} onChange={e=>setLobbyChatMsg(e.target.value.slice(200))} onKeyDown={e=>{if(e.key==="Enter"&&lobbyChatMsg.trim()){const txt=lobbyChatMsg.trim();setLobbyChat(prev=>[{uname:account.username,msg:txt,ago:"just now"},...prev]);if(window.RT&&window.RT.isLive()){window.RT.action("/lobby/chat",{username:account.username,lobbyId:curLobby.id,msg:txt})}else{api("/lobby/chat",{username:account.username,lobbyId:curLobby.id,msg:txt})};setLobbyChatMsg("")}}} placeholder="Type..." style={{...S.input,flex:1,width:"auto",padding:"4px 8px",fontSize:10}} maxLength={200}/><button onClick={()=>{if(!lobbyChatMsg.trim())return;const txt=lobbyChatMsg.trim();setLobbyChat(prev=>[{uname:account.username,msg:txt,ago:"just now"},...prev]);if(window.RT&&window.RT.isLive()){window.RT.action("/lobby/chat",{username:account.username,lobbyId:curLobby.id,msg:txt})}else{api("/lobby/chat",{username:account.username,lobbyId:curLobby.id,msg:txt})};setLobbyChatMsg("")}} style={{...S.btn,background:"#8b5cf6",color:"#fff",padding:"4px 10px",fontSize:10}}>Send</button></div>
         </div>
       </div>:
       <>
@@ -1941,9 +2098,9 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
             </div>
             {/* Input */}
             <div style={{padding:"8px 10px",borderTop:"1px solid #151820",display:"flex",gap:4}}>
-              <input value={dmMsg} onChange={e=>setDmMsg(e.target.value.slice(0,500))} placeholder="Message..." style={{...S.input,flex:1,width:"auto",padding:"6px 10px",fontSize:"clamp(10px,2.5vw,12px)"}} maxLength={500} onKeyDown={e=>{if(e.key==="Enter"&&dmMsg.trim()){api("/dm/send",{username:account.username,token:account.token,to:dmTo,msg:dmMsg.trim()}).then(r=>{if(r?.ok){setDmMsg("");api("/dm/inbox",{username:account.username,token:account.token,after:lastDmIdRef.current}).then(r2=>{if(r2?.ok){const mx=Math.max(lastDmIdRef.current,...(r2.received||[]).map(m=>m.id||0),...(r2.sent||[]).map(m=>m.id||0));lastDmIdRef.current=mx;if(r2.incremental){setDmInbox(prev=>{if(!prev)return r2;const ex=new Set([...(prev.received||[]).map(m=>m.id),...(prev.sent||[]).map(m=>m.id)]);return{...prev,unread:r2.unread,received:[...(r2.received||[]).filter(m=>!ex.has(m.id)),...(prev.received||[])].slice(0,200),sent:[...(r2.sent||[]).filter(m=>!ex.has(m.id)),...(prev.sent||[])].slice(0,200)}})}else setDmInbox(r2)}})}else{setToast({msg:r?.error||"Failed",color:"#eb4b4b"})}})}}}/>
+              <input value={dmMsg} onChange={e=>setDmMsg(e.target.value.slice(0,500))} placeholder="Message..." style={{...S.input,flex:1,width:"auto",padding:"6px 10px",fontSize:"clamp(10px,2.5vw,12px)"}} maxLength={500} onKeyDown={e=>{if(e.key==="Enter"&&dmMsg.trim()){doSendDm(dmTo,dmMsg)}}}/>
               <button onClick={()=>{setGiftModal({to:dmTo,context:"dm"});setGiftAmt("")}} style={{...S.btn,background:"#ffd70022",color:"#ffd700",padding:"6px 10px"}}><MI n="redeem" s={16}/></button>
-              <button onClick={()=>{if(!dmMsg.trim())return;api("/dm/send",{username:account.username,token:account.token,to:dmTo,msg:dmMsg.trim()}).then(r=>{if(r?.ok){setDmMsg("");api("/dm/inbox",{username:account.username,token:account.token,after:lastDmIdRef.current}).then(r2=>{if(r2?.ok){const mx=Math.max(lastDmIdRef.current,...(r2.received||[]).map(m=>m.id||0),...(r2.sent||[]).map(m=>m.id||0));lastDmIdRef.current=mx;if(r2.incremental){setDmInbox(prev=>{if(!prev)return r2;const ex=new Set([...(prev.received||[]).map(m=>m.id),...(prev.sent||[]).map(m=>m.id)]);return{...prev,unread:r2.unread,received:[...(r2.received||[]).filter(m=>!ex.has(m.id)),...(prev.received||[])].slice(0,200),sent:[...(r2.sent||[]).filter(m=>!ex.has(m.id)),...(prev.sent||[])].slice(0,200)}})}else setDmInbox(r2)}})}else{setToast({msg:r?.error||"Failed",color:"#eb4b4b"})}})}} style={{...S.btn,background:"#3b82f6",color:"#fff",padding:"6px 12px"}}>Send</button>
+              <button onClick={()=>doSendDm(dmTo,dmMsg)} style={{...S.btn,background:"#3b82f6",color:"#fff",padding:"6px 12px"}}>Send</button>
             </div>
           </>}
         </div>
@@ -2939,6 +3096,7 @@ if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||pre
           const target=buckshotConfirm.target;
           setBuckshotConfirm(null);
           const r=await api("/buckshot/shoot",{lobbyId:curLobby.id,username:account.username,target});
+          if(window._fetchBuckshotState)window._fetchBuckshotState();
           if(r?.ok){
             if(r.winner){_SND.stopMusic();if(r.forceSync){await silentCloudSync()}if(r.winner===account.username){setToast({msg:"You won "+money(r.payout||0)+"!",color:"#4ade80"})}}
           }else setToast({msg:r?.error||"Failed",color:"#eb4b4b"});
