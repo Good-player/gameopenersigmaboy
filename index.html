@@ -19,6 +19,8 @@
   Haxball server hosted by me and password is: Turebergsskolan67 <a href="https://www.haxball.com/play?c=B51rs0QUPrM" target="_blank" rel="noopener noreferrer">Visit Website</a>
 </div>
 <div id="root"></div>
+<!-- Realtime WebSocket client: must load before app.js -->
+<script src="rt.js"></script>
 <script src="i18n.js"></script>
 <script src="cases.js"></script>
 <script type="text/babel" data-presets="react" src="app.js"></script>
@@ -26,7 +28,10 @@
 // Admin console command - type admin("password") in dev console
 // This is intentionally a plain script, not JSX, for security isolation
 (function(){
-  var _API = "https://samptonweb.dpdns.org/api/caseopen/adminpanel";
+  var _backendBase = (/\.github\.io$/i.test(location.hostname) || !/^https?:$/.test(location.protocol)
+    ? "https://backend.samptonweb.dpdns.org/api/caseopen" 
+    : location.origin + "/api/caseopen");
+  var _API = _backendBase + "/adminpanel";
   var _active = false;
   window.admin = async function(pwd) {
     if (_active) { console.log("%c[ADMIN] Panel already open", "color:#ffd700"); return; }
@@ -87,7 +92,7 @@
     else { console.log("%c[OWNER] Usage: owner('password') or login as owner", "color:#eb4b4b"); return; }
     console.log("%c[OWNER] Authenticating...", "color:#888");
     try {
-      var r = await fetch("https://samptonweb.dpdns.org/api/caseopen/ownerpanel", {
+      var r = await fetch(_backendBase + "/ownerpanel", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(postBody)

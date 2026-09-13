@@ -10,8 +10,11 @@ const USER_ID=getUserId();
 
 // Server API
 const isMobile=/Android|iPhone|iPad|iPod|webOS/i.test(navigator.userAgent)||window.innerWidth<600;
-const API_BASE="https://samptonweb.dpdns.org/api/caseopen";
-const API_LIGHT="https://samptonweb.wat-the-heck-lol12.workers.dev/api/caseopen";
+const API_OVERRIDE = "";
+const BACKEND_BASE = "https://backend.samptonweb.dpdns.org/api/caseopen";
+const SAME_ORIGIN_API = !/\.github\.io$/i.test(location.hostname) && /^https?:$/.test(location.protocol);
+const API_BASE = API_OVERRIDE || (SAME_ORIGIN_API ? location.origin + "/api/caseopen" : BACKEND_BASE);
+const API_LIGHT = BACKEND_BASE;
 async function api(path,body){let resp;try{resp=await fetch(API_BASE+path,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({uid:USER_ID,uname:getUserName(),...body})})}catch(e){if(window.__setOnline)window.__setOnline(false);return null}if(window.__setOnline)window.__setOnline(true);try{return await resp.json()}catch{return null}}
 async function apiL(path,body){let resp;try{resp=await fetch(API_LIGHT+path,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({uid:USER_ID,uname:getUserName(),...body})})}catch(e){if(window.__setOnline)window.__setOnline(false);return null}if(window.__setOnline)window.__setOnline(true);try{return await resp.json()}catch{return null}}
 
@@ -363,6 +366,64 @@ function App(){
   const askPrompt=(opts)=>new Promise(res=>{setPromptModal({...opts,resolve:res,value:opts.defaultValue||""})});
   const[lobbies,setLobbies]=useState([]);const[curLobby,setCurLobby]=useState(null);const[lobbyChat,setLobbyChat]=useState([]);const[lobbyChatMsg,setLobbyChatMsg]=useState("");const[lobbyTimer,setLobbyTimer]=useState(0);const[createLobbyName,setCreateLobbyName]=useState("");const[createLobbyPw,setCreateLobbyPw]=useState("");const[createLobbyMode,setCreateLobbyMode]=useState("profit_race");const[createLobbyBet,setCreateLobbyBet]=useState("1000");const[buckshotState,setBuckshotState]=useState(null);const[buckshotNarration,setBuckshotNarration]=useState(null);const buckshotEventCursorRef=useRef(0);const[buckshotConfirm,setBuckshotConfirm]=useState(null);const[itemAnimSlot,setItemAnimSlot]=useState(null);const[confirmModal,setConfirmModal]=useState(null);const[promptModal,setPromptModal]=useState(null);
   const stripRef=useRef(null);const lockRef=useRef(false);const lobbyPollRef=useRef(null);
+
+  // Connect Realtime WebSocket on login / mount
+  useEffect(()=>{
+    if(window.RT&&account?.username&&account?.token){
+      window.RT.connect(account.username,account.token,USER_ID);
+    }
+  },[account?.username,account?.token]);
+
+  // Realtime push listeners
+  useEffect(()=>{
+    if(!window.RT)return;
+    const unsubChat=window.RT.on("chat",(msg)=>{
+      if(!msg)return;
+      const m={...msg,pfp:pfpCache.current[msg.uid]||msg.pfp||""};
+      setChatLog(prev=>{
+        if(prev.some(x=>x.id===m.id))return prev;
+        return[m,...prev].slice(0,200);
+      });
+      if(m.id&&m.id>lastChatIdRef.current)lastChatIdRef.current=m.id;
+    });
+
+    const unsubFeed=window.RT.on("feed",(drop)=>{
+      if(!drop)return;
+      setFeed(prev=>[drop,...prev.slice(0,49)]);
+    });
+
+    const unsubDm=window.RT.on("dm",(d)=>{
+      if(!d)return;
+      if(d.unread!==undefined)setDmUnread(d.unread);
+      if(d.msg&&d.from_user!==account?.username){
+        setToast({msg:"DM from "+d.from_user+": "+d.msg.slice(0,30),color:"#3b82f6"});
+      }
+    });
+
+    const unsubOnline=window.RT.on("online",(d)=>{
+      if(!d)return;
+      if(d.players){
+        const map={};
+        for(const p of d.players){map[p.uname]=p.status}
+        setUserStatusMap(map);
+      }
+      setOnlineData(d);
+    });
+
+    const unsubBuckshot=window.RT.on("buckshot",(st)=>{
+      if(st)setBuckshotState(st);
+    });
+
+    const unsubLobby=window.RT.on("lobbyinfo",(lob)=>{
+      if(lob&&curLobby&&curLobby.id===lob.id){
+        setCurLobby(prev=>({...prev,...lob}));
+      }
+    });
+
+    return()=>{
+      unsubChat();unsubFeed();unsubDm();unsubOnline();unsubBuckshot();unsubLobby();
+    };
+  },[account?.username,curLobby?.id]);
 
   async function refreshLobbies(){const r=await api("/lobby/list",{});if(r?.lobbies)setLobbies(r.lobbies)}
   async function refreshLobby(id){
@@ -816,7 +877,7 @@ function App(){
         const ev2=await api("/events",{});if(ev2?.events)setEvents(ev2.events);if(dmPollCount%8===0){const[f,l]=await Promise.all([getFeed(),getLeaderboard()]);if(f?.feed)setFeed(f.feed);if(l?.lb)setLb(l.lb)}if(account?.username&&account?.token&&dmPollCount%2===0){try{const dm=await api("/dm/inbox",{username:account.username,token:account.token,after:lastDmIdRef.current});if(dm?.ok&&dm.unread!==undefined){if(dm.unread>dmUnread&&dmUnread>=0){setToast({msg:dm.unread+" new message"+(dm.unread>1?"s":""),color:"#3b82f6"})}setDmUnread(dm.unread);// Merge new received/sent into existing, update lastDmIdRef
 const newMax=Math.max(0,...(dm.received||[]).map(m=>m.id||0),...(dm.sent||[]).map(m=>m.id||0));if(newMax>lastDmIdRef.current)lastDmIdRef.current=newMax;if(dm.incremental){// merge new messages into existing inbox
 if((dm.received&&dm.received.length>0)||(dm.sent&&dm.sent.length>0)){setDmInbox(prev=>{if(!prev)return dm;const ex=new Set([...(prev.received||[]).map(m=>m.id),...(prev.sent||[]).map(m=>m.id)]);return{...prev,unread:dm.unread,received:[...(dm.received||[]).filter(m=>!ex.has(m.id)),...(prev.received||[])].slice(0,200),sent:[...(dm.sent||[]).filter(m=>!ex.has(m.id)),...(prev.sent||[])].slice(0,200)}})}}else{// first poll - full replacement
-if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||prev?.sent,unread:dm.unread}))}}}catch{}}if(account?.username&&account?.token&&dmPollCount%5===0){try{const st=await api("/status",{username:account.username,token:account.token});if(st?.banned){setBanModal({reason:st.banReason||"Banned",expires:st.banExpires||0});clearAccount();setAccount(null)}if(st?.warned&&!warnModal)setWarnModal(st.warnReason||"Warning");if(st?.forceSync&&st.forceSync>0){const lastSync=parseInt(localStorage.getItem("co-lastsync")||"0");const isFresh=(Date.now()-st.forceSync)<600000; /* 10min */ if(st.forceSync>lastSync&&isFresh){localStorage.setItem("co-lastsync",String(st.forceSync));syncLockRef.current=true;try{const lr=await api("/auth/load",{username:account.username,token:account.token,ackForceSync:true});if(lr?.ok&&lr.slots){for(let si=0;si<3;si++){if(lr.slots[si]){await _stSet("co-s"+si,JSON.stringify(lr.slots[si]))}}const curSlotData=lr.slots[slot];if(curSlotData&&curSlotData.st){setSt(s=>({...INIT,...curSlotData.st,starred:curSlotData.st?.starred||{}}));if(curSlotData.drops)setDrops(curSlotData.drops);setToast({msg:"Synced from cloud",color:"#3b82f6"})}}}catch{}setTimeout(()=>{syncLockRef.current=false},3000)}else if(st.forceSync>0&&!isFresh){/* Stale flag — clear it without overwriting local */ try{await api("/auth/load",{username:account.username,token:account.token,ackForceSync:true,clearOnly:true})}catch{}; localStorage.setItem("co-lastsync",String(st.forceSync))}}}catch{}}}catch{}};poll();const id=setInterval(poll,6000);return()=>{on=false;clearInterval(id)}},[showSlots,account]);
+if(dm.received)setDmInbox(prev=>({...prev,received:dm.received,sent:dm.sent||prev?.sent,unread:dm.unread}))}}}catch{}}if(account?.username&&account?.token&&dmPollCount%5===0){try{const st=await api("/status",{username:account.username,token:account.token});if(st?.banned){setBanModal({reason:st.banReason||"Banned",expires:st.banExpires||0});clearAccount();setAccount(null)}if(st?.warned&&!warnModal)setWarnModal(st.warnReason||"Warning");if(st?.forceSync&&st.forceSync>0){const lastSync=parseInt(localStorage.getItem("co-lastsync")||"0");const isFresh=(Date.now()-st.forceSync)<600000; /* 10min */ if(st.forceSync>lastSync&&isFresh){localStorage.setItem("co-lastsync",String(st.forceSync));syncLockRef.current=true;try{const lr=await api("/auth/load",{username:account.username,token:account.token,ackForceSync:true});if(lr?.ok&&lr.slots){for(let si=0;si<3;si++){if(lr.slots[si]){await _stSet("co-s"+si,JSON.stringify(lr.slots[si]))}}const curSlotData=lr.slots[slot];if(curSlotData&&curSlotData.st){setSt(s=>({...INIT,...curSlotData.st,starred:curSlotData.st?.starred||{}}));if(curSlotData.drops)setDrops(curSlotData.drops);setToast({msg:"Synced from cloud",color:"#3b82f6"})}}}catch{}setTimeout(()=>{syncLockRef.current=false},3000)}else if(st.forceSync>0&&!isFresh){/* Stale flag — clear it without overwriting local */ try{await api("/auth/load",{username:account.username,token:account.token,ackForceSync:true,clearOnly:true})}catch{}; localStorage.setItem("co-lastsync",String(st.forceSync))}}}catch{}}}catch{}};poll();let pollTimer=null;function schedulePoll(){if(!on)return;const ms=(window.RT&&window.RT.isLive())?20000:6000;pollTimer=setTimeout(async()=>{await poll();schedulePoll()},ms)}schedulePoll();return()=>{on=false;clearTimeout(pollTimer)}},[showSlots,account]);
   // Chat cooldown countdown
   useEffect(()=>{if(chatCd<=0)return;const id=setTimeout(()=>setChatCd(c=>c-1),1000);return()=>clearTimeout(id)},[chatCd]);
   useEffect(()=>{if(!toast)return;const id=setTimeout(()=>setToast(null),3000);return()=>clearTimeout(id)},[toast]);
