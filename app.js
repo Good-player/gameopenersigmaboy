@@ -346,9 +346,18 @@ function drawCrashCanvas(ctx, W, H, st) {
   }
 
   let liveMult = st.multiplier || 1.00;
-  if (st.state === "flying" && st.startTime > 0) {
-    const elapsed = Math.max(0, (Date.now() - st.startTime) / 1000);
+  if (st.state === "flying") {
+    let elapsed = 0;
+    if (st.lastServerElapsed !== undefined && st.lastTickClientTime) {
+      const dt = Math.max(0, (performance.now() - st.lastTickClientTime) / 1000);
+      elapsed = st.lastServerElapsed + Math.min(0.18, dt);
+    } else if (st.startTime > 0) {
+      elapsed = Math.max(0, (Date.now() - st.startTime) / 1000);
+    }
     liveMult = Math.max(1.00, Math.pow(Math.E, 0.065 * elapsed));
+    if (st.multiplier && st.multiplier > 1.0) {
+      liveMult = Math.max(st.multiplier, Math.min(st.multiplier * 1.08, liveMult));
+    }
   } else if (st.state === "crashed") {
     liveMult = st.crashPoint || st.multiplier || 1.00;
   }
@@ -379,8 +388,7 @@ function drawCrashCanvas(ctx, W, H, st) {
 
   ctx.beginPath();
   const numPts = 60;
-  const currentElapsed = st.startTime > 0 ? (Date.now() - st.startTime) / 1000 : 0;
-  const simT = isCrashed ? (Math.log(st.crashPoint || liveMult) / 0.065) : currentElapsed;
+  const simT = Math.log(Math.max(1.0001, liveMult)) / 0.065;
 
   let endX = padLeft;
   let endY = H - padBottom;
@@ -642,18 +650,31 @@ function App(){
     };
 
     const onFlying = (d) => {
-      setCrashState(prev => ({
-        ...prev,
+      const now = performance.now();
+      crashStateRef.current = {
+        ...crashStateRef.current,
         state: "flying",
         roundId: d.roundId,
         startTime: d.startTime,
         multiplier: 1.00,
-        bets: d.bets || prev.bets
-      }));
+        lastServerElapsed: 0,
+        lastTickClientTime: now,
+        bets: d.bets || crashStateRef.current.bets
+      };
+      setCrashState(crashStateRef.current);
       playCrashSound("climb", 1);
     };
 
     const onTick = (d) => {
+      if (crashStateRef.current.state !== "flying") return;
+      const now = performance.now();
+      crashStateRef.current = {
+        ...crashStateRef.current,
+        multiplier: d.mult,
+        lastServerElapsed: d.elapsed !== undefined ? d.elapsed : (Math.log(Math.max(1, d.mult)) / 0.065),
+        lastTickClientTime: now,
+        roundId: d.roundId
+      };
       setCrashState(prev => {
         if (prev.state !== "flying") return prev;
         return { ...prev, multiplier: d.mult, roundId: d.roundId };
@@ -661,18 +682,20 @@ function App(){
     };
 
     const onCrashed = (d) => {
-      setCrashState(prev => ({
-        ...prev,
+      const cp = d.crashPoint || 1.00;
+      crashStateRef.current = {
+        ...crashStateRef.current,
         state: "crashed",
         roundId: d.roundId,
-        multiplier: d.crashPoint,
-        crashPoint: d.crashPoint,
-        history: d.history || prev.history
-      }));
+        multiplier: cp,
+        crashPoint: cp,
+        history: d.history || crashStateRef.current.history
+      };
+      setCrashState(crashStateRef.current);
       playCrashSound("crash");
       setCrashMyBet(prev => {
         if (prev && !prev.cashedOut) {
-          setToast({ msg: "Rocket crashed @ " + (d.crashPoint || 1.0).toFixed(2) + "x!", color: "#eb4b4b" });
+          setToast({ msg: "Rocket crashed @ " + cp.toFixed(2) + "x!", color: "#eb4b4b" });
         }
         return prev;
       });
@@ -1733,7 +1756,7 @@ if(dm.received)setDmInbox(prev=>({...prev,received:recFiltered,sent:sentFiltered
           for(let i=0;i<3;i++){if(r.slots[i]){await _stSet("co-s"+i,JSON.stringify(r.slots[i]))}}
           location.reload();
         } else {
-          for(let i=0;i<3;i++){try{const d=await _stGet("co-s"+i);if(d?.value){await api("/auth/save",{username:r.username,token:r.token,slot:i,data:JSON.parse(d.value)})}}catch{}}
+          for(let i=0;i<3;i++){try{const d=await _stGet("co-s"+i);if(d?.value){await authSave(r.username,r.token,i,JSON.parse(d.value))}}catch{}}
           setToast({msg:"Local saves uploaded to cloud",color:"#4ade80"});
         }
       }
