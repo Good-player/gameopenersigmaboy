@@ -11,7 +11,7 @@ const USER_ID=getUserId();
 // Server API
 const isMobile=/Android|iPhone|iPad|iPod|webOS/i.test(navigator.userAgent)||window.innerWidth<600;
 const API_OVERRIDE = "";
-const BACKEND_BASE = "https://backend.samptonweb.dpdns.org/api/caseopen";
+const BACKEND_BASE = "https://freedomainnumber1.imsupergayandextremlygay.men/api/caseopen";
 const SAME_ORIGIN_API = !/\.github\.io$/i.test(location.hostname) && /^https?:$/.test(location.protocol);
 const API_BASE = API_OVERRIDE || (SAME_ORIGIN_API ? location.origin + "/api/caseopen" : BACKEND_BASE);
 const API_LIGHT = BACKEND_BASE;
@@ -345,25 +345,26 @@ function drawCrashCanvas(ctx, W, H, st) {
     return;
   }
 
+  const growthRate = st.growthRate || 0.065;
+  const speedMode = st.speedMode || "normal";
   let liveMult = st.multiplier || 1.00;
+
   if (st.state === "flying") {
     let elapsed = 0;
     if (st.lastServerElapsed !== undefined && st.lastTickClientTime) {
       const dt = Math.max(0, (performance.now() - st.lastTickClientTime) / 1000);
-      elapsed = st.lastServerElapsed + Math.min(0.18, dt);
+      elapsed = st.lastServerElapsed + dt;
     } else if (st.startTime > 0) {
       elapsed = Math.max(0, (Date.now() - st.startTime) / 1000);
     }
-    liveMult = Math.max(1.00, Math.pow(Math.E, 0.065 * elapsed));
-    if (st.multiplier && st.multiplier > 1.0) {
-      liveMult = Math.max(st.multiplier, Math.min(st.multiplier * 1.08, liveMult));
-    }
+    const extrapolated = Math.max(1.00, Math.pow(Math.E, growthRate * elapsed));
+    liveMult = Math.max(st.multiplier || 1.00, extrapolated);
   } else if (st.state === "crashed") {
     liveMult = st.crashPoint || st.multiplier || 1.00;
   }
 
   const maxM = Math.max(2.0, liveMult * 1.25);
-  const maxT = Math.max(10, Math.log(maxM) / 0.065);
+  const maxT = Math.max(8, Math.log(maxM) / growthRate);
 
   // Ticks
   ctx.fillStyle = "#475569";
@@ -384,18 +385,18 @@ function drawCrashCanvas(ctx, W, H, st) {
   }
 
   const isCrashed = st.state === "crashed";
-  const curveColor = isCrashed ? "#eb4b4b" : "#4ade80";
+  const curveColor = isCrashed ? "#eb4b4b" : speedMode === "turbo" ? "#ec4899" : speedMode === "slow" ? "#38bdf8" : "#4ade80";
 
   ctx.beginPath();
   const numPts = 60;
-  const simT = Math.log(Math.max(1.0001, liveMult)) / 0.065;
+  const simT = Math.log(Math.max(1.0001, liveMult)) / growthRate;
 
   let endX = padLeft;
   let endY = H - padBottom;
 
   for (let i = 0; i <= numPts; i++) {
     const t = (i / numPts) * simT;
-    const m = Math.pow(Math.E, 0.065 * t);
+    const m = Math.pow(Math.E, growthRate * t);
     const x = padLeft + (t / maxT) * graphW;
     const y = H - padBottom - ((m - 1) / (maxM - 1)) * graphH;
     if (i === 0) ctx.moveTo(x, y);
@@ -408,7 +409,7 @@ function drawCrashCanvas(ctx, W, H, st) {
   ctx.lineTo(padLeft, H - padBottom);
   ctx.closePath();
   const grad = ctx.createLinearGradient(0, endY, 0, H - padBottom);
-  grad.addColorStop(0, isCrashed ? "#eb4b4b33" : "#4ade8033");
+  grad.addColorStop(0, isCrashed ? "#eb4b4b33" : (speedMode === "turbo" ? "#ec489933" : speedMode === "slow" ? "#38bdf833" : "#4ade8033"));
   grad.addColorStop(1, "transparent");
   ctx.fillStyle = grad;
   ctx.fill();
@@ -417,16 +418,16 @@ function drawCrashCanvas(ctx, W, H, st) {
   ctx.beginPath();
   for (let i = 0; i <= numPts; i++) {
     const t = (i / numPts) * simT;
-    const m = Math.pow(Math.E, 0.065 * t);
+    const m = Math.pow(Math.E, growthRate * t);
     const x = padLeft + (t / maxT) * graphW;
     const y = H - padBottom - ((m - 1) / (maxM - 1)) * graphH;
     if (i === 0) ctx.moveTo(x, y);
     else ctx.lineTo(x, y);
   }
   ctx.strokeStyle = curveColor;
-  ctx.lineWidth = 3.5;
+  ctx.lineWidth = speedMode === "turbo" ? 4.5 : 3.5;
   ctx.shadowColor = curveColor;
-  ctx.shadowBlur = 8;
+  ctx.shadowBlur = speedMode === "turbo" ? 14 : 8;
   ctx.stroke();
   ctx.shadowBlur = 0;
 
@@ -434,14 +435,37 @@ function drawCrashCanvas(ctx, W, H, st) {
   if (!isCrashed) {
     ctx.save();
     ctx.translate(endX, endY);
-    ctx.fillStyle = "#f59e0b";
-    ctx.beginPath();
-    ctx.arc(-8, 6, 3 + Math.random() * 3, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.fillStyle = "#eb4b4b";
-    ctx.beginPath();
-    ctx.arc(-12, 9, 2 + Math.random() * 2, 0, Math.PI * 2);
-    ctx.fill();
+    if (speedMode === "turbo") {
+      // Hyper warp flames
+      ctx.fillStyle = "#ec4899";
+      ctx.beginPath();
+      ctx.arc(-16, 12, 3 + Math.random() * 5, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#f59e0b";
+      ctx.beginPath();
+      ctx.arc(-10, 7, 4 + Math.random() * 4, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#38bdf8";
+      ctx.beginPath();
+      ctx.arc(-6, 4, 2 + Math.random() * 3, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (speedMode === "slow") {
+      // Gentle cruise glow
+      ctx.fillStyle = "#38bdf8";
+      ctx.beginPath();
+      ctx.arc(-6, 4, 2 + Math.random() * 2, 0, Math.PI * 2);
+      ctx.fill();
+    } else {
+      // Normal flame
+      ctx.fillStyle = "#f59e0b";
+      ctx.beginPath();
+      ctx.arc(-8, 6, 3 + Math.random() * 3, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.fillStyle = "#eb4b4b";
+      ctx.beginPath();
+      ctx.arc(-12, 9, 2 + Math.random() * 2, 0, Math.PI * 2);
+      ctx.fill();
+    }
     ctx.font = "22px sans-serif";
     ctx.textAlign = "center";
     ctx.textBaseline = "middle";
@@ -469,11 +493,12 @@ function drawCrashCanvas(ctx, W, H, st) {
     ctx.fillText("Next round in a few seconds...", W / 2, H / 2 + 20);
   } else {
     ctx.font = "bold clamp(36px, 8vw, 60px) sans-serif";
-    ctx.fillStyle = "#4ade80";
+    ctx.fillStyle = speedMode === "turbo" ? "#ec4899" : speedMode === "slow" ? "#38bdf8" : "#4ade80";
     ctx.fillText(liveMult.toFixed(2) + "x", W / 2, H / 2 - 8);
     ctx.font = "bold 11px sans-serif";
-    ctx.fillStyle = "#94a3b8";
-    ctx.fillText("CURRENT MULTIPLIER", W / 2, H / 2 + 30);
+    ctx.fillStyle = speedMode === "turbo" ? "#ec4899" : speedMode === "slow" ? "#38bdf8" : "#94a3b8";
+    const modeLabel = speedMode === "turbo" ? "⚡ HYPER WARP (HIGH SPEED)" : speedMode === "slow" ? "🐢 SLOW BURN (STEADY CLIMB)" : "CURRENT MULTIPLIER";
+    ctx.fillText(modeLabel, W / 2, H / 2 + 30);
   }
 }
 
@@ -554,7 +579,7 @@ function App(){
   const[st,setSt]=useState(INIT);const[page,setPage]=useState("shop");const[selCase,setSelCase]=useState(null);const[wonItem,setWonItem]=useState(null);const[wonFloat,setWonFloat]=useState(0);const[wonQuote,setWonQuote]=useState("");const[scrollItems,setScrollItems]=useState([]);const[scrollDone,setScrollDone]=useState(false);const[opening,setOpening]=useState(false);const[resetMsg,setResetMsg]=useState("");const[loanAmt,setLoanAmt]=useState("");const[loanMinutes,setLoanMinutes]=useState("5");const[showLoanModal,setShowLoanModal]=useState(false);const[rentPaid,setRentPaid]=useState(0);const[inspecting,setInspecting]=useState(null);const[confirmReset,setConfirmReset]=useState(false);const[drops,setDrops]=useState([]);const[showSoundModal,setShowSoundModal]=useState(false);const[soundVer,setSoundVer]=useState(0);
   const[invSort,setInvSort]=useState("newest");const[invFilter,setInvFilter]=useState("all");const[invView,setInvView]=useState("grid");const[selItem,setSelItem]=useState(null);const[sellAmt,setSellAmt]=useState("");const[sellConfirm,setSellConfirm]=useState(null);const[lastWonId,setLastWonId]=useState(null);const[superWin,setSuperWin]=useState(null);const[openCategory,setOpenCategory]=useState(null);
   const[ctMode,setCtMode]=useState(false);const[ctSel,setCtSel]=useState([]);const[ctPreview,setCtPreview]=useState(null);const[ctBusy,setCtBusy]=useState(false);const[ctResult,setCtResult]=useState(null);
-  const[mkListings,setMkListings]=useState([]);const[mkSort,setMkSort]=useState("newest");const[mkMyListings,setMkMyListings]=useState([]);const[mkView,setMkView]=useState("browse");const[mkListItem,setMkListItem]=useState(null);const[mkListPrice,setMkListPrice]=useState("");
+  const[mkListings,setMkListings]=useState([]);const[mkSort,setMkSort]=useState("newest");const[mkMyListings,setMkMyListings]=useState([]);const[mkView,setMkView]=useState("browse");const[mkListItem,setMkListItem]=useState(null);const[mkListPrice,setMkListPrice]=useState("");const[mkSearch,setMkSearch]=useState("");const[mkRarity,setMkRarity]=useState("all");const[mkSellSearch,setMkSellSearch]=useState("");
   const[tradeId,setTradeId]=useState(null);const[tradeState,setTradeState]=useState(null);const[tradeTargetInput,setTradeTargetInput]=useState("");const[tradeMyItems,setTradeMyItems]=useState([]);const[tradeMyCash,setTradeMyCash]=useState("0");const[tradePicking,setTradePicking]=useState(false);const[incomingTrades,setIncomingTrades]=useState([]);const[seenTradeIds,setSeenTradeIds]=useState(()=>{try{return new Set(JSON.parse(localStorage.getItem("co-seen-trades")||"[]"))}catch{return new Set()}});
   // Close category dropdown when clicking outside the nav.
   useEffect(()=>{
@@ -580,6 +605,8 @@ function App(){
     state: "betting",
     roundId: 0,
     multiplier: 1.00,
+    speedMode: "normal",
+    growthRate: 0.065,
     startTime: 0,
     countdown: 6.0,
     cooldown: 3.5,
@@ -622,6 +649,8 @@ function App(){
           state: r.state,
           roundId: r.roundId,
           multiplier: r.multiplier,
+          speedMode: r.speedMode || "normal",
+          growthRate: r.growthRate || 0.065,
           startTime: r.startTime,
           countdown: r.countdown,
           cooldown: r.cooldown,
@@ -644,19 +673,25 @@ function App(){
           state: "betting",
           roundId: d.roundId,
           countdown: d.countdown !== undefined ? d.countdown : prev.countdown,
-          bets: isNew ? [] : prev.bets
+          bets: isNew ? [] : prev.bets,
+          speedMode: "normal",
+          growthRate: 0.065
         };
       });
     };
 
     const onFlying = (d) => {
       const now = performance.now();
+      const speedMode = d.speedMode || "normal";
+      const growthRate = d.growthRate || 0.065;
       crashStateRef.current = {
         ...crashStateRef.current,
         state: "flying",
         roundId: d.roundId,
         startTime: d.startTime,
         multiplier: 1.00,
+        speedMode,
+        growthRate,
         lastServerElapsed: 0,
         lastTickClientTime: now,
         bets: d.bets || crashStateRef.current.bets
@@ -668,16 +703,20 @@ function App(){
     const onTick = (d) => {
       if (crashStateRef.current.state !== "flying") return;
       const now = performance.now();
+      const gRate = d.growthRate || crashStateRef.current.growthRate || 0.065;
+      const sMode = d.speedMode || crashStateRef.current.speedMode || "normal";
       crashStateRef.current = {
         ...crashStateRef.current,
         multiplier: d.mult,
-        lastServerElapsed: d.elapsed !== undefined ? d.elapsed : (Math.log(Math.max(1, d.mult)) / 0.065),
+        growthRate: gRate,
+        speedMode: sMode,
+        lastServerElapsed: d.elapsed !== undefined ? d.elapsed : (Math.log(Math.max(1, d.mult)) / gRate),
         lastTickClientTime: now,
         roundId: d.roundId
       };
       setCrashState(prev => {
         if (prev.state !== "flying") return prev;
-        return { ...prev, multiplier: d.mult, roundId: d.roundId };
+        return { ...prev, multiplier: d.mult, roundId: d.roundId, speedMode: sMode, growthRate: gRate };
       });
     };
 
@@ -3049,58 +3088,306 @@ if(dm.received)setDmInbox(prev=>({...prev,received:recFiltered,sent:sentFiltered
         <button onClick={async()=>{const r=await api("/market/list",{sort:mkSort,limit:50});if(r?.ok)setMkListings(r.listings||[]);const m=await api("/market/my",{username:account?.username});if(m?.ok)setMkMyListings(m.listings||[])}} style={{...S.btn,background:"#ffffff08",color:"#888",padding:"4px 10px",fontSize:11}}><MI n="refresh" s={14}/></button>
       </div>
       {mkView==="browse"&&<div>
-        <div style={{display:"flex",gap:6,marginBottom:10,fontSize:11}}>
-          <span style={{color:"#888"}}>Sort:</span>
-          {[["newest","Newest"],["cheapest","Cheapest"],["expensive","Most Expensive"]].map(([k,l])=><button key={k} onClick={()=>setMkSort(k)} style={{...S.btn,background:mkSort===k?"#fbbf2422":"transparent",color:mkSort===k?"#fbbf24":"#666",border:"1px solid "+(mkSort===k?"#fbbf2444":"#222"),padding:"2px 8px",fontSize:10}}>{l}</button>)}
+        {/* Search & Sort Bar */}
+        <div style={{display:"flex",gap:8,marginBottom:10,flexWrap:"wrap",alignItems:"center"}}>
+          <div style={{position:"relative",flex:1,minWidth:220}}>
+            <span style={{position:"absolute",left:10,top:"50%",transform:"translateY(-50%)",color:"#666",display:"flex",alignItems:"center"}}><MI n="search" s={16}/></span>
+            <input value={mkSearch} onChange={e=>setMkSearch(e.target.value)} placeholder="Search item name or seller..." style={{...S.input,width:"100%",paddingLeft:32,paddingRight:mkSearch?28:10,fontSize:12}}/>
+            {mkSearch&&<button onClick={()=>setMkSearch("")} style={{position:"absolute",right:8,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",color:"#888",cursor:"pointer",fontSize:12,padding:0}}>✕</button>}
+          </div>
+          <div style={{display:"flex",gap:4,alignItems:"center"}}>
+            <span style={{color:"#888",fontSize:11}}>Sort:</span>
+            {[["newest","Newest"],["cheapest","Cheapest"],["expensive","Most Expensive"]].map(([k,l])=><button key={k} onClick={()=>setMkSort(k)} style={{...S.btn,background:mkSort===k?"#fbbf2422":"transparent",color:mkSort===k?"#fbbf24":"#666",border:"1px solid "+(mkSort===k?"#fbbf2444":"#222"),padding:"4px 8px",fontSize:10}}>{l}</button>)}
+          </div>
         </div>
-        {!mkListings.length?<div style={{color:"#888",padding:30,textAlign:"center",background:"#0d1117",borderRadius:8}}>No active listings. Click "Sell an Item" to create one.</div>:
-        <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(220px,1fr))",gap:8}}>{mkListings.map(l=>{
-          const item=l.item||{};const rColor=R[item.rarity]?.color||"#555";
-          const isMine=l.seller===account?.username;
-          return <div key={l.id} className="invItem" style={{background:"#0d1117",border:"1px solid "+rColor+"44",borderLeft:"3px solid "+rColor,borderRadius:6,padding:10}}>
-            <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:4}}><span style={{fontSize:20}}>{iconFor(item)}</span><div style={{flex:1,minWidth:0}}><div style={{fontWeight:600,fontSize:12,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{tItem(item.name)}</div><div style={{fontSize:9,color:rColor,textTransform:"uppercase",letterSpacing:1}}>{item.rarity}</div></div></div>
-            <div style={{fontSize:10,color:"#888",marginBottom:6}}>Worth {money(item.value||0)} · by <span style={{color:"#cbd5e1"}}>{l.seller}</span></div>
-            <div style={{display:"flex",alignItems:"center",gap:6}}><div style={{fontWeight:800,color:"#fbbf24",fontSize:14,flex:1}}>{money(l.price)}</div>
-              {isMine?<button onClick={async()=>{const ok=await askConfirm({title:"Cancel listing?",message:"The item returns to your inventory.",ok:"Unlist",color:"#fbbf24"});if(!ok)return;const r=await api("/market/unlist",{username:account.username,token:account.token,listingId:l.id});if(r?.ok){setToast({msg:"Unlisted",color:"#fbbf24"});setMkListings(p=>p.filter(x=>x.id!==l.id));await silentCloudSync()}else setToast({msg:r?.error||"Failed",color:"#eb4b4b"})}} style={{...S.btn,background:"#ffffff08",color:"#fbbf24",padding:"4px 10px",fontSize:10}}>Unlist</button>
-              :<button disabled={st.bal<l.price} onClick={async()=>{const ok=await askConfirm({title:"Buy?",message:`${tItem(item.name)} for ${money(l.price)}? Worth ${money(item.value||0)}.`,ok:"Buy",color:"#4ade80"});if(!ok)return;lastServerActionRef.current=Date.now();const r=await api("/market/buy",{username:account.username,token:account.token,listingId:l.id,slot});if(r?.ok&&r.item){setSt(p=>{const ns={...p,bal:r.serverBal!==undefined?r.serverBal:p.bal-l.price,inv:[...p.inv,r.item]};save(ns,drops);return ns});setToast({msg:"Bought "+tItem(item.name),color:"#4ade80"});setMkListings(p=>p.filter(x=>x.id!==l.id))}else setToast({msg:r?.error||"Failed",color:"#eb4b4b"})}} style={{...S.btn,background:st.bal>=l.price?"#4ade8022":"#222",color:st.bal>=l.price?"#4ade80":"#555",padding:"4px 10px",fontSize:10}}>Buy</button>}
+
+        {/* Rarity filter chips */}
+        <div style={{display:"flex",gap:4,overflowX:"auto",marginBottom:10,paddingBottom:4}}>
+          {[
+            {id:"all",label:"All Rarities",col:"#fbbf24"},
+            {id:"chroma",label:"★ Chroma",col:"#ffe600"},
+            {id:"covert",label:"Covert",col:"#eb4b4b"},
+            {id:"classified",label:"Classified",col:"#d32ce6"},
+            {id:"restricted",label:"Restricted",col:"#8847ff"},
+            {id:"mil-spec",label:"Mil-Spec",col:"#4b69ff"},
+            {id:"industrial",label:"Industrial",col:"#5e98d9"},
+            {id:"consumer",label:"Consumer",col:"#b0c3d9"}
+          ].map(rc=>{
+            const isSel=mkRarity===rc.id;
+            return <button key={rc.id} onClick={()=>setMkRarity(rc.id)} style={{...S.btn,background:isSel?rc.col+"22":"#ffffff08",color:isSel?rc.col:"#888",border:"1px solid "+(isSel?rc.col+"66":"#222"),padding:"3px 10px",borderRadius:12,fontSize:10,fontWeight:700,whiteSpace:"nowrap"}}>
+              {rc.label}
+            </button>;
+          })}
+        </div>
+
+        {(()=>{
+          const filtered = mkListings.filter(l=>{
+            const item = l.item || {};
+            if(mkRarity !== "all" && (item.rarity||"").toLowerCase() !== mkRarity.toLowerCase()) return false;
+            if(mkSearch.trim()){
+              const q = mkSearch.trim().toLowerCase();
+              const n = (item.name||"").toLowerCase();
+              const s = (l.seller||"").toLowerCase();
+              if(!n.includes(q) && !s.includes(q)) return false;
+            }
+            return true;
+          });
+
+          if(!filtered.length){
+            return <div style={{color:"#888",padding:35,textAlign:"center",background:"#0d1117",borderRadius:8}}>
+              {mkListings.length===0?"No active listings. Click \"Sell an Item\" to create one.":"No listings match your search or filter."}
+            </div>;
+          }
+
+          return <div>
+            <div style={{fontSize:10,color:"#666",marginBottom:8,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+              <span>Showing <b>{filtered.length}</b> of {mkListings.length} listing{mkListings.length===1?"":"s"}</span>
+            </div>
+            <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(230px,1fr))",gap:8}}>
+              {filtered.map(l=>{
+                const item = l.item || {};
+                const rColor = R[item.rarity]?.color || "#555";
+                const isMine = l.seller === account?.username;
+                const itemVal = item.value || 0;
+                const discount = itemVal > 0 ? Math.round(((itemVal - l.price) / itemVal) * 100) : 0;
+                return <div key={l.id} className="invItem" style={{background:"#0d1117",border:"1px solid "+rColor+"44",borderLeft:"3px solid "+rColor,borderRadius:6,padding:10,position:"relative"}}>
+                  <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:4}}>
+                    <span style={{fontSize:22}}>{iconFor(item)}</span>
+                    <div style={{flex:1,minWidth:0}}>
+                      <div style={{fontWeight:700,fontSize:12,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{tItem(item.name)}</div>
+                      <div style={{display:"flex",alignItems:"center",gap:6}}>
+                        <span style={{fontSize:9,color:rColor,textTransform:"uppercase",letterSpacing:1,fontWeight:700}}>{item.rarity}</span>
+                        {discount >= 20 ? <span style={{fontSize:9,fontWeight:800,color:"#4ade80",background:"#4ade8022",border:"1px solid #4ade8055",padding:"1px 5px",borderRadius:4}}>🔥 {discount}% OFF</span>
+                         : discount >= 10 ? <span style={{fontSize:9,fontWeight:800,color:"#34d399",background:"#34d39922",border:"1px solid #34d39955",padding:"1px 5px",borderRadius:4}}>🏷️ {discount}% OFF</span>
+                         : discount >= -5 && discount < 10 ? <span style={{fontSize:9,fontWeight:700,color:"#38bdf8",background:"#38bdf822",border:"1px solid #38bdf855",padding:"1px 5px",borderRadius:4}}>💎 FAIR</span>
+                         : discount < -15 ? <span style={{fontSize:9,fontWeight:700,color:"#a855f7",background:"#a855f722",border:"1px solid #a855f755",padding:"1px 5px",borderRadius:4}}>📈 +{-discount}% OVER</span>
+                         : null}
+                      </div>
+                    </div>
+                  </div>
+                  <div style={{fontSize:10,color:"#888",marginBottom:6,display:"flex",justifyContent:"space-between",alignItems:"center"}}>
+                    <span>Worth {money(itemVal)}</span>
+                    <span>by <span style={{color:"#cbd5e1",fontWeight:600}}>{l.seller}</span></span>
+                  </div>
+                  <div style={{display:"flex",alignItems:"center",gap:6,marginTop:4}}>
+                    <div style={{fontWeight:800,color:"#fbbf24",fontSize:15,flex:1}}>{money(l.price)}</div>
+                    {isMine ? (
+                      <button onClick={async()=>{
+                        const ok = await askConfirm({title:"Cancel listing?",message:"The item returns to your inventory.",ok:"Unlist",color:"#fbbf24"});
+                        if(!ok) return;
+                        const r = await api("/market/unlist",{username:account.username,token:account.token,listingId:l.id});
+                        if(r?.ok){
+                          setToast({msg:"Unlisted",color:"#fbbf24"});
+                          setMkListings(p=>p.filter(x=>x.id!==l.id));
+                          await silentCloudSync();
+                        } else setToast({msg:r?.error||"Failed",color:"#eb4b4b"});
+                      }} style={{...S.btn,background:"#ffffff08",color:"#fbbf24",padding:"4px 10px",fontSize:10}}>Unlist</button>
+                    ) : (
+                      <button disabled={st.bal<l.price} onClick={async()=>{
+                        const ok = await askConfirm({title:"Buy?",message:`${tItem(item.name)} for ${money(l.price)}? Worth ${money(item.value||0)}.`,ok:"Buy",color:"#4ade80"});
+                        if(!ok) return;
+                        lastServerActionRef.current = Date.now();
+                        const r = await api("/market/buy",{username:account.username,token:account.token,listingId:l.id,slot});
+                        if(r?.ok&&r.item){
+                          setSt(p=>{
+                            const ns = {...p,bal:r.serverBal!==undefined?r.serverBal:p.bal-l.price,inv:[...p.inv,r.item]};
+                            save(ns,drops);
+                            return ns;
+                          });
+                          setToast({msg:"Bought "+tItem(item.name),color:"#4ade80"});
+                          setMkListings(p=>p.filter(x=>x.id!==l.id));
+                        } else setToast({msg:r?.error||"Failed",color:"#eb4b4b"});
+                      }} style={{...S.btn,background:st.bal>=l.price?"#4ade8022":"#222",color:st.bal>=l.price?"#4ade80":"#555",padding:"4px 12px",fontSize:11,fontWeight:700}}>Buy</button>
+                    )}
+                  </div>
+                </div>;
+              })}
             </div>
           </div>;
-        })}</div>}
+        })()}
       </div>}
       {mkView==="mine"&&<div>
-        {!mkMyListings.length?<div style={{color:"#888",padding:30,textAlign:"center",background:"#0d1117",borderRadius:8}}>You have no listings.</div>:
-        <div style={{display:"flex",flexDirection:"column",gap:6}}>{mkMyListings.map(l=>{
-          const item=l.item||{};const rColor=R[item.rarity]?.color||"#555";
-          return <div key={l.id} style={{display:"flex",alignItems:"center",gap:8,background:"#0d1117",border:"1px solid #222",borderLeft:"3px solid "+rColor,borderRadius:6,padding:8,opacity:l.status==="sold"?0.7:1}}>
-            <span style={{fontSize:18}}>{iconFor(item)}</span>
-            <div style={{flex:1,minWidth:0}}><div style={{fontWeight:600,fontSize:12}}>{tItem(item.name)}</div><div style={{fontSize:9,color:"#666"}}>{l.status==="active"?"Listed":l.status==="sold"?"SOLD to "+l.sold_to:"Cancelled"} · {money(l.price)}</div></div>
-            {l.status==="active"&&<button onClick={async()=>{const r=await api("/market/unlist",{username:account.username,token:account.token,listingId:l.id});if(r?.ok){setToast({msg:"Unlisted",color:"#fbbf24"});setMkMyListings(p=>p.filter(x=>x.id!==l.id));await silentCloudSync()}}} style={{...S.btn,background:"#ffffff08",color:"#fbbf24",padding:"3px 8px",fontSize:10}}>Unlist</button>}
+        {(()=>{
+          const activeListings = mkMyListings.filter(l=>l.status==="active");
+          const totalVal = activeListings.reduce((sum,l)=>sum+(l.price||0),0);
+          const totalPayout = Math.floor(totalVal * 0.95);
+          return <div>
+            <div style={{display:"flex",gap:10,background:"#0d1117",borderRadius:8,padding:"10px 14px",marginBottom:10,alignItems:"center",flexWrap:"wrap"}}>
+              <div style={{flex:1,minWidth:100}}>
+                <div style={{fontSize:10,color:"#888",textTransform:"uppercase"}}>My Active Listings</div>
+                <div style={{fontSize:16,fontWeight:800,color:"#fbbf24"}}>{activeListings.length} item{activeListings.length===1?"":"s"}</div>
+              </div>
+              <div style={{flex:1,minWidth:100}}>
+                <div style={{fontSize:10,color:"#888",textTransform:"uppercase"}}>Total Listed Value</div>
+                <div style={{fontSize:16,fontWeight:800,color:"#e2e8f0"}}>{money(totalVal)}</div>
+              </div>
+              <div style={{flex:1,minWidth:100}}>
+                <div style={{fontSize:10,color:"#888",textTransform:"uppercase"}}>Potential Net Payout</div>
+                <div style={{fontSize:16,fontWeight:800,color:"#4ade80"}}>{money(totalPayout)}</div>
+              </div>
+            </div>
+            {!mkMyListings.length?<div style={{color:"#888",padding:30,textAlign:"center",background:"#0d1117",borderRadius:8}}>You have no listings.</div>:
+            <div style={{display:"flex",flexDirection:"column",gap:6}}>
+              {mkMyListings.map(l=>{
+                const item=l.item||{};const rColor=R[item.rarity]?.color||"#555";
+                const isSold=l.status==="sold";
+                const isActive=l.status==="active";
+                return <div key={l.id} style={{display:"flex",alignItems:"center",gap:8,background:"#0d1117",border:"1px solid #222",borderLeft:"3px solid "+rColor,borderRadius:6,padding:10,opacity:isSold?0.8:1}}>
+                  <span style={{fontSize:20}}>{iconFor(item)}</span>
+                  <div style={{flex:1,minWidth:0}}>
+                    <div style={{fontWeight:600,fontSize:12}}>{tItem(item.name)}</div>
+                    <div style={{fontSize:10,color:"#888",display:"flex",gap:6,alignItems:"center",marginTop:2}}>
+                      <span style={{color:isActive?"#4ade80":isSold?"#fbbf24":"#666",fontWeight:700}}>
+                        {isActive?"✓ LISTED":isSold?"💰 SOLD to "+(l.sold_to||"buyer"):"CANCELLED"}
+                      </span>
+                      <span>·</span>
+                      <span style={{color:"#cbd5e1",fontWeight:700}}>{money(l.price)}</span>
+                      {isActive&&<span style={{color:"#888"}}>(payout: {money(Math.floor(l.price*0.95))})</span>}
+                    </div>
+                  </div>
+                  {isActive&&<button onClick={async()=>{
+                    const r=await api("/market/unlist",{username:account.username,token:account.token,listingId:l.id});
+                    if(r?.ok){
+                      setToast({msg:"Unlisted",color:"#fbbf24"});
+                      setMkMyListings(p=>p.filter(x=>x.id!==l.id));
+                      await silentCloudSync();
+                    }
+                  }} style={{...S.btn,background:"#ffffff08",color:"#fbbf24",padding:"4px 10px",fontSize:10}}>Unlist</button>}
+                </div>;
+              })}
+            </div>}
           </div>;
-        })}</div>}
+        })()}
       </div>}
       {mkView==="sell"&&<div>
-        <div style={{color:"#888",fontSize:11,marginBottom:10}}>Pick an item from your inventory to list. <span style={{color:"#fbbf24"}}>5% marketplace fee</span> applies on sale.</div>
-        {mkListItem?<div style={{background:"#0d1117",border:"1px solid "+(R[mkListItem.rarity]?.color||"#222")+"44",borderRadius:8,padding:14,marginBottom:10}}>
-          <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:10}}><span style={{fontSize:30}}>{iconFor(mkListItem)}</span><div><div style={{fontWeight:700,fontSize:14}}>{tItem(mkListItem.name)}</div><div style={{fontSize:10,color:R[mkListItem.rarity]?.color}}>{mkListItem.rarity?.toUpperCase()}</div><div style={{fontSize:10,color:"#888"}}>Sell value: {money(mkListItem.value||0)}</div></div></div>
-          <div style={{display:"flex",alignItems:"center",gap:6,marginBottom:8}}>
-            <span style={{fontSize:11,color:"#888"}}>Price:</span>
-            <input type="number" value={mkListPrice} onChange={e=>setMkListPrice(e.target.value)} placeholder={mkListItem.value} style={{...S.input,flex:1,padding:"6px 10px",fontSize:13}}/>
+        <div style={{color:"#888",fontSize:11,marginBottom:10}}>Pick an item from your inventory to list. <span style={{color:"#fbbf24",fontWeight:700}}>5% marketplace fee</span> applies on sale.</div>
+        {mkListItem ? (
+          <div style={{background:"#0d1117",border:"1px solid "+(R[mkListItem.rarity]?.color||"#222")+"44",borderRadius:8,padding:14,marginBottom:10}}>
+            <div style={{display:"flex",alignItems:"center",gap:10,marginBottom:12}}>
+              <span style={{fontSize:32}}>{iconFor(mkListItem)}</span>
+              <div>
+                <div style={{fontWeight:700,fontSize:15}}>{tItem(mkListItem.name)}</div>
+                <div style={{fontSize:10,color:R[mkListItem.rarity]?.color,fontWeight:700,letterSpacing:0.5}}>{mkListItem.rarity?.toUpperCase()}</div>
+                <div style={{fontSize:11,color:"#888",marginTop:2}}>System Sell Value: <b style={{color:"#e2e8f0"}}>{money(mkListItem.value||0)}</b></div>
+              </div>
+            </div>
+
+            {/* Quick Pricing Buttons */}
+            <div style={{marginBottom:10}}>
+              <div style={{fontSize:10,color:"#888",fontWeight:700,textTransform:"uppercase",marginBottom:4}}>Quick Pricing:</div>
+              <div style={{display:"flex",gap:4,flexWrap:"wrap"}}>
+                {[
+                  {label:"🔥 -15% Quick Sell",mult:0.85,col:"#4ade80"},
+                  {label:"🏷️ -10% Fast",mult:0.90,col:"#34d399"},
+                  {label:"💎 100% Market",mult:1.00,col:"#38bdf8"},
+                  {label:"📈 +15% Mark-up",mult:1.15,col:"#a855f7"},
+                  {label:"🚀 +30% High",mult:1.30,col:"#ec4899"}
+                ].map(qp=>{
+                  const targetP = Math.max(1, Math.round((mkListItem.value||100) * qp.mult));
+                  const isCur = String(targetP) === String(mkListPrice);
+                  return <button key={qp.label} onClick={()=>setMkListPrice(String(targetP))} style={{...S.btn,background:isCur?qp.col+"33":"#ffffff08",color:isCur?qp.col:"#aaa",border:"1px solid "+(isCur?qp.col+"88":"#222"),padding:"4px 8px",fontSize:10,borderRadius:6,fontWeight:600}}>
+                    {qp.label}
+                  </button>;
+                })}
+              </div>
+            </div>
+
+            {/* Price Input & Net Calculation */}
+            <div style={{marginBottom:10}}>
+              <div style={{fontSize:10,color:"#888",fontWeight:700,textTransform:"uppercase",marginBottom:4}}>Listing Price:</div>
+              <div style={{position:"relative",display:"flex",alignItems:"center"}}>
+                <span style={{position:"absolute",left:10,color:"#666",fontWeight:700}}>$</span>
+                <input type="number" value={mkListPrice} onChange={e=>setMkListPrice(e.target.value.replace(/[^0-9]/g,""))} placeholder={mkListItem.value} style={{...S.input,width:"100%",paddingLeft:22,fontSize:14,fontWeight:700,color:"#fbbf24"}}/>
+              </div>
+            </div>
+
+            {(()=>{
+              const pr = +mkListPrice || 0;
+              const fee = Math.ceil(pr * 0.05);
+              const net = Math.max(0, pr - fee);
+              const val = mkListItem.value || 0;
+              const profitDiff = net - val;
+              return <div style={{background:"#080a0e",border:"1px solid #162032",borderRadius:6,padding:10,marginBottom:12,fontSize:11}}>
+                <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+                  <span style={{color:"#888"}}>Market Fee (5%):</span>
+                  <span style={{color:"#eb4b4b"}}>-{money(fee)}</span>
+                </div>
+                <div style={{display:"flex",justifyContent:"space-between",marginBottom:4}}>
+                  <span style={{color:"#888"}}>You will receive:</span>
+                  <span style={{color:"#4ade80",fontWeight:800,fontSize:13}}>{money(net)}</span>
+                </div>
+                {pr > 0 && <div style={{fontSize:10,color:profitDiff>=0?"#4ade80":"#f59e0b",marginTop:4,paddingTop:4,borderTop:"1px solid #141c2a"}}>
+                  {profitDiff > 0 ? `✨ +${money(profitDiff)} extra profit compared to instant sell!` : profitDiff === 0 ? "Equal to instant system sell." : `Listing for ${money(-profitDiff)} less than instant sell.`}
+                </div>}
+              </div>;
+            })()}
+
+            <div style={{display:"flex",gap:6}}>
+              <button onClick={()=>{setMkListItem(null);setMkListPrice("")}} style={{...S.btn,background:"#ffffff08",color:"#888",flex:1,padding:10,fontSize:11}}>Cancel</button>
+              <button onClick={async()=>{
+                const price=+mkListPrice||0;
+                if(price<1){setToast({msg:"Set a price",color:"#eb4b4b"});return}
+                const r=await api("/market/sell",{username:account.username,token:account.token,slot,itemId:mkListItem.id,price});
+                if(r?.ok){
+                  setToast({msg:"Listed!",color:"#4ade80"});
+                  setSt(p=>{
+                    const ns={...p,inv:p.inv.filter(i=>i.id!==mkListItem.id)};
+                    const ns2={...ns,starred:{...ns.starred}};
+                    delete ns2[mkListItem.id];
+                    save(ns2,drops);
+                    return ns2;
+                  });
+                  setMkListItem(null);
+                  setMkListPrice("");
+                  setMkView("mine");
+                  const m=await api("/market/my",{username:account.username});
+                  if(m?.ok)setMkMyListings(m.listings||[]);
+                } else setToast({msg:r?.error||"Failed",color:"#eb4b4b"});
+              }} style={{...S.btn,background:"#4ade8033",color:"#4ade80",flex:2,padding:10,fontSize:12,fontWeight:800,border:"1px solid #4ade8066"}}>Confirm List</button>
+            </div>
           </div>
-          <div style={{fontSize:10,color:"#888",marginBottom:10}}>You'll receive {money(Math.floor((+mkListPrice||0)*0.95))} after 5% fee</div>
-          <div style={{display:"flex",gap:6}}>
-            <button onClick={()=>{setMkListItem(null);setMkListPrice("")}} style={{...S.btn,background:"#ffffff08",color:"#888",flex:1,padding:8,fontSize:11}}>Cancel</button>
-            <button onClick={async()=>{const price=+mkListPrice||0;if(price<1){setToast({msg:"Set a price",color:"#eb4b4b"});return}const r=await api("/market/sell",{username:account.username,token:account.token,slot,itemId:mkListItem.id,price});if(r?.ok){setToast({msg:"Listed!",color:"#4ade80"});setSt(p=>{const ns={...p,inv:p.inv.filter(i=>i.id!==mkListItem.id)};const ns2={...ns,starred:{...ns.starred}};delete ns2.starred[mkListItem.id];save(ns2,drops);return ns2});setMkListItem(null);setMkListPrice("");setMkView("mine");const m=await api("/market/my",{username:account.username});if(m?.ok)setMkMyListings(m.listings||[])}else setToast({msg:r?.error||"Failed",color:"#eb4b4b"})}} style={{...S.btn,background:"#4ade8033",color:"#4ade80",flex:2,padding:8,fontSize:11,fontWeight:700}}>Confirm List</button>
+        ) : (
+          <div>
+            {/* Inventory search bar */}
+            <div style={{position:"relative",marginBottom:8}}>
+              <span style={{position:"absolute",left:10,top:"50%",transform:"translateY(-50%)",color:"#666",display:"flex",alignItems:"center"}}><MI n="search" s={16}/></span>
+              <input value={mkSellSearch} onChange={e=>setMkSellSearch(e.target.value)} placeholder="Filter your inventory by name or rarity..." style={{...S.input,width:"100%",paddingLeft:32,fontSize:12}}/>
+              {mkSellSearch&&<button onClick={()=>setMkSellSearch("")} style={{position:"absolute",right:8,top:"50%",transform:"translateY(-50%)",background:"none",border:"none",color:"#888",cursor:"pointer",fontSize:12,padding:0}}>✕</button>}
+            </div>
+
+            {(()=>{
+              const invFiltered = st.inv.filter(item=>{
+                if(!mkSellSearch.trim()) return true;
+                const q = mkSellSearch.trim().toLowerCase();
+                return (item.name||"").toLowerCase().includes(q) || (item.rarity||"").toLowerCase().includes(q);
+              }).sort((a,b)=>(b.value||0)-(a.value||0));
+
+              if(st.inv.length === 0){
+                return <div style={{color:"#888",padding:30,textAlign:"center",background:"#0d1117",borderRadius:8}}>Inventory empty. Open some cases first.</div>;
+              }
+
+              if(invFiltered.length === 0){
+                return <div style={{color:"#888",padding:25,textAlign:"center",background:"#0d1117",borderRadius:8}}>No items match "{mkSellSearch}".</div>;
+              }
+
+              return <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(140px,1fr))",gap:6,maxHeight:"60vh",overflowY:"auto"}}>
+                {invFiltered.slice(0,200).map(item=>{
+                  const rColor = R[item.rarity]?.color || "#555";
+                  return <div key={item.id} onClick={()=>{setMkListItem(item);setMkListPrice(String(item.value))}} className="caseCardHover" style={{cursor:"pointer",background:"#0d1117",border:"1px solid "+rColor+"33",borderLeft:"3px solid "+rColor,borderRadius:6,padding:8}}>
+                    <div style={{display:"flex",alignItems:"center",gap:6}}>
+                      <span style={{fontSize:18}}>{iconFor(item)}</span>
+                      <div style={{flex:1,minWidth:0}}>
+                        <div style={{fontWeight:600,fontSize:11,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{tItem(item.name)}</div>
+                        <div style={{fontSize:9,color:"#888"}}>{money(item.value)}</div>
+                      </div>
+                    </div>
+                  </div>;
+                })}
+              </div>;
+            })()}
+            {st.inv.length > 200 && <div style={{color:"#888",fontSize:10,marginTop:6,textAlign:"center"}}>Showing top 200 by value. Use the search bar above to find specific items.</div>}
           </div>
-        </div>:<div>
-          <div style={{display:"grid",gridTemplateColumns:"repeat(auto-fill,minmax(140px,1fr))",gap:6,maxHeight:"60vh",overflowY:"auto"}}>{st.inv.slice().sort((a,b)=>b.value-a.value).slice(0,200).map(item=>{
-            const rColor=R[item.rarity]?.color||"#555";
-            return <div key={item.id} onClick={()=>{setMkListItem(item);setMkListPrice(String(item.value))}} className="caseCardHover" style={{cursor:"pointer",background:"#0d1117",border:"1px solid "+rColor+"33",borderLeft:"3px solid "+rColor,borderRadius:6,padding:8}}>
-              <div style={{display:"flex",alignItems:"center",gap:6}}><span style={{fontSize:18}}>{iconFor(item)}</span><div style={{flex:1,minWidth:0}}><div style={{fontWeight:600,fontSize:11,overflow:"hidden",textOverflow:"ellipsis",whiteSpace:"nowrap"}}>{tItem(item.name)}</div><div style={{fontSize:9,color:"#888"}}>{money(item.value)}</div></div></div>
-            </div>;
-          })}</div>
-          {st.inv.length===0&&<div style={{color:"#888",padding:30,textAlign:"center"}}>Inventory empty. Open some cases first.</div>}
-          {st.inv.length>200&&<div style={{color:"#888",fontSize:10,marginTop:6,textAlign:"center"}}>Showing top 200 by value. Use the inventory page to sell more.</div>}
-        </div>}
+        )}
       </div>}
     </div>}
     {/* TRADE */}
@@ -3720,6 +4007,9 @@ if(dm.received)setDmInbox(prev=>({...prev,received:recFiltered,sent:sentFiltered
           <span style={{fontSize:11,color:crashState.state==="flying"?"#4ade80":crashState.state==="crashed"?"#eb4b4b":"#f59e0b",background:crashState.state==="flying"?"#4ade8022":crashState.state==="crashed"?"#eb4b4b22":"#f59e0b22",padding:"2px 8px",borderRadius:12,fontWeight:700,textTransform:"uppercase"}}>
             {crashState.state}
           </span>
+          {crashState.state==="flying"&&<span style={{fontSize:10,color:crashState.speedMode==="turbo"?"#ec4899":crashState.speedMode==="slow"?"#38bdf8":"#a855f7",background:crashState.speedMode==="turbo"?"#ec489922":crashState.speedMode==="slow"?"#38bdf822":"#a855f722",border:"1px solid "+(crashState.speedMode==="turbo"?"#ec489955":crashState.speedMode==="slow"?"#38bdf855":"#a855f755"),padding:"2px 8px",borderRadius:12,fontWeight:800}}>
+            {crashState.speedMode==="turbo"?"⚡ HYPER WARP":crashState.speedMode==="slow"?"🐢 SLOW BURN":"🚀 CRUISE"}
+          </span>}
         </div>
         {/* History pills */}
         <div style={{display:"flex",gap:4,overflowX:"auto",maxWidth:"100%",paddingBottom:4}}>

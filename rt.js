@@ -3,9 +3,9 @@
 
 (function() {
   var isGitHub = /\.github\.io$/i.test(location.hostname);
-  var isSelfHosted = location.hostname === "localhost" || location.hostname === "127.0.0.1" || location.hostname === "backend.samptonweb.dpdns.org";
+  var isSelfHosted = location.hostname === "localhost" || location.hostname === "127.0.0.1" || location.hostname.includes("imsupergayandextremlygay.men") || location.hostname.includes("samptonweb.dpdns.org");
   var DEFAULT_WS_URL = (isGitHub || !isSelfHosted)
-    ? "wss://backend.samptonweb.dpdns.org/ws"
+    ? "wss://freedomainnumber1.imsupergayandextremlygay.men/ws"
     : (location.origin.replace(/^http/, "ws") + "/ws");
 
   var ws = null;
